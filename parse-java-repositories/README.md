@@ -4,7 +4,7 @@ A command-line tool to parse the output of macOS `/usr/libexec/java_home -X` com
 
 ## Description
 
-This tool parses the XML plist output from the macOS `java_home` utility and displays information about installed Java Virtual Machines in a human-readable format.
+This tool parses the XML plist output from the macOS `java_home` utility and outputs information about installed Java Virtual Machines as a JSON object.
 
 ## Building
 
@@ -42,28 +42,31 @@ parse-java-repositories < example-input.xml
 
 ## Example Output
 
-```
-Found 7 Java installation(s):
-
-1. OpenJDK 25.0.1
-   Version:     25.0.1
-   Vendor:      Eclipse Adoptium
-   Home Path:   /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
-   Architecture: arm64
-   Bundle ID:   net.java.openjdk.jdk
-   Platform Ver: 25.0.1
-   Enabled:     true
-
-2. Oracle GraalVM 25.0.1+8.1
-   Version:     25.0.1
-   Vendor:      Oracle Corporation
-   Home Path:   /Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home
-   Architecture: arm64
-   Bundle ID:   com.oracle.java.jdk
-   Platform Ver: 25.0.1
-   Enabled:     true
-
-...
+```json
+{
+  "jvms": [
+    {
+      "JVMArch": "arm64",
+      "JVMBundleID": "net.java.openjdk.jdk",
+      "JVMEnabled": true,
+      "JVMHomePath": "/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home",
+      "JVMName": "OpenJDK 25.0.1",
+      "JVMPlatformVersion": "25.0.1",
+      "JVMVendor": "Eclipse Adoptium",
+      "JVMVersion": "25.0.1"
+    },
+    {
+      "JVMArch": "arm64",
+      "JVMBundleID": "com.oracle.java.jdk",
+      "JVMEnabled": true,
+      "JVMHomePath": "/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home",
+      "JVMName": "Oracle GraalVM 25.0.1+8.1",
+      "JVMPlatformVersion": "25.0.1",
+      "JVMVendor": "Oracle Corporation",
+      "JVMVersion": "25.0.1"
+    }
+  ]
+}
 ```
 
 ## Installation

@@ -1,26 +1,31 @@
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io::{self, Read};
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Debug, Deserialize, Serialize)]
+#[allow(non_snake_case)]
 struct JVMInfo {
     #[serde(rename = "JVMArch")]
-    jvm_arch: String,
+    JVMArch: String,
     #[serde(rename = "JVMBundleID")]
-    jvm_bundle_id: String,
+    JVMBundleID: String,
     #[serde(rename = "JVMEnabled")]
-    jvm_enabled: bool,
+    JVMEnabled: bool,
     #[serde(rename = "JVMHomePath")]
-    jvm_home_path: String,
+    JVMHomePath: String,
     #[serde(rename = "JVMName")]
-    jvm_name: String,
+    JVMName: String,
     #[serde(rename = "JVMPlatformVersion")]
-    jvm_platform_version: String,
+    JVMPlatformVersion: String,
     #[serde(rename = "JVMVendor")]
-    jvm_vendor: String,
+    JVMVendor: String,
     #[serde(rename = "JVMVersion")]
-    jvm_version: String,
+    JVMVersion: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Output {
+    jvms: Vec<JVMInfo>,
 }
 
 fn main() -> Result<()> {
@@ -34,20 +39,14 @@ fn main() -> Result<()> {
     let jvms: Vec<JVMInfo> = plist::from_bytes(input.as_bytes())
         .context("Failed to parse plist XML")?;
 
-    // Display the parsed information
-    println!("Found {} Java installation(s):\n", jvms.len());
+    // Create output structure
+    let output = Output { jvms };
 
-    for (index, jvm) in jvms.iter().enumerate() {
-        println!("{}. {}", index + 1, jvm.jvm_name);
-        println!("   Version:     {}", jvm.jvm_version);
-        println!("   Vendor:      {}", jvm.jvm_vendor);
-        println!("   Home Path:   {}", jvm.jvm_home_path);
-        println!("   Architecture: {}", jvm.jvm_arch);
-        println!("   Bundle ID:   {}", jvm.jvm_bundle_id);
-        println!("   Platform Ver: {}", jvm.jvm_platform_version);
-        println!("   Enabled:     {}", jvm.jvm_enabled);
-        println!();
-    }
+    // Serialize to JSON and print
+    let json = serde_json::to_string_pretty(&output)
+        .context("Failed to serialize to JSON")?;
+
+    println!("{}", json);
 
     Ok(())
 }
