@@ -24,6 +24,7 @@ Usage: x-java-home [OPTIONS]
 Options:
   -v, --version <VERSION>    Filter versions (as if JAVA_VERSION had been set in the environment)
   -a, --arch <ARCH>          Filter architecture (as if JAVA_ARCH had been set in the environment)
+  -n, --name <NAME>          Filter by JVM name (case-insensitive substring match)
   -F, --failfast             Fail when filters return no JVMs, do not continue with default
       --exec <EXEC>...       Execute the $JAVA_HOME/bin/<command> with the remaining arguments
       --json                 Print full JVM list and additional data as JSON
@@ -53,6 +54,28 @@ x-java-home -v 21
 Output:
 ```
 /Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
+```
+
+#### Filter by JVM name
+
+```bash
+x-java-home -n graal
+```
+
+Output:
+```
+/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home
+```
+
+#### Combine filters (version and name)
+
+```bash
+x-java-home -v 25 -n graal
+```
+
+Output:
+```
+/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home
 ```
 
 #### Get all JVMs in verbose format
@@ -112,6 +135,14 @@ x-java-home -v 21 --json
 
 This will return JSON data for Java 21 installations.
 
+#### Filter by name with JSON output
+
+```bash
+x-java-home -n zulu --json
+```
+
+This will return JSON data for all Zulu JDK installations.
+
 #### Execute a command with a specific Java version
 
 ```bash
@@ -140,9 +171,10 @@ x-java-home --json
 
 ## Differences from java_home
 
-The only difference from the standard `/usr/libexec/java_home` tool is:
+The differences from the standard `/usr/libexec/java_home` tool are:
 
 - **Removed:** `-X/--xml` flag (XML output)
 - **Added:** `--json` flag (JSON output)
+- **Added:** `-n/--name` flag (filter by JVM name with case-insensitive substring matching)
 
 All other functionality remains identical.
