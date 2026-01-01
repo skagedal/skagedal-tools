@@ -5,7 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-public class Main {
+public class GitDirtyChecker {
   static boolean isDirty(final Path path) {
     final var processBuilder = new ProcessBuilder()
         .directory(path.toFile())
