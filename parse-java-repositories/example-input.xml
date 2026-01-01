@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<array>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>net.java.openjdk.jdk</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home</string>
+		<key>JVMName</key>
+		<string>OpenJDK 25.0.1</string>
+		<key>JVMPlatformVersion</key>
+		<string>25.0.1</string>
+		<key>JVMVendor</key>
+		<string>Eclipse Adoptium</string>
+		<key>JVMVersion</key>
+		<string>25.0.1</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>com.oracle.java.jdk</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home</string>
+		<key>JVMName</key>
+		<string>Oracle GraalVM 25.0.1+8.1</string>
+		<key>JVMPlatformVersion</key>
+		<string>25.0.1</string>
+		<key>JVMVendor</key>
+		<string>Oracle Corporation</string>
+		<key>JVMVersion</key>
+		<string>25.0.1</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>com.azul.zulu.jdk</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Library/Java/JavaVirtualMachines/zulu-25.jdk/Contents/Home</string>
+		<key>JVMName</key>
+		<string>Zulu 25.30.17</string>
+		<key>JVMPlatformVersion</key>
+		<string>25.0.1</string>
+		<key>JVMVendor</key>
+		<string>Azul Systems, Inc.</string>
+		<key>JVMVersion</key>
+		<string>25.0.1</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>com.azul.zulu.jdk</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Library/Java/JavaVirtualMachines/zulu-24.jdk/Contents/Home</string>
+		<key>JVMName</key>
+		<string>Zulu 24.32.13</string>
+		<key>JVMPlatformVersion</key>
+		<string>24.0.2</string>
+		<key>JVMVendor</key>
+		<string>Azul Systems, Inc.</string>
+		<key>JVMVersion</key>
+		<string>24.0.2</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>com.azul.zulu.jdk</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home</string>
+		<key>JVMName</key>
+		<string>Zulu 21.46.19</string>
+		<key>JVMPlatformVersion</key>
+		<string>21.0.9</string>
+		<key>JVMVendor</key>
+		<string>Azul Systems, Inc.</string>
+		<key>JVMVersion</key>
+		<string>21.0.9</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>com.amazon.corretto.20</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Users/simon/Library/Java/JavaVirtualMachines/corretto-20.0.2.1/Contents/Home</string>
+		<key>JVMName</key>
+		<string>Amazon Corretto 20</string>
+		<key>JVMPlatformVersion</key>
+		<string>20.0.2</string>
+		<key>JVMVendor</key>
+		<string>Amazon.com Inc.</string>
+		<key>JVMVersion</key>
+		<string>20.0.2</string>
+	</dict>
+	<dict>
+		<key>JVMArch</key>
+		<string>arm64</string>
+		<key>JVMBundleID</key>
+		<string>com.azul.zulu.jdk</string>
+		<key>JVMEnabled</key>
+		<true/>
+		<key>JVMHomePath</key>
+		<string>/Library/Java/JavaVirtualMachines/zulu-11.jdk/Contents/Home</string>
+		<key>JVMName</key>
+		<string>Zulu 11.84.17</string>
+		<key>JVMPlatformVersion</key>
+		<string>11.0.29</string>
+		<key>JVMVendor</key>
+		<string>Azul Systems, Inc.</string>
+		<key>JVMVersion</key>
+		<string>11.0.29</string>
+	</dict>
+</array>
+</plist>
