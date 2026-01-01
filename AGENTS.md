@@ -19,3 +19,14 @@ The table format is:
 ```
 
 Each tool name should be a link to its directory, and the description should be concise (one line).
+
+## Java Code Formatting
+
+All Java code in this repository must be formatted with **4-space indentation**. This applies to:
+
+- Class and method bodies
+- Control structures (if, for, while, etc.)
+- Method chaining and fluent APIs
+- All other indented code blocks
+
+Do not use tabs for indentation in Java files.
