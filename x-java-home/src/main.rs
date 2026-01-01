@@ -30,7 +30,7 @@ struct Output {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "parse-java-repositories")]
+#[command(name = "x-java-home")]
 #[command(about = "A drop-in replacement for /usr/libexec/java_home with JSON output support", long_about = None)]
 struct Args {
     /// Filter versions (as if JAVA_VERSION had been set in the environment)

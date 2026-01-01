@@ -1,4 +1,4 @@
-# parse-java-repositories
+# x-java-home
 
 A drop-in replacement for macOS `/usr/libexec/java_home` with JSON output support.
 
@@ -19,7 +19,7 @@ cargo build --release
 The tool supports all the same flags as `/usr/libexec/java_home`:
 
 ```
-Usage: parse-java-repositories [OPTIONS]
+Usage: x-java-home [OPTIONS]
 
 Options:
   -v, --version <VERSION>    Filter versions (as if JAVA_VERSION had been set in the environment)
@@ -36,7 +36,7 @@ Options:
 #### Get the default Java home path (same as java_home)
 
 ```bash
-parse-java-repositories
+x-java-home
 ```
 
 Output:
@@ -47,7 +47,7 @@ Output:
 #### Get a specific Java version
 
 ```bash
-parse-java-repositories -v 21
+x-java-home -v 21
 ```
 
 Output:
@@ -58,7 +58,7 @@ Output:
 #### Get all JVMs in verbose format
 
 ```bash
-parse-java-repositories -V
+x-java-home -V
 ```
 
 Output:
@@ -73,7 +73,7 @@ Matching Java Virtual Machines (7):
 #### Get all JVMs as JSON
 
 ```bash
-parse-java-repositories --json
+x-java-home --json
 ```
 
 Output:
@@ -107,7 +107,7 @@ Output:
 #### Get specific version as JSON
 
 ```bash
-parse-java-repositories -v 21 --json
+x-java-home -v 21 --json
 ```
 
 This will return JSON data for Java 21 installations.
@@ -115,7 +115,7 @@ This will return JSON data for Java 21 installations.
 #### Execute a command with a specific Java version
 
 ```bash
-parse-java-repositories -v 17 --exec javac MyProgram.java
+x-java-home -v 17 --exec javac MyProgram.java
 ```
 
 This executes `$JAVA_HOME/bin/javac MyProgram.java` using Java 17.
@@ -132,10 +132,10 @@ Then you can use it from anywhere as a drop-in replacement for `java_home`:
 
 ```bash
 # Create an alias
-alias java_home='parse-java-repositories'
+alias java_home='x-java-home'
 
 # Or use it directly
-parse-java-repositories --json
+x-java-home --json
 ```
 
 ## Differences from java_home

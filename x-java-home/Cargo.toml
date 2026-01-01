@@ -1,5 +1,5 @@
 [package]
-name = "parse-java-repositories"
+name = "x-java-home"
 version = "0.1.0"
 edition = "2021"
 
