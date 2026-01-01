@@ -1,10 +1,12 @@
 # parse-java-repositories
 
-A command-line tool to parse the output of macOS `/usr/libexec/java_home -X` command.
+A drop-in replacement for macOS `/usr/libexec/java_home` with JSON output support.
 
 ## Description
 
-This tool parses the XML plist output from the macOS `java_home` utility and outputs information about installed Java Virtual Machines as a JSON object.
+This tool wraps the macOS `java_home` utility and provides all its functionality, but instead of the `-X/--xml` flag for getting detailed information about all installed JVMs, it provides a `--json` flag that outputs the same information in JSON format.
+
+In default mode, it behaves exactly like `/usr/libexec/java_home`, returning the path to the default Java home directory.
 
 ## Building
 
@@ -14,34 +16,67 @@ cargo build --release
 
 ## Usage
 
-### On macOS with java_home
+The tool supports all the same flags as `/usr/libexec/java_home`:
 
-Pipe the output of `java_home -X` directly to the tool:
+```
+Usage: parse-java-repositories [OPTIONS]
 
-```bash
-/usr/libexec/java_home -X | parse-java-repositories
+Options:
+  -v, --version <VERSION>    Filter versions (as if JAVA_VERSION had been set in the environment)
+  -a, --arch <ARCH>          Filter architecture (as if JAVA_ARCH had been set in the environment)
+  -F, --failfast             Fail when filters return no JVMs, do not continue with default
+      --exec <EXEC>...       Execute the $JAVA_HOME/bin/<command> with the remaining arguments
+      --json                 Print full JVM list and additional data as JSON
+  -V, --verbose              Print full JVM list with architectures
+  -h, --help                 Print help
 ```
 
-Or build and run in one command:
+### Examples
+
+#### Get the default Java home path (same as java_home)
 
 ```bash
-/usr/libexec/java_home -X | cargo run
+parse-java-repositories
 ```
 
-### With a saved XML file
+Output:
+```
+/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
+```
+
+#### Get a specific Java version
 
 ```bash
-cat example-input.xml | parse-java-repositories
+parse-java-repositories -v 21
 ```
 
-Or:
+Output:
+```
+/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home
+```
+
+#### Get all JVMs in verbose format
 
 ```bash
-parse-java-repositories < example-input.xml
+parse-java-repositories -V
 ```
 
-## Example Output
+Output:
+```
+Matching Java Virtual Machines (7):
+    25.0.1 (arm64) "OpenJDK 25.0.1" - "Eclipse Adoptium" /Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
+    25.0.1 (arm64) "Oracle GraalVM 25.0.1+8.1" - "Oracle Corporation" /Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home
+    ...
+/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home
+```
 
+#### Get all JVMs as JSON
+
+```bash
+parse-java-repositories --json
+```
+
+Output:
 ```json
 {
   "jvms": [
@@ -69,6 +104,22 @@ parse-java-repositories < example-input.xml
 }
 ```
 
+#### Get specific version as JSON
+
+```bash
+parse-java-repositories -v 21 --json
+```
+
+This will return JSON data for Java 21 installations.
+
+#### Execute a command with a specific Java version
+
+```bash
+parse-java-repositories -v 17 --exec javac MyProgram.java
+```
+
+This executes `$JAVA_HOME/bin/javac MyProgram.java` using Java 17.
+
 ## Installation
 
 To install the tool to your cargo bin directory:
@@ -77,8 +128,21 @@ To install the tool to your cargo bin directory:
 cargo install --path .
 ```
 
-Then you can use it from anywhere:
+Then you can use it from anywhere as a drop-in replacement for `java_home`:
 
 ```bash
-/usr/libexec/java_home -X | parse-java-repositories
+# Create an alias
+alias java_home='parse-java-repositories'
+
+# Or use it directly
+parse-java-repositories --json
 ```
+
+## Differences from java_home
+
+The only difference from the standard `/usr/libexec/java_home` tool is:
+
+- **Removed:** `-X/--xml` flag (XML output)
+- **Added:** `--json` flag (JSON output)
+
+All other functionality remains identical.
