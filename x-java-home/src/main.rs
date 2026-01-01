@@ -41,6 +41,10 @@ struct Args {
     #[arg(short = 'a', long = "arch")]
     arch: Option<String>,
 
+    /// Filter by JVM name (case-insensitive substring match)
+    #[arg(short = 'n', long = "name")]
+    name: Option<String>,
+
     /// Fail when filters return no JVMs, do not continue with default
     #[arg(short = 'F', long = "failfast")]
     failfast: bool,
@@ -61,34 +65,26 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    // Build the java_home command
-    let mut cmd = Command::new("/usr/libexec/java_home");
-
-    // Add version filter if provided
-    if let Some(version) = &args.version {
-        cmd.arg("-v").arg(version);
-    }
-
-    // Add architecture filter if provided
-    if let Some(arch) = &args.arch {
-        cmd.arg("-a").arg(arch);
-    }
-
-    // Add failfast flag if provided
-    if args.failfast {
-        cmd.arg("-F");
-    }
-
-    // Handle --exec flag
-    if let Some(exec_args) = &args.exec {
-        cmd.arg("--exec");
-        cmd.args(exec_args);
-    }
-
-    // Handle --json flag
-    if args.json {
-        // Request XML output from java_home
+    // If --name or --json is provided, we need to fetch and parse the XML output
+    if args.name.is_some() || args.json {
+        // Build the java_home command with -X flag to get XML output
+        let mut cmd = Command::new("/usr/libexec/java_home");
         cmd.arg("-X");
+
+        // Add version filter if provided
+        if let Some(version) = &args.version {
+            cmd.arg("-v").arg(version);
+        }
+
+        // Add architecture filter if provided
+        if let Some(arch) = &args.arch {
+            cmd.arg("-a").arg(arch);
+        }
+
+        // Add failfast flag if provided
+        if args.failfast {
+            cmd.arg("-F");
+        }
 
         let output = cmd.output().context("Failed to execute java_home")?;
 
@@ -98,18 +94,59 @@ fn main() -> Result<()> {
         }
 
         // Parse the plist XML
-        let jvms: Vec<JVMInfo> = plist::from_bytes(&output.stdout)
+        let mut jvms: Vec<JVMInfo> = plist::from_bytes(&output.stdout)
             .context("Failed to parse plist XML from java_home")?;
 
-        // Create output structure
-        let json_output = Output { jvms };
+        // Filter by name if provided
+        if let Some(name_filter) = &args.name {
+            let name_lower = name_filter.to_lowercase();
+            jvms.retain(|jvm| jvm.JVMName.to_lowercase().contains(&name_lower));
+        }
 
-        // Serialize to JSON and print
-        let json = serde_json::to_string_pretty(&json_output)
-            .context("Failed to serialize to JSON")?;
+        // Handle output
+        if args.json {
+            // Create output structure
+            let json_output = Output { jvms };
 
-        println!("{}", json);
+            // Serialize to JSON and print
+            let json = serde_json::to_string_pretty(&json_output)
+                .context("Failed to serialize to JSON")?;
+
+            println!("{}", json);
+        } else {
+            // Output the first matching JVM's home path
+            if let Some(jvm) = jvms.first() {
+                println!("{}", jvm.JVMHomePath);
+            } else {
+                eprintln!("No matching JVM found");
+                std::process::exit(1);
+            }
+        }
     } else {
+        // Pass through to java_home for standard behavior
+        let mut cmd = Command::new("/usr/libexec/java_home");
+
+        // Add version filter if provided
+        if let Some(version) = &args.version {
+            cmd.arg("-v").arg(version);
+        }
+
+        // Add architecture filter if provided
+        if let Some(arch) = &args.arch {
+            cmd.arg("-a").arg(arch);
+        }
+
+        // Add failfast flag if provided
+        if args.failfast {
+            cmd.arg("-F");
+        }
+
+        // Handle --exec flag
+        if let Some(exec_args) = &args.exec {
+            cmd.arg("--exec");
+            cmd.args(exec_args);
+        }
+
         // Add verbose flag if provided
         if args.verbose {
             cmd.arg("-V");
