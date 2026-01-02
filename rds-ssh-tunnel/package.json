@@ -1,0 +1,33 @@
+{
+  "name": "rds-ssh-tunnel",
+  "version": "1.0.0",
+  "description": "Connect to PostgreSQL databases via SSH tunnel to a bastion host, optimized for AWS RDS",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "rds-ssh-tunnel": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/index.ts"
+  },
+  "keywords": [
+    "postgresql",
+    "ssh",
+    "tunnel",
+    "rds",
+    "aws",
+    "database"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "pg": "^8.13.1",
+    "ssh2": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@types/ssh2": "^1.15.1"
+  }
+}
