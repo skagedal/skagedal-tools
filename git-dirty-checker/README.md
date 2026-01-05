@@ -11,6 +11,7 @@ This tool helps you quickly identify which repositories in a collection of git r
 This repository contains multiple implementations of the same functionality:
 
 - **[java/](java/)** - A Java implementation that can be run as a standalone JAR
+- **[rust/](rust/)** - A Rust implementation with parallel processing for high performance
 - **[shell/](shell/)** - Shell script implementations (both sequential and parallel versions)
 
 Each implementation provides the same core functionality: given one or more directory paths, it will search for git repositories in subdirectories and report which ones have uncommitted changes.
