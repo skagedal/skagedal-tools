@@ -30,3 +30,10 @@ All Java code in this repository must be formatted with **4-space indentation**.
 - All other indented code blocks
 
 Do not use tabs for indentation in Java files.
+
+## Shell Scripts
+
+All shell scripts in this repository must follow these guidelines:
+
+- Use `#!/usr/bin/env bash` as the shebang line instead of `#!/bin/bash`
+  - This provides better portability across different systems where bash may be installed in different locations

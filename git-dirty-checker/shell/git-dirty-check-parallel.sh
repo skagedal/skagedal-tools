@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # git-dirty-check-parallel.sh
 # Find git repositories with uncommitted changes (parallel version using GNU parallel)
 #

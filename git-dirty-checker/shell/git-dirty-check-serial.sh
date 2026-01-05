@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # git-dirty-check-serial.sh
 # Find git repositories with uncommitted changes (sequential version)
 #
