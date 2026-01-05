@@ -37,3 +37,10 @@ All shell scripts in this repository must follow these guidelines:
 
 - Use `#!/usr/bin/env bash` as the shebang line instead of `#!/bin/bash`
   - This provides better portability across different systems where bash may be installed in different locations
+
+## Rust Projects
+
+All Rust projects in this repository must follow these guidelines:
+
+- Use `edition = "2024"` in Cargo.toml
+  - This ensures projects use the latest Rust edition with modern language features and best practices
