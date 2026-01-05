@@ -7,4 +7,4 @@
 # This will list all subdirectories that are git repositories with uncommitted changes.
 # Requires GNU parallel to be installed.
 
-printf '%s\n' "$@"/*/ | parallel 'git -C {} status --porcelain 2>/dev/null | grep -q . && realpath {}'
+printf '%s\n' "$@"/*/ | parallel 'git -C {} status --porcelain 2>/dev/null | grep -q . && realpath {} || true'
