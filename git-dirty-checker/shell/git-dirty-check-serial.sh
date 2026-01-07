@@ -7,5 +7,5 @@
 # This will list all subdirectories that are git repositories with uncommitted changes.
 
 for dir in "$@"/*/; do
-    git -C "$dir" status --porcelain 2>/dev/null | grep -q . && realpath "$dir"
+    git -C "$dir" status --porcelain 2>/dev/null | grep -q . && realpath "$dir" || true
 done
