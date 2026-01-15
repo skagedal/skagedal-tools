@@ -1,10 +1,10 @@
 [package]
-name = "jsonl-stream-processor"
+name = "log-jsonify"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "jsonl-stream-processor"
+name = "log-jsonify"
 path = "src/main.rs"
 
 [dependencies]

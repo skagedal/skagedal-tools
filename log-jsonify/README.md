@@ -1,4 +1,4 @@
-# jsonl-stream-processor
+# log-jsonify
 
 A lightweight tool that processes JSONL (JSON Lines) streams, ensuring all output is valid JSON.
 
@@ -16,26 +16,26 @@ This ensures your entire output stream is valid JSONL, making it easier to pipe 
 cargo build --release
 ```
 
-The binary will be at `target/release/jsonl-stream-processor`.
+The binary will be at `target/release/log-jsonify`.
 
 ## Usage
 
 ```bash
 # Basic usage
-some-command | jsonl-stream-processor
+some-command | log-jsonify
 
 # Example with mixed output
-echo '{"status":"ok","count":42}' | jsonl-stream-processor
+echo '{"status":"ok","count":42}' | log-jsonify
 # Output: {"status":"ok","count":42}
 
-echo 'Plain text message' | jsonl-stream-processor
+echo 'Plain text message' | log-jsonify
 # Output: {"message":"Plain text message"}
 
 # Real-world example: process kubectl output
-kubectl get pods --watch -o json | jsonl-stream-processor | jq .
+kubectl get pods --watch -o json | log-jsonify | jq .
 
 # Process log files with mixed content
-cat application.log | jsonl-stream-processor | jq -r '.message // .'
+cat application.log | log-jsonify | jq -r '.message // .'
 ```
 
 ## Examples
@@ -43,7 +43,7 @@ cat application.log | jsonl-stream-processor | jq -r '.message // .'
 ### Mixed JSON and text input
 
 ```bash
-$ cat <<EOF | jsonl-stream-processor
+$ cat <<EOF | log-jsonify
 {"level":"info","msg":"Server started"}
 Error: connection timeout
 {"level":"error","msg":"Failed to connect"}
@@ -64,7 +64,7 @@ Output:
 The tool properly escapes special characters in non-JSON lines:
 
 ```bash
-$ echo 'Message with "quotes" and \backslashes' | jsonl-stream-processor
+$ echo 'Message with "quotes" and \backslashes' | log-jsonify
 {"message":"Message with \"quotes\" and \\backslashes"}
 ```
 
@@ -145,7 +145,7 @@ some-command | awk '{
 
 ### When to use this tool
 
-Use `jsonl-stream-processor` when:
+Use `log-jsonify` when:
 - You want a fast, standalone binary with no dependencies
 - You process high-volume streams where performance matters
 - You prefer a simple, single-purpose tool
