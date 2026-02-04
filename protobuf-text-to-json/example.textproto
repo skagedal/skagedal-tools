@@ -1,0 +1,19 @@
+# Example protobuf text format
+name: "John Doe"
+id: 1234
+email: "jdoe@example.com"
+phones {
+  number: "555-4321"
+  type: HOME
+}
+phones {
+  number: "555-1234"
+  type: MOBILE
+}
+active: true
+score: 98.5
+metadata {
+  created_at: 1609459200
+  tags: "important"
+  tags: "verified"
+}
