@@ -5,7 +5,7 @@ Interactive CLI for viewing and opening unread [Linear](https://linear.app) noti
 ## Requirements
 
 - [Node.js](https://nodejs.org) (v18+)
-- The [`linear`](https://github.com/linear/linear) CLI, authenticated and available on your `PATH`
+- The [`linear`](https://github.com/schpet/linear-cli) CLI, authenticated and available on your `PATH`
 
 ## Installation
 
