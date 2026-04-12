@@ -49,7 +49,7 @@ pnpm run gunshi   -- greet Alice --times 2
 | **Auto-generated help** | ✓ | ✓ | ✓ (free-form text) | ✓ | ✓ |
 | **Version flag** | ✓ | ✓ | ✓ (from `package.json`) | ✓ | ✓ |
 | **Async action handlers** | ✓ (`.parseAsync()`) | ✓ | N/A | ✓ | ✓ |
-| **Shell completion** | ✗ | ✓ bash/zsh/fish | ✗ | ✗ | Via plugin (WIP) |
+| **Shell completion** | ✗ | ✓ bash/zsh/fish | ✗ | ✗ | ✓ bash/zsh/fish/powershell (plugin) |
 | **Node.js requirement** | ≥ 18 | ≥ 12 | ≥ 18 | ≥ 18 | ≥ 20 |
 
 ### Notes
@@ -62,7 +62,7 @@ pnpm run gunshi   -- greet Alice --times 2
 
 **citty** — Modern, lightweight (smallest package), written in TypeScript. Offers the best type inference: arg shapes defined in `args` flow through automatically to the `run` function, with no need for manual type annotations. Subcommands declared as plain objects via `subCommands`. CJS and ESM.
 
-**gunshi** — A newer, declarative library with a `define()` + `cli()` API. Like citty, it is written in TypeScript and infers arg types directly from the definition. Supports named positional arguments (`type: 'positional'`) alongside regular options. Has an extensible plugin system; a shell completion plugin (`@gunshi/plugin-completion`) is in progress. Requires Node.js ≥ 20.
+**gunshi** — A newer, declarative library with a `define()` + `cli()` API. Like citty, it is written in TypeScript and infers arg types directly from the definition. Supports named positional arguments (`type: 'positional'`) alongside regular options. Has an extensible plugin system; shell completion (bash/zsh/fish/PowerShell) is provided by `@gunshi/plugin-completion`, passed as a plugin to `cli()`. Requires Node.js ≥ 20.
 
 ## Shell completions
 
@@ -83,3 +83,13 @@ pnpm --silent run yargs -- completion >> ~/.zshrc
 ```
 
 The generated script calls the program with `--get-yargs-completions` to dynamically suggest completions for commands and options.
+
+**gunshi** also has completion support, via the `@gunshi/plugin-completion` plugin (bash, zsh, fish, PowerShell):
+
+```bash
+# Print the completion script
+pnpm --silent run gunshi -- complete bash
+
+# Activate completions in the current shell session
+source <(pnpm --silent run gunshi -- complete bash)
+```
