@@ -7,11 +7,13 @@
     "commander": "tsx src/commander.ts",
     "yargs": "tsx src/yargs.ts",
     "meow": "tsx src/meow.ts",
-    "citty": "tsx src/citty.ts"
+    "citty": "tsx src/citty.ts",
+    "gunshi": "tsx src/gunshi.ts"
   },
   "dependencies": {
     "citty": "^0.1.6",
     "commander": "^12.0.0",
+    "gunshi": "^0.29.0",
     "meow": "^13.2.0",
     "yargs": "^17.7.2"
   },
@@ -22,8 +24,5 @@
   },
   "pnpm": {
     "ignoredBuiltDependencies": ["esbuild"]
-  },
-  "renovate": {
-    "minimumReleaseAge": "3 days"
   }
 }

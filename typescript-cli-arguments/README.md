@@ -28,28 +28,29 @@ pnpm run commander -- greet Alice --times 3 --shout
 pnpm run yargs    -- farewell Bob --formal
 pnpm run meow     -- greet Alice --times 2
 pnpm run citty    -- farewell Bob
+pnpm run gunshi   -- greet Alice --times 2
 ```
 
 ## Comparison
 
-| Feature | [commander](https://github.com/tj/commander.js) | [yargs](https://yargs.js.org) | [meow](https://github.com/sindresorhus/meow) | [citty](https://github.com/unjs/citty) |
-|---|---|---|---|---|
-| **Package size** (self, excl. deps) | 198 KB | 337 KB | 420 KB | 48 KB |
-| **Direct dependencies** | 0 | 7 | 0 | 1 (`consola`) |
-| **TypeScript** | Bundled types | `@types/yargs` | Bundled types | Written in TS, inferred arg types |
-| **ESM** | ✓ | ✓ | ✓ (only) | ✓ |
-| **CJS** | ✓ | ✓ | ✗ | ✓ |
-| **Subcommands** | Native | Native | Manual dispatch | Native |
-| **Nested subcommands** | ✓ | ✓ | Manual | ✓ |
-| **Positional arguments** | `<required>` / `[optional]` in signature | `.positional()` builder | `cli.input` array | `type: 'positional'` |
-| **Option types** | string, boolean, int, float, custom | string, boolean, number, array, count | string, boolean, number, string\[\] | string, boolean |
-| **Required options** | ✓ | ✓ | ✓ (`isRequired`) | ✓ |
-| **Default values** | ✓ | ✓ | ✓ | ✓ |
-| **Auto-generated help** | ✓ | ✓ | ✓ (free-form text) | ✓ |
-| **Version flag** | ✓ | ✓ | ✓ (from `package.json`) | ✓ |
-| **Async action handlers** | ✓ (`.parseAsync()`) | ✓ | N/A | ✓ |
-| **Shell completion** | ✗ | ✓ bash/zsh/fish | ✗ | ✗ |
-| **Node.js requirement** | ≥ 18 | ≥ 12 | ≥ 18 | ≥ 18 |
+| Feature | [commander](https://github.com/tj/commander.js) | [yargs](https://yargs.js.org) | [meow](https://github.com/sindresorhus/meow) | [citty](https://github.com/unjs/citty) | [gunshi](https://github.com/kazupon/gunshi) |
+|---|---|---|---|---|---|
+| **Package size** (self, excl. deps) | 198 KB | 337 KB | 420 KB | 48 KB | 211 KB |
+| **Direct dependencies** | 0 | 7 | 0 | 1 (`consola`) | 0 (bundled) |
+| **TypeScript** | Bundled types | `@types/yargs` | Bundled types | Written in TS, inferred arg types | Written in TS, inferred arg types |
+| **ESM** | ✓ | ✓ | ✓ (only) | ✓ | ✓ |
+| **CJS** | ✓ | ✓ | ✗ | ✓ | ✓ |
+| **Subcommands** | Native | Native | Manual dispatch | Native | Native |
+| **Nested subcommands** | ✓ | ✓ | Manual | ✓ | ✓ |
+| **Positional arguments** | `<required>` / `[optional]` in signature | `.positional()` builder | `cli.input` array | `type: 'positional'` | `type: 'positional'` |
+| **Option types** | string, boolean, int, float, custom | string, boolean, number, array, count | string, boolean, number, string\[\] | string, boolean | string, boolean, number, positional |
+| **Required options** | ✓ | ✓ | ✓ (`isRequired`) | ✓ | ✓ |
+| **Default values** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Auto-generated help** | ✓ | ✓ | ✓ (free-form text) | ✓ | ✓ |
+| **Version flag** | ✓ | ✓ | ✓ (from `package.json`) | ✓ | ✓ |
+| **Async action handlers** | ✓ (`.parseAsync()`) | ✓ | N/A | ✓ | ✓ |
+| **Shell completion** | ✗ | ✓ bash/zsh/fish | ✗ | ✗ | Via plugin (WIP) |
+| **Node.js requirement** | ≥ 18 | ≥ 12 | ≥ 18 | ≥ 18 | ≥ 20 |
 
 ### Notes
 
@@ -60,6 +61,8 @@ pnpm run citty    -- farewell Bob
 **meow** — Minimal and intentionally simple; designed for single-command CLIs. Subcommands require manual dispatch (inspect `cli.input[0]` and branch). ESM-only. Suitable for small tools where you want total control with minimal abstraction.
 
 **citty** — Modern, lightweight (smallest package), written in TypeScript. Offers the best type inference: arg shapes defined in `args` flow through automatically to the `run` function, with no need for manual type annotations. Subcommands declared as plain objects via `subCommands`. CJS and ESM.
+
+**gunshi** — A newer, declarative library with a `define()` + `cli()` API. Like citty, it is written in TypeScript and infers arg types directly from the definition. Supports named positional arguments (`type: 'positional'`) alongside regular options. Has an extensible plugin system; a shell completion plugin (`@gunshi/plugin-completion`) is in progress. Requires Node.js ≥ 20.
 
 ## Shell completions
 

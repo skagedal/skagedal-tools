@@ -43,13 +43,12 @@ All shell scripts in this repository must follow these guidelines:
 All Node.js/TypeScript projects in this repository must follow these guidelines:
 
 - Use **pnpm** as the package manager
-- Set a `minimumReleaseAge` of `"3 days"` in the Renovate configuration inside `package.json`:
-  ```json
-  "renovate": {
-    "minimumReleaseAge": "3 days"
-  }
+- Set `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (4320 minutes = 3 days):
+  ```yaml
+  minimumReleaseAge: 4320
   ```
-  This prevents Renovate from raising PRs for dependencies that were released fewer than three days ago, reducing the risk of picking up broken or immediately-yanked releases.
+  This is a pnpm supply-chain security feature that prevents installing package versions
+  published fewer than 3 days ago, giving the community time to detect and pull compromised releases.
 
 ## Rust Projects
 
