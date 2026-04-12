@@ -1,8 +1,12 @@
 // CLI argument parsing with yargs
 // https://yargs.js.org/
 //
-// Run: pnpm yargs -- greet Alice --times 3 --shout
-//      pnpm yargs -- farewell Bob --formal
+// Run: pnpm run yargs -- greet Alice --times 3 --shout
+//      pnpm run yargs -- farewell Bob --formal
+//
+// Shell completion (yargs has built-in support):
+//      pnpm --silent run yargs -- completion        # print bash script
+//      source <(pnpm --silent run yargs -- completion)  # activate in current shell
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -66,6 +70,7 @@ yargs(hideBin(process.argv))
       console.log(message);
     }
   )
+  .completion("completion", "Generate shell completion script")
   .demandCommand(1, "Please specify a command")
   .strict()
   .parse();
