@@ -21,6 +21,9 @@
     "typescript": "^5.4.5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "ignoredBuiltDependencies": ["esbuild"]
+  },
+  "renovate": {
+    "minimumReleaseAge": "3 days"
   }
 }

@@ -38,6 +38,19 @@ All shell scripts in this repository must follow these guidelines:
 - Use `#!/usr/bin/env bash` as the shebang line instead of `#!/bin/bash`
   - This provides better portability across different systems where bash may be installed in different locations
 
+## Node.js Programs
+
+All Node.js/TypeScript projects in this repository must follow these guidelines:
+
+- Use **pnpm** as the package manager
+- Set a `minimumReleaseAge` of `"3 days"` in the Renovate configuration inside `package.json`:
+  ```json
+  "renovate": {
+    "minimumReleaseAge": "3 days"
+  }
+  ```
+  This prevents Renovate from raising PRs for dependencies that were released fewer than three days ago, reducing the risk of picking up broken or immediately-yanked releases.
+
 ## Rust Projects
 
 All Rust projects in this repository must follow these guidelines:
