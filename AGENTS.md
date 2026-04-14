@@ -38,6 +38,18 @@ All shell scripts in this repository must follow these guidelines:
 - Use `#!/usr/bin/env bash` as the shebang line instead of `#!/bin/bash`
   - This provides better portability across different systems where bash may be installed in different locations
 
+## Node.js Programs
+
+All Node.js/TypeScript projects in this repository must follow these guidelines:
+
+- Use **pnpm** as the package manager
+- Set `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (4320 minutes = 3 days):
+  ```yaml
+  minimumReleaseAge: 4320
+  ```
+  This is a pnpm supply-chain security feature that prevents installing package versions
+  published fewer than 3 days ago, giving the community time to detect and pull compromised releases.
+
 ## Rust Projects
 
 All Rust projects in this repository must follow these guidelines:

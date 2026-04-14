@@ -1,0 +1,29 @@
+{
+  "name": "typescript-cli-arguments",
+  "version": "1.0.0",
+  "description": "Comparison of CLI argument parsing libraries for Node.js/TypeScript",
+  "type": "module",
+  "scripts": {
+    "commander": "tsx src/commander.ts",
+    "yargs": "tsx src/yargs.ts",
+    "meow": "tsx src/meow.ts",
+    "citty": "tsx src/citty.ts",
+    "gunshi": "tsx src/gunshi.ts"
+  },
+  "dependencies": {
+    "@gunshi/plugin-completion": "^0.29.0",
+    "citty": "^0.1.6",
+    "commander": "^12.0.0",
+    "gunshi": "^0.29.0",
+    "meow": "^13.2.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/yargs": "^17.0.32",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.5"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": ["esbuild"]
+  }
+}
