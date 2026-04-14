@@ -1,0 +1,19 @@
+{
+  "name": "linear-notifications",
+  "version": "1.0.0",
+  "description": "Interactive CLI for viewing unread Linear notifications",
+  "main": "dist/index.js",
+  "bin": {
+    "linear-notifications": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}
