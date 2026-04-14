@@ -8,12 +8,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build",
+    "prepare": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.33.0"
 }

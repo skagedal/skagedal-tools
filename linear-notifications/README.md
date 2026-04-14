@@ -10,10 +10,12 @@ Interactive CLI for viewing and opening unread [Linear](https://linear.app) noti
 ## Installation
 
 ```sh
-npm install -g .
+pnpm link --global
 ```
 
 This builds the TypeScript source and installs the `linear-notifications` command globally.
+
+> **Note:** `pnpm install -g .` is broken in pnpm v10 (resolves `.` relative to the global store instead of the current directory). Use `pnpm link --global` instead.
 
 ## Usage
 
@@ -44,6 +46,6 @@ Linear Notifications — 3 unread notifications
 ## Development
 
 ```sh
-npm run build   # compile TypeScript to dist/
-npm start       # run the compiled output
+pnpm build   # compile TypeScript to dist/
+pnpm start   # run the compiled output
 ```
