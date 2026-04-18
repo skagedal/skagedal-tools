@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{self, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
 /// Finds git repositories with uncommitted changes in subdirectories
@@ -51,7 +51,7 @@ fn main() {
 
     if args.interactive {
         if let Some(selected) = run_interactive(dirty_repos) {
-            println!("{}", selected.display());
+            output_selected(&selected);
         }
     } else {
         for repo in &dirty_repos {
@@ -59,6 +59,15 @@ fn main() {
                 println!("{}", repo.display());
             }
         }
+    }
+}
+
+fn output_selected(path: &Path) {
+    if let Ok(file) = std::env::var("SUGGESTED_CD_FILE") {
+        let _ = fs::write(&file, path.to_string_lossy().as_bytes());
+        process::exit(10);
+    } else {
+        println!("{}", path.display());
     }
 }
 
