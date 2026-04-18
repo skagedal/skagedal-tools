@@ -49,8 +49,26 @@ public class GitDirtyChecker {
     }
   }
 
+  static final String USAGE = """
+      Usage: git-dirty-checker <directory> [<directory> ...]
+
+      Finds git repositories with uncommitted changes in subdirectories.
+      """;
+
   static void main(String[] args) {
-    final var paths = Arrays.stream(args).map(Path::of).toList();
+    final var argList = Arrays.asList(args);
+    if (argList.contains("--help") || argList.contains("-h")) {
+      System.out.print(USAGE);
+      return;
+    }
+    if (args.length == 0) {
+      System.err.print(USAGE);
+      System.exit(1);
+    }
+    final var paths = argList.stream()
+        .filter(a -> !a.startsWith("-"))
+        .map(Path::of)
+        .toList();
     printDirtyRepos(paths);
   }
 }
