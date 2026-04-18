@@ -4,18 +4,42 @@ A tool to find git repositories with uncommitted changes (dirty working trees) i
 
 ## Purpose
 
-This tool helps you quickly identify which repositories in a collection of git repositories have uncommitted changes. This is useful when you maintain multiple repositories and want to ensure you haven't forgotten to commit or push changes.
+Quickly identify which repositories in a collection have uncommitted changes. Useful when maintaining multiple repositories to ensure you haven't forgotten to commit or push changes.
 
-## Implementations
+## Building
 
-This repository contains multiple implementations of the same functionality:
+```bash
+cargo build --release
+```
 
-- **[java/](java/)** - A Java implementation that can be run as a standalone JAR
-- **[rust/](rust/)** - A Rust implementation with parallel processing for high performance
-- **[shell/](shell/)** - Shell script implementations (both sequential and parallel versions)
-
-Each implementation provides the same core functionality: given one or more directory paths, it will search for git repositories in subdirectories and report which ones have uncommitted changes.
+The compiled binary will be available at `target/release/git-dirty-checker`.
 
 ## Usage
 
-See the README in each subdirectory for implementation-specific usage instructions.
+```bash
+./target/release/git-dirty-checker /path/to/repos /another/path
+```
+
+Or run directly with cargo:
+
+```bash
+cargo run --release -- /path/to/repos /another/path
+```
+
+## Features
+
+- **Parallel processing**: Uses Rayon to check multiple repositories concurrently
+- **Interactive TUI mode**: Run with `--interactive` for a terminal UI with navigation and snooze support
+  - Navigate with `j`/`k` or arrow keys
+  - Search with `/`
+  - Snooze a repository for 1 hour with `s`
+- **Output**: Prints full paths of repositories with uncommitted changes, one per line (non-interactive mode)
+
+## Requirements
+
+- Rust toolchain (cargo and rustc)
+- Git must be installed and available in PATH
+
+## Other implementations
+
+The [`other-implementations/`](other-implementations/) directory contains shell script and Java implementations for reference.
