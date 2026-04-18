@@ -29,11 +29,17 @@ cargo run --release -- /path/to/repos /another/path
 ## Features
 
 - **Parallel processing**: Uses Rayon to check multiple repositories concurrently
-- **Interactive TUI mode**: Run with `--interactive` for a terminal UI with navigation and snooze support
+- **Interactive mode**: Run with `--interactive` for an inline UI with navigation and snooze support. Pass `--exit-if-no-active-dirty` together with `--interactive` to exit silently when all dirty repos are snoozed.
   - Navigate with `j`/`k` or arrow keys
   - Search with `/`
-  - Snooze a repository for 1 hour with `s`
+  - Snooze a repository for 1 hour with `s`; press `s` again on a snoozed repo to add another hour
+  - Unsnooze a repository with `u`
+  - Snoozed repos remain visible in grey at the bottom of the list
 - **Output**: Prints full paths of repositories with uncommitted changes, one per line (non-interactive mode)
+
+## Integration with `assistant` / `SUGGESTED_CD_FILE`
+
+When the interactive mode selection results in a directory, the tool checks the `SUGGESTED_CD_FILE` environment variable. If set, it writes the selected path to that file and exits with code `10` instead of printing to stdout. This follows the convention used by the `assistant` program, which uses this mechanism to `cd` the calling shell into the selected directory.
 
 ## Requirements
 
