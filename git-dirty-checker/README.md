@@ -29,7 +29,7 @@ cargo run --release -- /path/to/repos /another/path
 ## Features
 
 - **Parallel processing**: Uses Rayon to check multiple repositories concurrently
-- **Interactive mode**: Run with `--interactive` for an inline UI with navigation and snooze support
+- **Interactive mode**: Run with `--interactive` for an inline UI with navigation and snooze support. Pass `--exit-if-no-active-dirty` together with `--interactive` to exit silently when all dirty repos are snoozed.
   - Navigate with `j`/`k` or arrow keys
   - Search with `/`
   - Snooze a repository for 1 hour with `s`; press `s` again on a snoozed repo to add another hour

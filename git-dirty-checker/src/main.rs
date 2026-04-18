@@ -27,6 +27,10 @@ struct Args {
     #[clap(long)]
     interactive: bool,
 
+    /// In interactive mode, exit silently if there are no unsnoozed dirty repos
+    #[clap(long)]
+    exit_if_no_active_dirty: bool,
+
     /// Directories to search for git repositories
     #[clap(required = true)]
     dirs: Vec<String>,
@@ -50,6 +54,9 @@ fn main() {
     dirty_repos.sort();
 
     if args.interactive {
+        if args.exit_if_no_active_dirty && dirty_repos.iter().all(|r| is_snoozed(r)) {
+            return;
+        }
         if let Some(selected) = run_interactive(dirty_repos) {
             output_selected(&selected);
         }
