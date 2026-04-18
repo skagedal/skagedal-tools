@@ -1,3 +1,4 @@
+use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -12,26 +13,30 @@ use ratatui::{
     Frame, Terminal,
 };
 use rayon::prelude::*;
-use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 
+/// Finds git repositories with uncommitted changes in subdirectories
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Run in interactive TUI mode
+    #[clap(long)]
+    interactive: bool,
+
+    /// Directories to search for git repositories
+    #[clap(required = true)]
+    dirs: Vec<String>,
+}
+
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
+    let args = Args::parse();
 
-    let interactive = args.iter().any(|a| a == "--interactive");
-    let dirs: Vec<String> = args.into_iter().filter(|a| !a.starts_with("--")).collect();
-
-    if dirs.is_empty() {
-        eprintln!("Usage: git-dirty-checker [--interactive] <directory> [<directory> ...]");
-        eprintln!("\nFinds git repositories with uncommitted changes in subdirectories.");
-        std::process::exit(1);
-    }
-
-    let repositories: Vec<PathBuf> = dirs
+    let repositories: Vec<PathBuf> = args
+        .dirs
         .par_iter()
         .flat_map(|dir| find_subdirectories(dir))
         .collect();
@@ -45,7 +50,7 @@ fn main() {
     dirty_repos.sort();
     dirty_repos.retain(|repo| !is_snoozed(repo));
 
-    if interactive {
+    if args.interactive {
         if let Some(selected) = run_interactive(dirty_repos) {
             println!("{}", selected.display());
         }
