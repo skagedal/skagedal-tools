@@ -65,10 +65,10 @@ Times use `.` or `:` as the sub-separator. Milliseconds are introduced with a `.
 The tool detects the git repository you're running it from (via `git rev-parse --show-toplevel`) and looks up a section keyed by the repo's directory name in:
 
 ```
-~/.config/cloudwatch-insights/settings.toml
+~/.skagedal-tools/cloudwatch-insights/settings.toml
 ```
 
-Overridable with `$XDG_CONFIG_HOME` or the explicit `$CLOUDWATCH_INSIGHTS_CONFIG` env var.
+Per the skagedal-tools convention, per-tool state lives under `~/.skagedal-tools/<tool-name>/`. Override the whole base directory with `$SKAGEDAL_TOOLS_HOME`, or point at an arbitrary file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
 
 ```toml
 # settings.toml

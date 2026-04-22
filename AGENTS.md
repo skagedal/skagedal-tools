@@ -59,6 +59,27 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
   - Pass `renderHeader: null` to `cli()` when you don't want the command description
     reprinted before every invocation.
 
+## Per-tool Config and State Directories
+
+When a tool needs to store user-scoped config or state on disk (config
+files, caches, snooze records, etc.), put it under:
+
+```
+~/.skagedal-tools/<tool-name>/
+```
+
+For example, `git-dirty-checker` stores its snooze records in
+`~/.skagedal-tools/git-dirty-checker/snoozed/`, and `cloudwatch-insights`
+reads `~/.skagedal-tools/cloudwatch-insights/settings.toml`.
+
+Do not use `~/.config/<tool>/` or `$XDG_CONFIG_HOME` — those aren't
+meaningfully portable to macOS (the OS convention there is
+`~/Library/Application Support/`), and keeping everything under
+`~/.skagedal-tools/` makes it easy to back up, wipe, or sync as a group.
+
+Tools may honor a `SKAGEDAL_TOOLS_HOME` environment variable to
+override the base directory (primarily useful for tests).
+
 ## Rust Projects
 
 All Rust projects in this repository must follow these guidelines:

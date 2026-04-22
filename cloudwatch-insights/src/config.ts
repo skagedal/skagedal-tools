@@ -34,15 +34,18 @@ export class ConfigError extends Error {
 /**
  * Return the absolute path to the config file.
  *
+ * Per the skagedal-tools convention, per-tool state lives under
+ * ~/.skagedal-tools/<tool-name>/ (matches git-dirty-checker).
+ *
  * Order:
- *   1. $CLOUDWATCH_INSIGHTS_CONFIG (explicit override)
- *   2. $XDG_CONFIG_HOME/cloudwatch-insights/settings.toml
- *   3. ~/.config/cloudwatch-insights/settings.toml
+ *   1. $CLOUDWATCH_INSIGHTS_CONFIG (explicit override, mainly for tests)
+ *   2. $SKAGEDAL_TOOLS_HOME/cloudwatch-insights/settings.toml
+ *   3. ~/.skagedal-tools/cloudwatch-insights/settings.toml
  */
 export function configPath(env: NodeJS.ProcessEnv = process.env): string {
   if (env.CLOUDWATCH_INSIGHTS_CONFIG) return env.CLOUDWATCH_INSIGHTS_CONFIG;
-  const xdg = env.XDG_CONFIG_HOME || join(homedir(), ".config");
-  return join(xdg, "cloudwatch-insights", "settings.toml");
+  const base = env.SKAGEDAL_TOOLS_HOME || join(homedir(), ".skagedal-tools");
+  return join(base, "cloudwatch-insights", "settings.toml");
 }
 
 /**

@@ -78,14 +78,14 @@ test("defaultQueryForApp: escapes embedded quotes", () => {
   );
 });
 
-test("configPath: honors CLOUDWATCH_INSIGHTS_CONFIG, XDG_CONFIG_HOME, HOME", () => {
+test("configPath: honors CLOUDWATCH_INSIGHTS_CONFIG and SKAGEDAL_TOOLS_HOME", () => {
   assert.equal(
     configPath({ CLOUDWATCH_INSIGHTS_CONFIG: "/tmp/c.toml" }),
     "/tmp/c.toml",
   );
   assert.equal(
-    configPath({ XDG_CONFIG_HOME: "/xdg" }),
-    "/xdg/cloudwatch-insights/settings.toml",
+    configPath({ SKAGEDAL_TOOLS_HOME: "/custom" }),
+    "/custom/cloudwatch-insights/settings.toml",
   );
 });
 
