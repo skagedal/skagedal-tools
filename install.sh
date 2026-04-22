@@ -12,6 +12,9 @@ install_rust() {
 echo "==> Installing linear-notifications"
 (cd "$SCRIPT_DIR/linear-notifications" && pnpm link --global)
 
+echo "==> Installing cloudwatch-insights"
+(cd "$SCRIPT_DIR/cloudwatch-insights" && pnpm link --global)
+
 install_rust git-dirty-checker
 install_rust log-jsonify
 install_rust x-java-home
