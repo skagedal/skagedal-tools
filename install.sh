@@ -3,17 +3,20 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+install_node() {
+    local dir="$1"
+    echo "==> Installing $dir"
+    (cd "$SCRIPT_DIR/$dir" && pnpm link --global)
+}
+
 install_rust() {
     local dir="$1"
     echo "==> Installing $dir"
     (cd "$SCRIPT_DIR/$dir" && cargo install --path .)
 }
 
-echo "==> Installing linear-notifications"
-(cd "$SCRIPT_DIR/linear-notifications" && pnpm link --global)
-
-echo "==> Installing cloudwatch-insights"
-(cd "$SCRIPT_DIR/cloudwatch-insights" && pnpm link --global)
+install_node linear-notifications
+install_node cloudwatch-insights
 
 install_rust git-dirty-checker
 install_rust log-jsonify
