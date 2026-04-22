@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "fs";
-import { Command, InvalidArgumentError } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
 import { parseTimeRange, TimeRangeParseError } from "./time-range";
 import { runInsightsQuery, QueryRow } from "./insights";
+import {
+  applyEnvironment,
+  ConfigError,
+  configPath,
+  defaultQueryForApp,
+  Environment,
+  ENVIRONMENTS,
+  loadSettings,
+  resolveRepoDefaults,
+} from "./config";
 
 type OutputFormat = "ndjson" | "json" | "tsv";
 
@@ -17,11 +27,13 @@ interface CliOptions {
   limit?: number;
   region?: string;
   profile?: string;
+  environment?: Environment;
+  app?: string;
   output: OutputFormat;
   quiet: boolean;
 }
 
-const DEFAULT_QUERY = "fields @timestamp, @message | sort @timestamp desc";
+const FALLBACK_QUERY = "fields @timestamp, @message | sort @timestamp desc";
 
 function parsePositiveInt(raw: string): number {
   const n = parseInt(raw, 10);
@@ -45,24 +57,34 @@ function buildProgram(): Command {
     .description(
       "Download logs from AWS CloudWatch Logs Insights.\n\n" +
         "Time range examples:\n" +
-        '  5h                                last 5 hours\n' +
-        '  30m                               last 30 minutes\n' +
-        '  500ms                             last 500 milliseconds\n' +
-        '  13.00-13.01                       time range today\n' +
-        '  09:15:00.000-09:15:00.500         millisecond precision today\n' +
-        '  yesterday 17-18                   time range on a named day\n' +
-        '  2026-04-22T13:00:00Z/2026-04-22T14:00:00Z   explicit ISO range\n' +
-        '  "last Monday 9am to 5pm"          natural language (chrono-node)\n',
+        "  5h                                last 5 hours\n" +
+        "  30m                               last 30 minutes\n" +
+        "  500ms                             last 500 milliseconds\n" +
+        "  13.00-13.01                       time range today\n" +
+        "  09:15:00.000-09:15:00.500         millisecond precision today\n" +
+        "  yesterday 17-18                   time range on a named day\n" +
+        "  2026-04-22T13:00:00Z/2026-04-22T14:00:00Z   explicit ISO range\n" +
+        "  \"last Monday 9am to 5pm\"          natural language (chrono-node)\n\n" +
+        "Defaults are read per git repository from ~/.config/cloudwatch-insights/settings.toml.\n" +
+        'Example: [my-repo]\n         group = "/{env}/team-icc"\n         app   = "installer-notification"\n',
     )
-    .requiredOption(
+    .option(
       "-g, --log-group <name...>",
-      "log group name (repeat or comma-separate to query multiple)",
-      (value: string, previous: string[] = []) => previous.concat(value.split(",").map((s) => s.trim()).filter(Boolean)),
+      "log group name (repeat or comma-separate for multiple; overrides config)",
+      (value: string, previous: string[] = []) =>
+        previous.concat(value.split(",").map((s) => s.trim()).filter(Boolean)),
       [] as string[],
     )
     .requiredOption("-t, --time <range>", "time range (see examples above)")
     .option("-q, --query <string>", "CloudWatch Insights query string")
     .option("-f, --query-file <path>", "read query from file (use '-' for stdin)")
+    .option("--app <name>", "filter by `app` field (overrides config's app)")
+    .addOption(
+      new Option(
+        "-e, --environment <env>",
+        "substituted for {env} in the log group template",
+      ).choices([...ENVIRONMENTS]),
+    )
     .option<number>("-l, --limit <n>", "maximum number of rows to return", parsePositiveInt)
     .option("-r, --region <region>", "AWS region (overrides AWS_REGION)")
     .option("--profile <name>", "AWS profile (sets AWS_PROFILE)")
@@ -76,16 +98,69 @@ function buildProgram(): Command {
   return program;
 }
 
-function resolveQuery(options: CliOptions): string {
+function readQueryFile(path: string): string {
+  const source = path === "-" ? 0 : path;
+  return readFileSync(source, "utf8");
+}
+
+interface ResolvedPlan {
+  logGroups: string[];
+  query: string;
+  source: {
+    logGroups: "cli" | "config";
+    query: "cli" | "query-file" | "config-app" | "default";
+  };
+}
+
+function resolvePlan(options: CliOptions): ResolvedPlan {
   if (options.query && options.queryFile) {
     throw new Error("--query and --query-file are mutually exclusive");
   }
-  if (options.query) return options.query;
-  if (options.queryFile) {
-    const source = options.queryFile === "-" ? 0 : options.queryFile;
-    return readFileSync(source, "utf8");
+
+  const settings = loadSettings();
+  const { defaults, sectionName } = resolveRepoDefaults(settings);
+
+  let logGroups = options.logGroup;
+  let logGroupsSource: "cli" | "config" = "cli";
+  if (logGroups.length === 0) {
+    if (defaults.group) {
+      logGroups = [applyEnvironment(defaults.group, options.environment)];
+      logGroupsSource = "config";
+    } else {
+      throw new Error(
+        sectionName
+          ? `no --log-group given, and config section [${sectionName}] has no "group"`
+          : "no --log-group given, and no matching config section was found",
+      );
+    }
+  } else if (options.environment) {
+    logGroups = logGroups.map((g) => applyEnvironment(g, options.environment));
   }
-  return DEFAULT_QUERY;
+
+  let query: string;
+  let querySource: ResolvedPlan["source"]["query"];
+  if (options.query) {
+    query = options.query;
+    querySource = "cli";
+  } else if (options.queryFile) {
+    query = readQueryFile(options.queryFile);
+    querySource = "query-file";
+  } else {
+    const app = options.app ?? defaults.app;
+    if (app) {
+      query = defaultQueryForApp(app);
+      querySource = "config-app";
+    } else {
+      query = FALLBACK_QUERY;
+      querySource = "default";
+    }
+  }
+
+  return {
+    logGroups,
+    query,
+    source: { logGroups: logGroupsSource, query: querySource },
+  };
 }
 
 function renderRows(rows: QueryRow[], format: OutputFormat): void {
@@ -135,13 +210,22 @@ async function main(): Promise<void> {
   program.parse(process.argv);
   const options = program.opts<CliOptions>();
 
-  const query = resolveQuery(options);
-
   let range;
   try {
     range = parseTimeRange(options.time);
   } catch (err) {
     if (err instanceof TimeRangeParseError) {
+      process.stderr.write(`error: ${err.message}\n`);
+      process.exit(2);
+    }
+    throw err;
+  }
+
+  let plan: ResolvedPlan;
+  try {
+    plan = resolvePlan(options);
+  } catch (err) {
+    if (err instanceof ConfigError || err instanceof Error) {
       process.stderr.write(`error: ${err.message}\n`);
       process.exit(2);
     }
@@ -158,16 +242,18 @@ async function main(): Promise<void> {
 
   if (!options.quiet) {
     process.stderr.write(
-      `Querying ${options.logGroup.length} log group(s) from ${range.startTime.toISOString()} ` +
+      `Querying ${plan.logGroups.length} log group(s) from ${range.startTime.toISOString()} ` +
         `to ${range.endTime.toISOString()}\n`,
     );
+    process.stderr.write(`  log groups: ${plan.logGroups.join(", ")} (${plan.source.logGroups})\n`);
+    process.stderr.write(`  query source: ${plan.source.query}\n`);
   }
 
   let lastStatus = "";
   const result = await runInsightsQuery({
     client,
-    logGroups: options.logGroup,
-    queryString: query,
+    logGroups: plan.logGroups,
+    queryString: plan.query,
     startTime: range.startTime,
     endTime: range.endTime,
     limit: options.limit,
@@ -188,6 +274,9 @@ async function main(): Promise<void> {
     );
   }
 }
+
+// Exported so the config file path is easy to discover from --help-ish commands.
+export { configPath };
 
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);

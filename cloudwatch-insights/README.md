@@ -1,6 +1,6 @@
 # cloudwatch-insights
 
-Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html) from the command line, with a flexible time-range syntax.
+Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html) from the command line, with a flexible time-range syntax and per-git-repository defaults.
 
 ## Requirements
 
@@ -9,11 +9,15 @@ Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/Am
 
 ## Installation
 
+Install globally using pnpm:
+
 ```sh
 pnpm link --global
 ```
 
-This builds the TypeScript source and installs the `cloudwatch-insights` command globally.
+This builds the TypeScript source and installs the `cloudwatch-insights` command on your `PATH`. After installation you can run `cloudwatch-insights` from anywhere.
+
+> `pnpm install -g .` is broken in pnpm v10, so use `pnpm link --global`.
 
 ## Usage
 
@@ -34,12 +38,11 @@ cloudwatch-insights -g /aws/lambda/my-func -t 13.00-13.01 \
 # Millisecond granularity
 cloudwatch-insights -g /my/group -t 09:15:00.000-09:15:00.500
 
-# A natural-language time range on a named day
+# A time range on a named day
 cloudwatch-insights -g /my/group -t "yesterday 17-18"
 
-# Multiple log groups, JSON output, read query from a file
-cloudwatch-insights -g /api/prod -g /api/staging -t 30m \
-  -f query.txt -o json
+# No -g needed when there's a matching config section — just supply --environment
+cloudwatch-insights -t 30m -e systest
 ```
 
 ### Time-range syntax
@@ -57,13 +60,49 @@ The `-t / --time` flag accepts, in order of precedence:
 
 Times use `.` or `:` as the sub-separator. Milliseconds are introduced with a `.` after the seconds (e.g. `09:15:00.500`).
 
+### Per-repository defaults (`settings.toml`)
+
+The tool detects the git repository you're running it from (via `git rev-parse --show-toplevel`) and looks up a section keyed by the repo's directory name in:
+
+```
+~/.config/cloudwatch-insights/settings.toml
+```
+
+Overridable with `$XDG_CONFIG_HOME` or the explicit `$CLOUDWATCH_INSIGHTS_CONFIG` env var.
+
+```toml
+# settings.toml
+[installer-notification]
+group = "/{env}/team-icc"
+app   = "installer-notification"
+
+[another-repo]
+group = "/prod/another"
+```
+
+Fields:
+
+- `group` — log group used when `--log-group` is not given. The literal string `{env}` is substituted with the value of `--environment`.
+- `app` — if neither `--query` nor `--query-file` is given, the default query becomes:
+  ```
+  fields @timestamp, @message, app | filter app = "<app>" | sort @timestamp desc
+  ```
+
+### `--environment`
+
+```
+-e, --environment <env>      systest | uat | prod
+```
+
+Substituted into `{env}` in the log group template (either from config or from `--log-group`). Required whenever the template contains `{env}`.
+
 ### Output formats
 
 - `ndjson` (default) — one JSON object per row, one row per line.
 - `json` — a pretty-printed JSON array.
 - `tsv` — tab-separated values with a header row (`@ptr` is omitted).
 
-Progress (query status, row counts, byte totals) is written to stderr so piping the data side is safe. Use `--quiet` to silence it.
+Progress (query status, row counts, byte totals) is written to stderr so piping stdout is safe. Use `--quiet` to silence it.
 
 ### Credentials and region
 
@@ -77,7 +116,7 @@ Standard AWS SDK resolution applies:
 
 ```sh
 pnpm install
-pnpm build   # compile TypeScript to dist/
-pnpm dev -- -g /my/group -t 5h   # run directly from src/ via tsx
-pnpm test    # run the time-range parser tests
+pnpm build                         # compile TypeScript to dist/
+pnpm dev -- -g /my/group -t 5h     # run directly from src/ via tsx
+pnpm test                          # time-range + config tests
 ```
