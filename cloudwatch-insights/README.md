@@ -72,9 +72,9 @@ Overridable with `$XDG_CONFIG_HOME` or the explicit `$CLOUDWATCH_INSIGHTS_CONFIG
 
 ```toml
 # settings.toml
-[installer-notification]
-group = "/{env}/team-icc"
-app   = "installer-notification"
+[my-service]
+group = "/{env}/my-team"
+app   = "my-service"
 
 [another-repo]
 group = "/prod/another"
@@ -98,9 +98,8 @@ Substituted into `{env}` in the log group template (either from config or from `
 
 ### Output formats
 
-- `ndjson` (default) — one JSON object per row, one row per line.
+- `jsonl` (default) — one JSON object per row, one row per line.
 - `json` — a pretty-printed JSON array.
-- `tsv` — tab-separated values with a header row (`@ptr` is omitted).
 
 Progress (query status, row counts, byte totals) is written to stderr so piping stdout is safe. Use `--quiet` to silence it.
 

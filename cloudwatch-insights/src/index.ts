@@ -16,8 +16,8 @@ import {
   resolveRepoDefaults,
 } from "./config.js";
 
-type OutputFormat = "ndjson" | "json" | "tsv";
-const OUTPUT_FORMATS: readonly OutputFormat[] = ["ndjson", "json", "tsv"];
+type OutputFormat = "jsonl" | "json";
+const OUTPUT_FORMATS: readonly OutputFormat[] = ["jsonl", "json"];
 
 const FALLBACK_QUERY = "fields @timestamp, @message | sort @timestamp desc";
 
@@ -80,8 +80,8 @@ const command = define({
     output: {
       type: "string",
       short: "o",
-      default: "ndjson",
-      description: "output format: ndjson | json | tsv",
+      default: "jsonl",
+      description: "output format: jsonl | json",
     },
     quiet: {
       type: "boolean",
@@ -256,7 +256,7 @@ function resolvePlan(args: ResolveArgs): ResolvedPlan {
 
 function renderRows(rows: QueryRow[], format: OutputFormat): void {
   switch (format) {
-    case "ndjson":
+    case "jsonl":
       for (const row of rows) {
         process.stdout.write(JSON.stringify(row) + "\n");
       }
@@ -264,36 +264,7 @@ function renderRows(rows: QueryRow[], format: OutputFormat): void {
     case "json":
       process.stdout.write(JSON.stringify(rows, null, 2) + "\n");
       break;
-    case "tsv": {
-      if (rows.length === 0) return;
-      const columns = collectColumns(rows);
-      process.stdout.write(columns.join("\t") + "\n");
-      for (const row of rows) {
-        const line = columns.map((c) => escapeTsv(row[c] ?? "")).join("\t");
-        process.stdout.write(line + "\n");
-      }
-      break;
-    }
   }
-}
-
-function collectColumns(rows: QueryRow[]): string[] {
-  const seen = new Set<string>();
-  const order: string[] = [];
-  for (const row of rows) {
-    for (const key of Object.keys(row)) {
-      if (key === "@ptr") continue;
-      if (!seen.has(key)) {
-        seen.add(key);
-        order.push(key);
-      }
-    }
-  }
-  return order;
-}
-
-function escapeTsv(value: string): string {
-  return value.replace(/\t/g, " ").replace(/\r?\n/g, " ");
 }
 
 function validateChoice<T extends string>(
