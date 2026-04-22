@@ -4,7 +4,7 @@ Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/Am
 
 ## Requirements
 
-- [Node.js](https://nodejs.org) (v18+)
+- [Node.js](https://nodejs.org) (v20+, required by [gunshi](https://github.com/kazupon/gunshi))
 - AWS credentials available through the standard SDK chain (env vars, `~/.aws/credentials`, SSO, IMDS, …)
 
 ## Installation

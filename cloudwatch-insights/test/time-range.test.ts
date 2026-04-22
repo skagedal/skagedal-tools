@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 
-import { parseTimeRange, TimeRangeParseError } from "../src/time-range";
+import { parseTimeRange, TimeRangeParseError } from "../src/time-range.js";
 
 // Fixed "now" — 2026-04-22 at 15:30:00 local time.
 const NOW = new Date(2026, 3, 22, 15, 30, 0);

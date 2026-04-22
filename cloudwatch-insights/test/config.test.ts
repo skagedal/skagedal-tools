@@ -14,7 +14,7 @@ import {
   loadSettings,
   parseSettings,
   resolveRepoDefaults,
-} from "../src/config";
+} from "../src/config.js";
 
 test("parseSettings: extracts group and app from a named section", () => {
   const settings = parseSettings(
