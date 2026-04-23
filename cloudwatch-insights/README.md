@@ -22,7 +22,7 @@ This builds the TypeScript source and installs the `cloudwatch-insights` command
 ## Usage
 
 ```sh
-cloudwatch-insights -g <log-group> -t <time-range> [-q '<insights query>']
+cloudwatch-insights -g <log-group> [-t <time-range>] [-q '<insights query>']
 ```
 
 ### Examples
@@ -47,7 +47,7 @@ cloudwatch-insights -t 30m -e systest
 
 ### Time-range syntax
 
-The `-t / --time` flag accepts, in order of precedence:
+The `-t / --time` flag defaults to `1h` (last hour). It accepts, in order of precedence:
 
 | Form | Examples | Meaning |
 |------|----------|---------|
