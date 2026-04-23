@@ -6,7 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 install-node() {
     local dir="$1"
     echo "==> Installing $dir"
-    (cd "$SCRIPT_DIR/$dir" && pnpm link --global)
+    (
+        cd "$SCRIPT_DIR/$dir"
+        pnpm install
+        pnpm run build
+        pnpm link --global
+    )
 }
 
 install-rust() {
