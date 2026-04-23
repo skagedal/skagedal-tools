@@ -5,7 +5,7 @@ import termkit from "terminal-kit";
 
 const term = termkit.terminal;
 
-const GRAPHQL_QUERY = `query {
+const NOTIFICATIONS_QUERY = `query {
   notifications(first: 50) {
     nodes {
       id
@@ -49,6 +49,26 @@ interface Notification {
   comment?: { body: string } | null;
 }
 
+interface Issue {
+  identifier: string;
+  title: string;
+  description: string | null;
+  url: string;
+  createdAt: string;
+  state: { name: string } | null;
+  priorityLabel: string | null;
+  assignee: { name: string } | null;
+  creator: { name: string } | null;
+  labels: { nodes: Array<{ name: string }> };
+  comments: {
+    nodes: Array<{
+      body: string;
+      createdAt: string;
+      user: { name: string } | null;
+    }>;
+  };
+}
+
 function runLinearApi(query: string): any {
   const result = spawnSync("linear", ["api", query], { encoding: "utf8" });
 
@@ -69,9 +89,35 @@ function runLinearApi(query: string): any {
 }
 
 function fetchUnreadNotifications(): Notification[] {
-  const data = runLinearApi(GRAPHQL_QUERY);
+  const data = runLinearApi(NOTIFICATIONS_QUERY);
   const nodes: Notification[] = data?.data?.notifications?.nodes ?? [];
   return nodes.filter((n) => n.readAt === null);
+}
+
+function fetchIssue(identifier: string): Issue {
+  const query = `query { issue(id: "${identifier}") {
+    identifier
+    title
+    description
+    url
+    createdAt
+    state { name }
+    priorityLabel
+    assignee { name }
+    creator { name }
+    labels { nodes { name } }
+    comments(first: 50) {
+      nodes {
+        body
+        createdAt
+        user { name }
+      }
+    }
+  } }`;
+  const data = runLinearApi(query);
+  const issue = data?.data?.issue;
+  if (!issue) throw new Error(`Issue ${identifier} not found`);
+  return issue;
 }
 
 function markNotificationRead(id: string): void {
@@ -137,7 +183,50 @@ function countStatus(count: number): string {
   return `${count} unread notification${count !== 1 ? "s" : ""}`;
 }
 
-type Mode = "list" | "details";
+function safeW(): number {
+  return Math.max(0, term.width - 1);
+}
+
+type Mode = "list" | "issue";
+
+interface Row {
+  label: string;
+  value: string;
+}
+
+function metadataRows(n: Notification): Row[] {
+  const rows: Row[] = [
+    { label: "Type", value: n.type },
+    { label: "Actor", value: n.actor?.name ?? "—" },
+    { label: "Time", value: `${formatTime(n.createdAt)} (${n.createdAt})` },
+  ];
+  if (n.issue)
+    rows.push({
+      label: "Issue",
+      value: `${n.issue.identifier} — ${n.issue.title}`,
+    });
+  if (n.project) rows.push({ label: "Project", value: n.project.name });
+  if (n.pullRequest)
+    rows.push({
+      label: "PR",
+      value: `#${n.pullRequest.number} ${n.pullRequest.title}`,
+    });
+  rows.push({ label: "URL", value: n.url });
+  return rows;
+}
+
+function drawLabeledRows(startRow: number, maxRow: number, rows: Row[]): number {
+  const labelW = Math.max(...rows.map((r) => r.label.length)) + 2;
+  let row = startRow;
+  for (const { label, value } of rows) {
+    if (row > maxRow) break;
+    term.moveTo(1, row);
+    term.dim((label + ":").padEnd(labelW));
+    term(truncate(value, Math.max(0, safeW() - labelW)));
+    row++;
+  }
+  return row;
+}
 
 class App {
   notifications: Notification[];
@@ -145,7 +234,11 @@ class App {
   scrollOffset = 0;
   mode: Mode = "list";
   listStatus: string;
-  detailsStatus = "";
+  issueStatus = "";
+  issue: Issue | null = null;
+  issueError: string | null = null;
+  issueLoading = false;
+  issueCache = new Map<string, Issue>();
 
   constructor(notifications: Notification[]) {
     this.notifications = notifications;
@@ -158,139 +251,313 @@ class App {
 
   render(): void {
     if (this.mode === "list") this.renderList();
-    else this.renderDetails();
+    else this.renderIssue();
   }
 
   renderList(): void {
     term.clear();
+
     term.moveTo(1, 1);
     term.bold.cyan("Linear Notifications");
     term(" ");
     term.dim(`— ${this.listStatus}`);
 
+    const footerRow = term.height;
     const listTop = 3;
-    const listBottom = term.height - 1;
-    const maxItems = Math.max(1, listBottom - listTop + 1);
+    const maxListHeight = Math.max(
+      3,
+      Math.min(10, Math.floor((term.height - listTop - 2) * 0.4))
+    );
+    const listHeight = Math.min(this.notifications.length, maxListHeight);
+    const listBottom = listTop + listHeight - 1;
+    const separatorRow = listBottom + 1;
+    const previewTop = separatorRow + 1;
+    const previewBottom = footerRow - 1;
 
     if (this.selected < this.scrollOffset) {
       this.scrollOffset = this.selected;
-    } else if (this.selected >= this.scrollOffset + maxItems) {
-      this.scrollOffset = this.selected - maxItems + 1;
+    } else if (this.selected >= this.scrollOffset + listHeight) {
+      this.scrollOffset = this.selected - listHeight + 1;
     }
 
     const timeW = 8;
-    const visible = Math.min(maxItems, this.notifications.length - this.scrollOffset);
-    for (let i = 0; i < visible; i++) {
+    const rowW = safeW();
+    for (let i = 0; i < listHeight; i++) {
       const idx = i + this.scrollOffset;
+      if (idx >= this.notifications.length) break;
       const n = this.notifications[idx];
       const isSelected = idx === this.selected;
       const prefix = isSelected ? "▶ " : "  ";
-      const titleW = Math.max(0, term.width - timeW - prefix.length - 1);
+      const titleW = Math.max(0, rowW - timeW - prefix.length - 1);
       const title = truncate(n.title, titleW).padEnd(titleW);
       const time = formatTime(n.createdAt).padStart(timeW);
       const line = `${prefix}${title} ${time}`;
 
       term.moveTo(1, listTop + i);
-      const rowWidth = Math.max(0, term.width - 1);
       if (isSelected) {
-        term.inverse.bold(truncate(line, rowWidth).padEnd(rowWidth));
+        term.inverse.bold(truncate(line, rowW).padEnd(rowW));
       } else {
-        term(truncate(line, rowWidth));
+        term(truncate(line, rowW));
       }
     }
 
-    term.moveTo(1, term.height);
+    if (separatorRow <= footerRow - 1) {
+      term.moveTo(1, separatorRow);
+      term.dim("─".repeat(rowW));
+    }
+
+    if (previewTop <= previewBottom) {
+      this.renderPreview(previewTop, previewBottom);
+    }
+
+    term.moveTo(1, footerRow);
     term.dim(
       truncate(
-        "↑↓/jk: navigate  Enter: details  b: browser  m: mark read  r: reload  q: quit",
-        Math.max(0, term.width - 1)
+        "↑↓/jk: navigate  Enter/o: open  b: browser  m: mark read  r: reload  q: quit",
+        rowW
       )
     );
   }
 
-  renderDetails(): void {
+  renderPreview(top: number, bottom: number): void {
     const n = this.current();
     if (!n) return;
+    const w = safeW();
 
-    term.clear();
-    term.moveTo(1, 1);
-    term.bold.cyan(truncate(n.title, term.width));
+    let row = top;
 
-    let row = 2;
-    if (n.subtitle) {
+    term.moveTo(1, row);
+    term.bold(truncate(n.title, w));
+    row++;
+
+    if (n.subtitle && row <= bottom) {
       term.moveTo(1, row);
-      term.dim(truncate(n.subtitle, term.width));
-      row++;
-    }
-    row++; // blank line
-
-    const rows: Array<[string, string]> = [
-      ["Type", n.type],
-      ["Actor", n.actor?.name ?? "—"],
-      ["Time", `${formatTime(n.createdAt)} (${n.createdAt})`],
-    ];
-    if (n.issue)
-      rows.push(["Issue", `${n.issue.identifier} — ${n.issue.title}`]);
-    if (n.project) rows.push(["Project", n.project.name]);
-    if (n.pullRequest)
-      rows.push(["PR", `#${n.pullRequest.number} ${n.pullRequest.title}`]);
-    rows.push(["URL", n.url]);
-
-    const labelW = Math.max(...rows.map(([l]) => l.length)) + 2;
-    for (const [label, value] of rows) {
-      term.moveTo(1, row);
-      term.dim((label + ":").padEnd(labelW));
-      term(truncate(value, Math.max(0, term.width - labelW)));
+      term.dim(truncate(n.subtitle, w));
       row++;
     }
 
-    if (n.comment?.body) {
-      row++; // blank line
+    if (row <= bottom) row++; // blank line
+
+    row = drawLabeledRows(row, bottom, metadataRows(n));
+
+    if (n.comment?.body && row + 1 <= bottom) {
+      row++; // blank
       term.moveTo(1, row);
       term.bold("Comment");
       row++;
 
-      const footerRow = term.height;
-      const maxBodyRows = Math.max(0, footerRow - row - 1);
-      const bodyLines = wrapText(n.comment.body, term.width);
-      const shown = bodyLines.slice(0, maxBodyRows);
+      const bodyLines = wrapText(n.comment.body, w);
+      const available = bottom - row + 1;
+      const shown = bodyLines.slice(0, available);
       for (const line of shown) {
+        if (row > bottom) break;
         term.moveTo(1, row);
         term(line);
         row++;
       }
-      if (bodyLines.length > shown.length) {
-        term.moveTo(1, row);
+      if (bodyLines.length > shown.length && row - 1 <= bottom) {
+        term.moveTo(1, Math.min(row, bottom));
+        const leftover = bodyLines.length - shown.length;
         term.dim(
-          `… (${bodyLines.length - shown.length} more line${
-            bodyLines.length - shown.length !== 1 ? "s" : ""
-          })`
+          truncate(
+            `… (${leftover} more line${leftover !== 1 ? "s" : ""})`,
+            w
+          )
         );
       }
     }
-
-    term.moveTo(1, term.height);
-    const footerW = Math.max(0, term.width - 1);
-    const help = "b: browser  m: mark read  Enter/q: back";
-    const footer = this.detailsStatus
-      ? `${help}  ${this.detailsStatus}`
-      : help;
-    term.dim(truncate(footer, footerW));
   }
 
-  enterDetails(): void {
-    this.mode = "details";
-    this.detailsStatus = "";
+  renderIssue(): void {
+    term.clear();
+    const n = this.current();
+    if (!n) return;
+    const w = safeW();
+    const footerRow = term.height;
+    const bodyBottom = footerRow - 1;
+
+    const footerHelp = "b: browser  m: mark read  u/Enter/q: back";
+
+    const drawFooter = () => {
+      term.moveTo(1, footerRow);
+      const text = this.issueStatus
+        ? `${footerHelp}  ${this.issueStatus}`
+        : footerHelp;
+      term.dim(truncate(text, w));
+    };
+
+    if (this.issueLoading) {
+      term.moveTo(1, 1);
+      term.dim("Loading issue…");
+      drawFooter();
+      return;
+    }
+
+    if (this.issueError) {
+      term.moveTo(1, 1);
+      term.red(truncate(this.issueError, w));
+      drawFooter();
+      return;
+    }
+
+    if (this.issue) {
+      this.renderIssueBody(this.issue, bodyBottom, w);
+    } else {
+      // No associated issue — fall back to notification details
+      this.renderNotificationFallback(n, bodyBottom, w);
+    }
+
+    drawFooter();
+  }
+
+  renderIssueBody(issue: Issue, bottom: number, w: number): void {
+    let row = 1;
+
+    term.moveTo(1, row);
+    term.bold.cyan(truncate(`${issue.identifier}  ${issue.title}`, w));
+    row += 2;
+
+    const meta: Row[] = [];
+    if (issue.state) meta.push({ label: "State", value: issue.state.name });
+    if (issue.priorityLabel)
+      meta.push({ label: "Priority", value: issue.priorityLabel });
+    if (issue.assignee)
+      meta.push({ label: "Assignee", value: issue.assignee.name });
+    if (issue.creator)
+      meta.push({ label: "Creator", value: issue.creator.name });
+    meta.push({
+      label: "Created",
+      value: `${formatTime(issue.createdAt)} (${issue.createdAt})`,
+    });
+    const labelNames = issue.labels?.nodes?.map((l) => l.name) ?? [];
+    if (labelNames.length)
+      meta.push({ label: "Labels", value: labelNames.join(", ") });
+    meta.push({ label: "URL", value: issue.url });
+
+    row = drawLabeledRows(row, bottom, meta);
+
+    if (issue.description && row + 1 <= bottom) {
+      row++; // blank
+      term.moveTo(1, row);
+      term.bold("Description");
+      row++;
+      const lines = wrapText(issue.description, w);
+      for (const line of lines) {
+        if (row > bottom) return;
+        term.moveTo(1, row);
+        term(line);
+        row++;
+      }
+    }
+
+    const comments = issue.comments?.nodes ?? [];
+    if (comments.length && row + 1 <= bottom) {
+      row++;
+      term.moveTo(1, row);
+      term.bold(`Comments (${comments.length})`);
+      row++;
+      for (const c of comments) {
+        if (row > bottom) return;
+        term.moveTo(1, row);
+        term.dim(
+          truncate(
+            `— ${c.user?.name ?? "?"} · ${formatTime(c.createdAt)}`,
+            w
+          )
+        );
+        row++;
+        const lines = wrapText(c.body, w);
+        for (const line of lines) {
+          if (row > bottom) return;
+          term.moveTo(1, row);
+          term(line);
+          row++;
+        }
+        if (row > bottom) return;
+        row++; // blank between comments
+      }
+    }
+  }
+
+  renderNotificationFallback(n: Notification, bottom: number, w: number): void {
+    let row = 1;
+    term.moveTo(1, row);
+    term.bold.cyan(truncate(n.title, w));
+    row++;
+    if (n.subtitle) {
+      term.moveTo(1, row);
+      term.dim(truncate(n.subtitle, w));
+      row++;
+    }
+    row++;
+    row = drawLabeledRows(row, bottom, metadataRows(n));
+
+    if (n.comment?.body && row + 1 <= bottom) {
+      row++;
+      term.moveTo(1, row);
+      term.bold("Comment");
+      row++;
+      const lines = wrapText(n.comment.body, w);
+      for (const line of lines) {
+        if (row > bottom) return;
+        term.moveTo(1, row);
+        term(line);
+        row++;
+      }
+    }
+  }
+
+  openCurrent(): void {
+    const n = this.current();
+    if (!n) return;
+
+    this.mode = "issue";
+    this.issueStatus = "";
+    this.issue = null;
+    this.issueError = null;
+
+    if (!n.issue) {
+      // No associated issue — show fallback immediately
+      this.issueLoading = false;
+      this.render();
+      return;
+    }
+
+    const cached = this.issueCache.get(n.issue.identifier);
+    if (cached) {
+      this.issue = cached;
+      this.issueLoading = false;
+      this.render();
+      return;
+    }
+
+    this.issueLoading = true;
+    this.render();
+
+    try {
+      const issue = fetchIssue(n.issue.identifier);
+      this.issueCache.set(n.issue.identifier, issue);
+      this.issue = issue;
+      this.issueError = null;
+    } catch (err) {
+      this.issueError = `Error loading issue: ${err}`;
+    } finally {
+      this.issueLoading = false;
+    }
     this.render();
   }
 
-  leaveDetails(): void {
+  backToList(): void {
     this.mode = "list";
+    this.issue = null;
+    this.issueError = null;
+    this.issueLoading = false;
     this.render();
   }
 
   removeCurrent(): boolean {
-    this.notifications.splice(this.selected, 1);
+    const removed = this.notifications.splice(this.selected, 1)[0];
+    if (removed?.issue) this.issueCache.delete(removed.issue.identifier);
     if (this.notifications.length === 0) return false;
     this.selected = Math.min(this.selected, this.notifications.length - 1);
     this.listStatus = countStatus(this.notifications.length);
@@ -302,7 +569,11 @@ class App {
     this.render();
     try {
       this.notifications = fetchUnreadNotifications();
-      this.selected = Math.min(this.selected, Math.max(0, this.notifications.length - 1));
+      this.issueCache.clear();
+      this.selected = Math.min(
+        this.selected,
+        Math.max(0, this.notifications.length - 1)
+      );
       this.listStatus = countStatus(this.notifications.length);
     } catch (err) {
       this.listStatus = `Error reloading: ${err}`;
@@ -357,7 +628,7 @@ async function main(): Promise<void> {
     if (app.mode === "list") {
       handleListKey(app, key);
     } else {
-      handleDetailsKey(app, key);
+      handleIssueKey(app, key);
     }
   });
 }
@@ -382,7 +653,8 @@ function handleListKey(app: App, key: string): void {
       return;
 
     case "ENTER":
-      if (app.current()) app.enterDetails();
+    case "o":
+      if (app.current()) app.openCurrent();
       return;
 
     case "b": {
@@ -422,19 +694,21 @@ function handleListKey(app: App, key: string): void {
   }
 }
 
-function handleDetailsKey(app: App, key: string): void {
+function handleIssueKey(app: App, key: string): void {
   switch (key) {
+    case "u":
     case "q":
     case "ESCAPE":
     case "ENTER":
-      app.leaveDetails();
+      app.backToList();
       return;
 
     case "b": {
       const n = app.current();
-      if (n?.url) {
-        openUrl(n.url);
-        app.detailsStatus = "Opened in browser";
+      const url = app.issue?.url ?? n?.url;
+      if (url) {
+        openUrl(url);
+        app.issueStatus = "Opened in browser";
         app.render();
       }
       return;
@@ -443,7 +717,7 @@ function handleDetailsKey(app: App, key: string): void {
     case "m": {
       const n = app.current();
       if (!n) return;
-      app.detailsStatus = "Marking as read…";
+      app.issueStatus = "Marking as read…";
       app.render();
       try {
         markNotificationRead(n.id);
@@ -451,9 +725,9 @@ function handleDetailsKey(app: App, key: string): void {
           quit(0, "No unread notifications.\n");
           return;
         }
-        app.leaveDetails();
+        app.backToList();
       } catch (err) {
-        app.detailsStatus = `Error marking as read: ${err}`;
+        app.issueStatus = `Error marking as read: ${err}`;
         app.render();
       }
       return;
