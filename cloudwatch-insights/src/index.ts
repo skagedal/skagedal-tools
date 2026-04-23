@@ -1,39 +1,50 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "fs";
+import { createReadStream, existsSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
+import { pipeline } from "stream/promises";
 import { cli, define } from "gunshi";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
 import { parseTimeRange, TimeRangeParseError } from "./time-range.js";
-import { runInsightsQuery, QueryRow } from "./insights.js";
+import { runInsightsQuery } from "./insights.js";
 import {
   applyEnvironment,
   ConfigError,
   configPath,
-  defaultQueryForApp,
   ensureConfigFile,
   Environment,
   ENVIRONMENTS,
   loadSettings,
   resolveRepoDefaults,
 } from "./config.js";
-
-type OutputFormat = "jsonl" | "json";
-const OUTPUT_FORMATS: readonly OutputFormat[] = ["jsonl", "json"];
-
-const FALLBACK_QUERY = "fields @timestamp, @message | sort @timestamp desc";
+import {
+  currentInsightsPath,
+  ensureCurrentInsights,
+  FrontMatter,
+  latestRunPath,
+  loadQueryFile,
+  parseQueryFile,
+  runResultPath,
+  updateLatestSymlink,
+  writeResults,
+} from "./query-file.js";
 
 const DESCRIPTION = "Download logs from AWS CloudWatch Logs Insights.";
 
 const TIME_DESCRIPTION =
-  "time range (defaults to 1h). Examples: 5h, 30m, 500ms, 13.00-13.01, " +
+  "time range. Examples: 5h, 30m, 500ms, 13.00-13.01, " +
   "09:15:00.000-09:15:00.500, \"yesterday 17-18\", " +
-  "2026-04-22T13:00:00Z/2026-04-22T14:00:00Z, or natural language via chrono-node";
+  "2026-04-22T13:00:00Z/2026-04-22T14:00:00Z, or natural language via chrono-node. " +
+  "Defaults to the front-matter `time` if present, otherwise 1h.";
 
-const command = define({
-  name: "cloudwatch-insights",
-  description: DESCRIPTION,
+// ---------------------------------------------------------------------------
+// query subcommand
+// ---------------------------------------------------------------------------
+
+const queryCmd = define({
+  name: "query",
+  description: "Run a CloudWatch Logs Insights query (opens $EDITOR when no -q/-f is given)",
   args: {
     "log-group": {
       type: "string",
@@ -44,22 +55,17 @@ const command = define({
     time: {
       type: "string",
       short: "t",
-      default: "1h",
       description: TIME_DESCRIPTION,
     },
     query: {
       type: "string",
       short: "q",
-      description: "CloudWatch Insights query string",
+      description: "CloudWatch Insights query string (skips editor)",
     },
     "query-file": {
       type: "string",
       short: "f",
-      description: "read query from file (use '-' for stdin)",
-    },
-    app: {
-      type: "string",
-      description: "filter by `app` field (overrides config's app)",
+      description: "read query from file (use '-' for stdin; skips editor)",
     },
     environment: {
       type: "string",
@@ -80,12 +86,6 @@ const command = define({
       type: "string",
       description: "AWS profile (sets AWS_PROFILE)",
     },
-    output: {
-      type: "string",
-      short: "o",
-      default: "jsonl",
-      description: "output format: jsonl | json",
-    },
     quiet: {
       type: "boolean",
       default: false,
@@ -93,83 +93,75 @@ const command = define({
     },
   },
   run: async (ctx) => {
-    await runCommand(ctx.values);
+    await runQuery(ctx.values as unknown as QueryValues);
   },
 });
 
-interface Values {
+interface QueryValues {
   "log-group"?: string[];
-  time: string;
+  time?: string;
   query?: string;
   "query-file"?: string;
-  app?: string;
   environment?: string;
   limit?: number;
   region?: string;
   profile?: string;
-  output: string;
   quiet: boolean;
 }
 
-async function runCommand(raw: Record<string, unknown>): Promise<void> {
-  const values = raw as unknown as Values;
-
-  const output = validateChoice("output", values.output, OUTPUT_FORMATS) as OutputFormat;
-  const environment = values.environment
-    ? (validateChoice("environment", values.environment, ENVIRONMENTS) as Environment)
-    : undefined;
-  const logGroupsRaw = flatten((values["log-group"] ?? []).map((s) => s.split(",")));
-  if (values.limit !== undefined && (!Number.isFinite(values.limit) || values.limit <= 0)) {
-    fail("--limit must be a positive integer", 2);
+async function runQuery(values: QueryValues): Promise<void> {
+  if (values.query && values["query-file"]) {
+    fail("--query and --query-file are mutually exclusive", 2);
   }
+
+  const settings = loadSettings();
+  const { defaults, sectionName } = resolveRepoDefaults(settings);
+
+  const { queryBody, frontMatter } = await resolveQuerySource(values, defaults.app);
+
+  const environment = pickEnvironment(values.environment ?? frontMatter.environment);
+  const timeExpr = values.time ?? frontMatter.time ?? "1h";
+  const limit = values.limit ?? frontMatter.limit;
 
   let range;
   try {
-    range = parseTimeRange(values.time);
+    range = parseTimeRange(timeExpr);
   } catch (err) {
     if (err instanceof TimeRangeParseError) fail(err.message, 2);
     throw err;
   }
 
-  let plan: ResolvedPlan;
-  try {
-    plan = resolvePlan({
-      logGroupsRaw,
-      query: values.query,
-      queryFile: values["query-file"],
-      app: values.app,
-      environment,
-    });
-  } catch (err) {
-    if (err instanceof ConfigError || err instanceof Error) fail(err.message, 2);
-    throw err;
-  }
+  const logGroups = resolveLogGroups({
+    cliLogGroups: flatten((values["log-group"] ?? []).map((s) => s.split(","))),
+    frontMatterLogGroup: frontMatter.logGroup,
+    configGroupTemplate: defaults.group,
+    environment,
+    sectionName,
+  });
 
   if (values.profile) {
     process.env.AWS_PROFILE = values.profile;
   }
-
   const client = new CloudWatchLogsClient({
     region: values.region ?? process.env.AWS_REGION,
   });
 
   if (!values.quiet) {
     process.stderr.write(
-      `Querying ${plan.logGroups.length} log group(s) from ${range.startTime.toISOString()} ` +
+      `Querying ${logGroups.length} log group(s) from ${range.startTime.toISOString()} ` +
         `to ${range.endTime.toISOString()}\n`,
     );
-    process.stderr.write(`  log groups: ${plan.logGroups.join(", ")} (${plan.source.logGroups})\n`);
-    process.stderr.write(`  query source: ${plan.source.query}\n`);
+    process.stderr.write(`  log groups: ${logGroups.join(", ")}\n`);
   }
 
   let lastStatus = "";
   const result = await runInsightsQuery({
     client,
-    logGroups: plan.logGroups,
-    queryString: plan.query,
+    logGroups,
+    queryString: queryBody,
     startTime: range.startTime,
     endTime: range.endTime,
-    limit: values.limit,
+    limit,
     onStatus: (status) => {
       if (values.quiet || status === lastStatus) return;
       lastStatus = String(status);
@@ -177,108 +169,169 @@ async function runCommand(raw: Record<string, unknown>): Promise<void> {
     },
   });
 
-  renderRows(result.rows, output);
+  const outPath = runResultPath();
+  writeResults({ path: outPath, rows: result.rows });
+  const linkPath = updateLatestSymlink(outPath);
 
-  if (!values.quiet && result.statistics) {
-    const { recordsMatched, recordsScanned, bytesScanned } = result.statistics;
+  process.stdout.write(outPath + "\n");
+
+  if (!values.quiet) {
+    const { recordsMatched, recordsScanned, bytesScanned } = result.statistics ?? {};
     process.stderr.write(
-      `Done. ${result.rows.length} rows returned ` +
-        `(matched=${recordsMatched ?? "?"} scanned=${recordsScanned ?? "?"} bytes=${bytesScanned ?? "?"}).\n`,
+      `Done. ${result.rows.length} rows written (matched=${recordsMatched ?? "?"} ` +
+        `scanned=${recordsScanned ?? "?"} bytes=${bytesScanned ?? "?"}).\n`,
     );
+    process.stderr.write(`  ${linkPath} → ${outPath}\n`);
   }
 }
 
-interface ResolvedPlan {
-  logGroups: string[];
-  query: string;
-  source: {
-    logGroups: "cli" | "config";
-    query: "cli" | "query-file" | "config-app" | "default";
-  };
+interface QuerySource {
+  queryBody: string;
+  frontMatter: FrontMatter;
 }
 
-interface ResolveArgs {
-  logGroupsRaw: string[];
-  query: string | undefined;
-  queryFile: string | undefined;
-  app: string | undefined;
+async function resolveQuerySource(
+  values: QueryValues,
+  configApp: string | undefined,
+): Promise<QuerySource> {
+  if (values.query) {
+    return { queryBody: values.query, frontMatter: {} };
+  }
+  if (values["query-file"]) {
+    const source = values["query-file"] === "-" ? 0 : values["query-file"];
+    const raw = readFileSync(source, "utf8");
+    // Support front-matter in explicit files too.
+    const parsed = parseQueryFile(raw);
+    return { queryBody: parsed.body, frontMatter: parsed.frontMatter };
+  }
+
+  // Editor flow
+  const path = currentInsightsPath();
+  const seeded = ensureCurrentInsights(path, configApp);
+  if (seeded && !values.quiet) {
+    process.stderr.write(`Seeded ${path}\n`);
+  }
+  openEditor(path);
+  const parsed = loadQueryFile(path);
+  if (!parsed.body) {
+    fail(`${path} has no query body`, 2);
+  }
+  return { queryBody: parsed.body, frontMatter: parsed.frontMatter };
+}
+
+interface ResolveLogGroupsArgs {
+  cliLogGroups: string[];
+  frontMatterLogGroup: string | string[] | undefined;
+  configGroupTemplate: string | undefined;
   environment: Environment | undefined;
+  sectionName: string | null;
 }
 
-function resolvePlan(args: ResolveArgs): ResolvedPlan {
-  if (args.query && args.queryFile) {
-    throw new Error("--query and --query-file are mutually exclusive");
+function resolveLogGroups(args: ResolveLogGroupsArgs): string[] {
+  const fromCli = args.cliLogGroups.map((s) => s.trim()).filter(Boolean);
+  if (fromCli.length > 0) {
+    try {
+      return fromCli.map((g) => applyEnvironment(g, args.environment));
+    } catch (err) {
+      if (err instanceof ConfigError) fail(err.message, 2);
+      throw err;
+    }
   }
+  const fromFm = toArray(args.frontMatterLogGroup);
+  if (fromFm.length > 0) {
+    try {
+      return fromFm.map((g) => applyEnvironment(g, args.environment));
+    } catch (err) {
+      if (err instanceof ConfigError) fail(err.message, 2);
+      throw err;
+    }
+  }
+  if (args.configGroupTemplate) {
+    try {
+      return [applyEnvironment(args.configGroupTemplate, args.environment)];
+    } catch (err) {
+      if (err instanceof ConfigError) fail(err.message, 2);
+      throw err;
+    }
+  }
+  fail(
+    args.sectionName
+      ? `no log group given, and config section [${args.sectionName}] has no "group". Set it with \`cloudwatch-insights edit-config\` or pass --log-group.`
+      : "no log group given, and no matching config section was found. Pass --log-group or run `cloudwatch-insights edit-config`.",
+    2,
+  );
+}
 
-  const settings = loadSettings();
-  const { defaults, sectionName } = resolveRepoDefaults(settings);
+// ---------------------------------------------------------------------------
+// show subcommand
+// ---------------------------------------------------------------------------
 
-  let logGroups = args.logGroupsRaw.map((s) => s.trim()).filter(Boolean);
-  let logGroupsSource: "cli" | "config" = "cli";
-  if (logGroups.length === 0) {
-    if (defaults.group) {
-      logGroups = [applyEnvironment(defaults.group, args.environment)];
-      logGroupsSource = "config";
-    } else {
-      throw new Error(
-        sectionName
-          ? `no --log-group given, and config section [${sectionName}] has no "group"`
-          : "no --log-group given, and no matching config section was found",
+const showCmd = define({
+  name: "show",
+  description: "Stream the contents of latest-run.jsonl to stdout",
+  args: {},
+  run: async () => {
+    const path = latestRunPath();
+    if (!existsSync(path)) {
+      fail(`no runs found (${path} does not exist). Run \`cloudwatch-insights query\` first.`, 2);
+    }
+    await pipeline(createReadStream(path), process.stdout);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// edit-config subcommand
+// ---------------------------------------------------------------------------
+
+const editConfigCmd = define({
+  name: "edit-config",
+  description: "Open settings.toml in $EDITOR, creating it (and a placeholder section for the current repo) if needed",
+  args: {},
+  run: () => {
+    const path = configPath();
+    const { fileCreated, addedSection } = ensureConfigFile(path);
+    if (fileCreated) process.stderr.write(`Created ${path}\n`);
+    if (addedSection) {
+      process.stderr.write(
+        `Added commented placeholder section [${addedSection}] for the current repository\n`,
       );
     }
-  } else if (args.environment) {
-    logGroups = logGroups.map((g) => applyEnvironment(g, args.environment));
+    openEditor(path);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// shared helpers
+// ---------------------------------------------------------------------------
+
+function openEditor(path: string): void {
+  const editor = process.env.VISUAL || process.env.EDITOR;
+  if (!editor) {
+    fail("no editor set — define $EDITOR (or $VISUAL) and retry", 2);
   }
-
-  let query: string;
-  let querySource: ResolvedPlan["source"]["query"];
-  if (args.query) {
-    query = args.query;
-    querySource = "cli";
-  } else if (args.queryFile) {
-    const source = args.queryFile === "-" ? 0 : args.queryFile;
-    query = readFileSync(source, "utf8");
-    querySource = "query-file";
-  } else {
-    const app = args.app ?? defaults.app;
-    if (app) {
-      query = defaultQueryForApp(app);
-      querySource = "config-app";
-    } else {
-      query = FALLBACK_QUERY;
-      querySource = "default";
-    }
+  const parts = editor.split(/\s+/).filter(Boolean);
+  const cmd = parts[0];
+  const args = [...parts.slice(1), path];
+  const result = spawnSync(cmd, args, { stdio: "inherit" });
+  if (result.error) {
+    fail(`failed to launch editor (${editor}): ${result.error.message}`, 1);
   }
-
-  return {
-    logGroups,
-    query,
-    source: { logGroups: logGroupsSource, query: querySource },
-  };
-}
-
-function renderRows(rows: QueryRow[], format: OutputFormat): void {
-  switch (format) {
-    case "jsonl":
-      for (const row of rows) {
-        process.stdout.write(JSON.stringify(row) + "\n");
-      }
-      break;
-    case "json":
-      process.stdout.write(JSON.stringify(rows, null, 2) + "\n");
-      break;
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status);
   }
 }
 
-function validateChoice<T extends string>(
-  name: string,
-  value: unknown,
-  choices: readonly T[],
-): T {
-  if (typeof value !== "string" || !choices.includes(value as T)) {
-    fail(`--${name} must be one of: ${choices.join(", ")} (got ${JSON.stringify(value)})`, 2);
+function pickEnvironment(raw: string | undefined): Environment | undefined {
+  if (raw === undefined) return undefined;
+  if (!ENVIRONMENTS.includes(raw as Environment)) {
+    fail(`--environment must be one of: ${ENVIRONMENTS.join(", ")} (got ${JSON.stringify(raw)})`, 2);
   }
-  return value as T;
+  return raw as Environment;
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 function flatten<T>(arrays: T[][]): T[] {
@@ -292,59 +345,35 @@ function fail(message: string, code = 1): never {
   process.exit(code);
 }
 
-const EDIT_CONFIG_HELP =
-  "Usage: cloudwatch-insights edit-config\n\n" +
-  "Open the settings.toml in $EDITOR (or $VISUAL), creating it with a\n" +
-  "commented template if it does not yet exist.\n";
+// ---------------------------------------------------------------------------
+// main entry: unknown commands and `cloudwatch-insights` with no args both
+// fall through to this, which prints a hint.
+// ---------------------------------------------------------------------------
 
-function runEditConfig(argv: string[]): void {
-  if (argv.includes("--help") || argv.includes("-h")) {
-    process.stdout.write(EDIT_CONFIG_HELP);
-    return;
-  }
-
-  const path = configPath();
-  const { fileCreated, addedSection } = ensureConfigFile(path);
-  if (fileCreated) {
-    process.stderr.write(`Created ${path}\n`);
-  }
-  if (addedSection) {
-    process.stderr.write(`Added commented placeholder section [${addedSection}] for the current repository\n`);
-  }
-
-  const editor = process.env.VISUAL || process.env.EDITOR;
-  if (!editor) {
-    fail("no editor set — define $EDITOR (or $VISUAL) and retry", 2);
-  }
-
-  const parts = editor.split(/\s+/).filter(Boolean);
-  const cmd = parts[0];
-  const args = [...parts.slice(1), path];
-  const result = spawnSync(cmd, args, { stdio: "inherit" });
-  if (result.error) {
-    fail(`failed to launch editor (${editor}): ${result.error.message}`, 1);
-  }
-  if (typeof result.status === "number" && result.status !== 0) {
-    process.exit(result.status);
-  }
-}
-
-const argv = process.argv.slice(2);
-
-// edit-config is handled manually rather than through gunshi's subCommands,
-// because gunshi routes the first non-flag token to subcommand dispatch before
-// consuming flag values — that turns "-t 5m" into "Command not found: 5m".
-if (argv[0] === "edit-config") {
-  runEditConfig(argv.slice(1));
-  process.exit(0);
-}
+const main = define({
+  name: "cloudwatch-insights",
+  description: DESCRIPTION,
+  args: {},
+  run: () => {
+    process.stderr.write(
+      "Usage: cloudwatch-insights <query|show|edit-config>\n" +
+        "Run `cloudwatch-insights --help` for details.\n",
+    );
+    process.exit(2);
+  },
+});
 
 try {
-  await cli(argv, command, {
+  await cli(process.argv.slice(2), main, {
     name: "cloudwatch-insights",
     version: "1.0.0",
     description: DESCRIPTION,
     renderHeader: null,
+    subCommands: {
+      query: queryCmd,
+      show: showCmd,
+      "edit-config": editConfigCmd,
+    },
   });
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);

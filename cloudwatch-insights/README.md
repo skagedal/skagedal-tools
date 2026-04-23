@@ -1,6 +1,6 @@
 # cloudwatch-insights
 
-Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html) from the command line, with a flexible time-range syntax and per-git-repository defaults.
+Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html) from the command line, with a flexible time-range syntax, per-git-repository defaults, and persistent editable query files.
 
 ## Requirements
 
@@ -15,39 +15,97 @@ Install globally using pnpm:
 pnpm link --global
 ```
 
-This builds the TypeScript source and installs the `cloudwatch-insights` command on your `PATH`. After installation you can run `cloudwatch-insights` from anywhere.
+This builds the TypeScript source and installs the `cloudwatch-insights` command on your `PATH`. The `install.sh` at the repo root does the same for every tool in the repo.
 
-> `pnpm install -g .` is broken in pnpm v10, so use `pnpm link --global`.
+## Subcommands
 
-## Usage
-
-```sh
-cloudwatch-insights -g <log-group> [-t <time-range>] [-q '<insights query>']
+```
+cloudwatch-insights query [options]       run a query
+cloudwatch-insights show                  stream the latest run to stdout
+cloudwatch-insights edit-config           edit the per-repo config
 ```
 
-### Examples
+### `query`
+
+By default, `query` opens your `$EDITOR` (or `$VISUAL`) on a persistent `current.insights` file so you can tweak the query and its parameters. Save and exit, and the query runs. Pass `--query` or `--query-file` to skip the editor.
 
 ```sh
-# Last 5 hours of a default query (fields @timestamp, @message | sort @timestamp desc)
-cloudwatch-insights -g /aws/lambda/my-func -t 5h
+# First run: seeds current.insights from your config, opens it in $EDITOR
+cloudwatch-insights query
 
-# A specific minute today, with a custom query
-cloudwatch-insights -g /aws/lambda/my-func -t 13.00-13.01 \
+# Subsequent runs: reuse the same file (edit, save, exit, execute)
+cloudwatch-insights query
+
+# Skip the editor with an inline query
+cloudwatch-insights query -g /aws/lambda/my-func -t 5h \
   -q 'fields @timestamp, @message | filter @message like /ERROR/'
 
-# Millisecond granularity
-cloudwatch-insights -g /my/group -t 09:15:00.000-09:15:00.500
-
-# A time range on a named day
-cloudwatch-insights -g /my/group -t "yesterday 17-18"
-
-# No -g needed when there's a matching config section — just supply --environment
-cloudwatch-insights -t 30m -e systest
+# Override the time range at invocation time
+cloudwatch-insights query -t "yesterday 17-18" -e systest
 ```
 
-### Time-range syntax
+Results are written as JSONL to:
 
-The `-t / --time` flag defaults to `1h` (last hour). It accepts, in order of precedence:
+```
+~/.skagedal-tools/cloudwatch-insights/queries/<repo>/results/run-<timestamp>.jsonl
+```
+
+The path of the run file is the only thing printed to stdout, making it easy to capture:
+
+```sh
+last=$(cloudwatch-insights query)
+jq . < "$last"
+```
+
+After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file.
+
+### `show`
+
+```sh
+cloudwatch-insights show
+cloudwatch-insights show | jq .
+```
+
+Streams `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` to stdout. Handy for re-inspecting or re-formatting the most recent run without re-querying.
+
+### `edit-config`
+
+```sh
+cloudwatch-insights edit-config
+```
+
+Opens `~/.skagedal-tools/cloudwatch-insights/settings.toml` in `$EDITOR`, creating the file (and a commented placeholder section for the current git repository) on first use.
+
+## The `.insights` file format
+
+`current.insights` has an optional YAML **front-matter** block (fenced by `---` lines) followed by the query body:
+
+```
+---
+time: 5h
+environment: systest
+logGroup: /my/group
+limit: 200
+---
+fields @timestamp, @message, app
+| filter app = "my-service"
+| sort @timestamp desc
+```
+
+Front-matter fields:
+
+| Field         | Purpose                                                             |
+|---------------|---------------------------------------------------------------------|
+| `time`        | time range (same syntax as `--time`)                                |
+| `environment` | substituted for `{env}` in log group templates                       |
+| `logGroup`    | a log group, or an array of log groups                               |
+| `limit`       | row limit                                                           |
+
+CLI flags always win over front-matter, and front-matter wins over the repo defaults in `settings.toml`.
+
+## Time-range syntax
+
+The `-t / --time` flag (and the front-matter `time:` key) accepts, in order of precedence:
 
 | Form | Examples | Meaning |
 |------|----------|---------|
@@ -60,7 +118,9 @@ The `-t / --time` flag defaults to `1h` (last hour). It accepts, in order of pre
 
 Times use `.` or `:` as the sub-separator. Milliseconds are introduced with a `.` after the seconds (e.g. `09:15:00.500`).
 
-### Per-repository defaults (`settings.toml`)
+Default: **1h** (last hour) if neither CLI nor front-matter specifies one.
+
+## Per-repository defaults (`settings.toml`)
 
 The tool detects the git repository you're running it from (via `git rev-parse --show-toplevel`) and looks up a section keyed by the repo's directory name in:
 
@@ -68,15 +128,9 @@ The tool detects the git repository you're running it from (via `git rev-parse -
 ~/.skagedal-tools/cloudwatch-insights/settings.toml
 ```
 
-Per the skagedal-tools convention, per-tool state lives under `~/.skagedal-tools/<tool-name>/`. Override the whole base directory with `$SKAGEDAL_TOOLS_HOME`, or point at an arbitrary file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
+Per the skagedal-tools convention, per-tool state lives under `~/.skagedal-tools/<tool-name>/`. Override the whole base directory with `$SKAGEDAL_TOOLS_HOME`, or point at an arbitrary config file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
 
-To open (and, if necessary, create) the settings file:
-
-```sh
-cloudwatch-insights edit-config
-```
-
-This opens the file in `$VISUAL` (falling back to `$EDITOR`). On first use the file is seeded with a commented template. When run from inside a git repository, a commented placeholder section for that repo is appended too — just uncomment the lines and fill in the values.
+Example:
 
 ```toml
 # settings.toml
@@ -90,28 +144,34 @@ group = "/prod/another"
 
 Fields:
 
-- `group` — log group used when `--log-group` is not given. The literal string `{env}` is substituted with the value of `--environment`.
-- `app` — if neither `--query` nor `--query-file` is given, the default query becomes:
-  ```
-  fields @timestamp, @message, app | filter app = "<app>" | sort @timestamp desc
-  ```
+- `group` — log group used when no `--log-group` / front-matter `logGroup` is given. `{env}` is substituted with `--environment`.
+- `app` — used only when seeding a fresh `current.insights`: the seeded query body will filter on `app = "<app>"`.
 
-### `--environment`
+## `--environment`
 
 ```
 -e, --environment <env>      systest | uat | prod
 ```
 
-Substituted into `{env}` in the log group template (either from config or from `--log-group`). Required whenever the template contains `{env}`.
+Substituted into `{env}` in the log group template (from CLI, front-matter, or config). Required whenever the template contains `{env}`.
 
-### Output formats
+## Directory layout
 
-- `jsonl` (default) — one JSON object per row, one row per line.
-- `json` — a pretty-printed JSON array.
+```
+~/.skagedal-tools/cloudwatch-insights/
+├── settings.toml                       # per-repo defaults
+├── latest-run.jsonl                    # symlink to the most recent run
+└── queries/
+    ├── <repo-name>/
+    │   ├── current.insights            # editor file for `query`
+    │   └── results/
+    │       └── run-<timestamp>.jsonl
+    └── _default/                       # used when run outside any git repo
+        ├── current.insights
+        └── results/
+```
 
-Progress (query status, row counts, byte totals) is written to stderr so piping stdout is safe. Use `--quiet` to silence it.
-
-### Credentials and region
+## Credentials and region
 
 Standard AWS SDK resolution applies:
 
@@ -123,7 +183,7 @@ Standard AWS SDK resolution applies:
 
 ```sh
 pnpm install
-pnpm build                         # compile TypeScript to dist/
-pnpm dev -- -g /my/group -t 5h     # run directly from src/ via tsx
-pnpm test                          # time-range + config tests
+pnpm build                                   # compile TypeScript to dist/
+pnpm dev -- query -g /my/group -t 5h         # run directly from src/ via tsx
+pnpm test                                    # time-range, config, query-file tests
 ```
