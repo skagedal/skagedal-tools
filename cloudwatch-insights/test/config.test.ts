@@ -9,7 +9,7 @@ import {
   applyEnvironment,
   ConfigError,
   configPath,
-  defaultQueryForApp,
+  defaultQuery,
   ensureConfigFile,
   findGitRoot,
   loadSettings,
@@ -65,17 +65,28 @@ test("applyEnvironment: errors when template uses {env} but env is missing", () 
   assert.throws(() => applyEnvironment("/{env}/team", undefined), ConfigError);
 });
 
-test("defaultQueryForApp: builds a filter-by-app Insights query", () => {
+test("defaultQuery: substitutes {app} placeholder", () => {
   assert.equal(
-    defaultQueryForApp("installer-notification"),
-    'fields @timestamp, @message, app | filter app = "installer-notification" | sort @timestamp desc',
+    defaultQuery("my-service"),
+    [
+      "fields @timestamp, @message",
+      "| sort @timestamp desc",
+      "| filter app = my-service",
+      "| filter level in ['WARN', 'ERROR']",
+      "| limit 200",
+    ].join("\n"),
   );
 });
 
-test("defaultQueryForApp: escapes embedded quotes", () => {
+test("defaultQuery: omits the app filter line when no app is given", () => {
   assert.equal(
-    defaultQueryForApp('weird"name'),
-    'fields @timestamp, @message, app | filter app = "weird\\"name" | sort @timestamp desc',
+    defaultQuery(),
+    [
+      "fields @timestamp, @message",
+      "| sort @timestamp desc",
+      "| filter level in ['WARN', 'ERROR']",
+      "| limit 200",
+    ].join("\n"),
   );
 });
 

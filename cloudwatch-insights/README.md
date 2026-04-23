@@ -85,11 +85,12 @@ Opens `~/.skagedal-tools/cloudwatch-insights/settings.toml` in `$EDITOR`, creati
 time: 5h
 environment: systest
 logGroup: /my/group
-limit: 200
 ---
-fields @timestamp, @message, app
-| filter app = "my-service"
+fields @timestamp, @message
 | sort @timestamp desc
+| filter app = my-service
+| filter level in ['WARN', 'ERROR']
+| limit 200
 ```
 
 Front-matter fields:
@@ -99,9 +100,10 @@ Front-matter fields:
 | `time`        | time range (same syntax as `--time`)                                |
 | `environment` | substituted for `{env}` in log group templates                       |
 | `logGroup`    | a log group, or an array of log groups                               |
-| `limit`       | row limit                                                           |
 
-CLI flags always win over front-matter, and front-matter wins over the repo defaults in `settings.toml`.
+CLI flags always win over front-matter, and front-matter wins over the repo defaults in `settings.toml`. The result `limit` belongs in the query body itself (`| limit 200`), not the front-matter.
+
+Pass `--clear` to `query` to overwrite the current file with a fresh default template before opening the editor.
 
 ## Time-range syntax
 

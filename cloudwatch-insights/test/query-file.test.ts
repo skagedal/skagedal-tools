@@ -8,6 +8,7 @@ import {
   ensureCurrentInsights,
   loadQueryFile,
   parseQueryFile,
+  resetCurrentInsights,
   runTimestamp,
   updateLatestSymlink,
   writeResults,
@@ -27,7 +28,6 @@ test("parseQueryFile: YAML front-matter with time and logGroup", () => {
       "---",
       "time: 5h",
       "logGroup: /prod/team",
-      "limit: 100",
       "---",
       "fields @timestamp, @message",
       "| sort @timestamp desc",
@@ -37,7 +37,6 @@ test("parseQueryFile: YAML front-matter with time and logGroup", () => {
   assert.deepEqual(frontMatter, {
     time: "5h",
     logGroup: "/prod/team",
-    limit: 100,
   });
   assert.equal(body, "fields @timestamp, @message\n| sort @timestamp desc");
 });
@@ -62,15 +61,30 @@ test("parseQueryFile: empty front-matter block is valid (no keys)", () => {
   assert.equal(body, "fields @timestamp");
 });
 
-test("ensureCurrentInsights: seeds with app filter when app is provided", () => {
+test("ensureCurrentInsights: seeds with the new default template + app filter", () => {
   const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-"));
   try {
     const path = join(tmp, "current.insights");
     const created = ensureCurrentInsights(path, "my-service");
     assert.equal(created, true);
     const parsed = loadQueryFile(path);
-    assert.match(parsed.body, /filter app = "my-service"/);
+    assert.match(parsed.body, /filter app = my-service/);
+    assert.match(parsed.body, /filter level in \['WARN', 'ERROR'\]/);
+    assert.match(parsed.body, /limit 200/);
     assert.match(readFileSync(path, "utf8"), /^---\n/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("ensureCurrentInsights: omits app filter when no app is configured", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-noapp-"));
+  try {
+    const path = join(tmp, "current.insights");
+    ensureCurrentInsights(path);
+    const parsed = loadQueryFile(path);
+    assert.doesNotMatch(parsed.body, /filter app/);
+    assert.match(parsed.body, /filter level in \['WARN', 'ERROR'\]/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -85,6 +99,20 @@ test("ensureCurrentInsights: returns false when file already exists (idempotent)
     const created = ensureCurrentInsights(path, "other-app");
     assert.equal(created, false);
     assert.equal(readFileSync(path, "utf8"), before);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("resetCurrentInsights: overwrites an existing file with the default template", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-reset-"));
+  try {
+    const path = join(tmp, "current.insights");
+    writeFileSync(path, "---\n---\nuser-modified query", "utf8");
+    resetCurrentInsights(path, "my-service");
+    const parsed = loadQueryFile(path);
+    assert.doesNotMatch(parsed.body, /user-modified/);
+    assert.match(parsed.body, /filter app = my-service/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

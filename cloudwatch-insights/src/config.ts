@@ -136,12 +136,23 @@ export function applyEnvironment(template: string, env: Environment | undefined)
 }
 
 /**
- * Build the default Insights query for an `app` filter.
- * Escapes double quotes so unusual app names don't break the query.
+ * Template used to seed a fresh `current.insights`. The placeholder
+ * `{app}` is substituted with the configured app when available; when no
+ * app is configured, the `filter app = ...` line is omitted.
  */
-export function defaultQueryForApp(app: string): string {
-  const escaped = app.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `fields @timestamp, @message, app | filter app = "${escaped}" | sort @timestamp desc`;
+export const DEFAULT_QUERY_TEMPLATE = `fields @timestamp, @message
+| sort @timestamp desc
+| filter app = {app}
+| filter level in ['WARN', 'ERROR']
+| limit 200`;
+
+export function defaultQuery(app?: string): string {
+  if (app === undefined) {
+    return DEFAULT_QUERY_TEMPLATE.split("\n")
+      .filter((line) => !line.includes("{app}"))
+      .join("\n");
+  }
+  return DEFAULT_QUERY_TEMPLATE.replace("{app}", app);
 }
 
 const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings

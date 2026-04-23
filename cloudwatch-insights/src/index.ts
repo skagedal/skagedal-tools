@@ -25,6 +25,7 @@ import {
   latestRunPath,
   loadQueryFile,
   parseQueryFile,
+  resetCurrentInsights,
   runResultPath,
   updateLatestSymlink,
   writeResults,
@@ -86,6 +87,11 @@ const queryCmd = define({
       type: "string",
       description: "AWS profile (sets AWS_PROFILE)",
     },
+    clear: {
+      type: "boolean",
+      default: false,
+      description: "reset current.insights to the default template before opening the editor",
+    },
     quiet: {
       type: "boolean",
       default: false,
@@ -106,6 +112,7 @@ interface QueryValues {
   limit?: number;
   region?: string;
   profile?: string;
+  clear: boolean;
   quiet: boolean;
 }
 
@@ -121,7 +128,7 @@ async function runQuery(values: QueryValues): Promise<void> {
 
   const environment = pickEnvironment(values.environment ?? frontMatter.environment);
   const timeExpr = values.time ?? frontMatter.time ?? "1h";
-  const limit = values.limit ?? frontMatter.limit;
+  const limit = values.limit;
 
   let range;
   try {
@@ -207,9 +214,14 @@ async function resolveQuerySource(
 
   // Editor flow
   const path = currentInsightsPath();
-  const seeded = ensureCurrentInsights(path, configApp);
-  if (seeded && !values.quiet) {
-    process.stderr.write(`Seeded ${path}\n`);
+  if (values.clear) {
+    resetCurrentInsights(path, configApp);
+    if (!values.quiet) process.stderr.write(`Reset ${path} to default template\n`);
+  } else {
+    const seeded = ensureCurrentInsights(path, configApp);
+    if (seeded && !values.quiet) {
+      process.stderr.write(`Seeded ${path}\n`);
+    }
   }
   openEditor(path);
   const parsed = loadQueryFile(path);

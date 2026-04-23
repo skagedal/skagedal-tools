@@ -18,15 +18,12 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, lstatSync, unlinkSy
 import { basename, dirname, join } from "path";
 import { parse as parseYaml } from "yaml";
 
-import { configPath, defaultQueryForApp, findGitRoot } from "./config.js";
-
-export const FALLBACK_QUERY = "fields @timestamp, @message | sort @timestamp desc";
+import { configPath, defaultQuery, findGitRoot } from "./config.js";
 
 export interface FrontMatter {
   time?: string;
   environment?: string;
   logGroup?: string | string[];
-  limit?: number;
 }
 
 export interface QueryFile {
@@ -67,6 +64,16 @@ export function ensureCurrentInsights(path: string, app?: string): boolean {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, seedContent(app), { encoding: "utf8", flag: "wx" });
   return true;
+}
+
+/**
+ * Unconditionally reset current.insights to the default template (used
+ * by `query --clear`). Returns the path that was written.
+ */
+export function resetCurrentInsights(path: string, app?: string): string {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, seedContent(app), "utf8");
+  return path;
 }
 
 export function loadQueryFile(path: string): QueryFile {
@@ -148,15 +155,13 @@ export function updateLatestSymlink(target: string): string {
 }
 
 function seedContent(app?: string): string {
-  const query = app ? defaultQueryForApp(app) : FALLBACK_QUERY;
   return `---
 # Front-matter (YAML). Optional defaults for this query.
 # Examples:
 #   time: 5h
 #   environment: systest
 #   logGroup: /my/group
-#   limit: 100
 ---
-${query}
+${defaultQuery(app)}
 `;
 }
