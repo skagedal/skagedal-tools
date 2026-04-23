@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "child_process";
+import termkit from "terminal-kit";
+
+const term = termkit.terminal;
 
 const GRAPHQL_QUERY = `query {
   notifications(first: 50) {
@@ -130,168 +133,192 @@ function wrapText(text: string, cols: number): string[] {
   return out;
 }
 
-// ANSI escape helpers
-const ESC = "\x1b";
-const HIDE_CURSOR = `${ESC}[?25l`;
-const SHOW_CURSOR = `${ESC}[?25h`;
-const RESET = `${ESC}[0m`;
-const BOLD = `${ESC}[1m`;
-const DIM = `${ESC}[2m`;
-const REVERSE = `${ESC}[7m`;
-const CYAN = `${ESC}[36m`;
-const CLEAR_LINE = `${ESC}[2K`;
-const CLEAR_SCREEN = `${ESC}[2J`;
-const MOVE_HOME = `${ESC}[H`;
-const ALT_SCREEN_ON = `${ESC}[?1049h`;
-const ALT_SCREEN_OFF = `${ESC}[?1049l`;
-const UP = (n: number) => `${ESC}[${n}A`;
-const MOVE_TO = (row: number, col: number) => `${ESC}[${row};${col}H`;
-
-const MAX_VISIBLE_ITEMS = 10;
-
-// The inline rendering area has a fixed height determined at startup:
-//   1 header line + visibleItems lines + 1 help line
-let areaHeight = 0;
-let scrollOffset = 0;
-
-function computeVisibleItems(count: number): number {
-  return Math.min(count, MAX_VISIBLE_ITEMS);
+function countStatus(count: number): string {
+  return `${count} unread notification${count !== 1 ? "s" : ""}`;
 }
 
-/** Reserve `areaHeight` blank lines below current cursor, then move back up. */
-function reserveArea(height: number): void {
-  areaHeight = height;
-  // Move cursor down by printing newlines (may scroll terminal), then back up
-  process.stdout.write("\n".repeat(height) + UP(height));
-}
+type Mode = "list" | "details";
 
-/**
- * Render the entire inline area in-place.
- * After rendering, cursor is left at the top-left of the area so the next
- * render also starts there.
- */
-function renderList(
-  notifications: Notification[],
-  selected: number,
-  statusMsg: string
-): void {
-  const termCols = process.stdout.columns ?? 80;
-  const visibleItems = computeVisibleItems(notifications.length);
+class App {
+  notifications: Notification[];
+  selected = 0;
+  scrollOffset = 0;
+  mode: Mode = "list";
+  listStatus: string;
+  detailsStatus = "";
 
-  // Adjust scroll to keep selected in view
-  if (selected < scrollOffset) {
-    scrollOffset = selected;
-  } else if (selected >= scrollOffset + visibleItems) {
-    scrollOffset = selected - visibleItems + 1;
+  constructor(notifications: Notification[]) {
+    this.notifications = notifications;
+    this.listStatus = countStatus(notifications.length);
   }
 
-  let out = "\r"; // go to column 1
+  current(): Notification | undefined {
+    return this.notifications[this.selected];
+  }
 
-  // ── Header ──────────────────────────────────────────────────────────────
-  out += CLEAR_LINE;
-  const headerText = `${BOLD}${CYAN}Linear Notifications${RESET} ${DIM}— ${statusMsg}${RESET}`;
-  out += headerText + "\n";
+  render(): void {
+    if (this.mode === "list") this.renderList();
+    else this.renderDetails();
+  }
 
-  // ── Item lines ───────────────────────────────────────────────────────────
-  for (let i = 0; i < visibleItems; i++) {
-    out += CLEAR_LINE;
-    const idx = i + scrollOffset;
-    const n = notifications[idx];
-    const isSelected = idx === selected;
+  renderList(): void {
+    term.clear();
+    term.moveTo(1, 1);
+    term.bold.cyan("Linear Notifications");
+    term(" ");
+    term.dim(`— ${this.listStatus}`);
 
-    const timeStr = formatTime(n.createdAt);
-    const timeWidth = 8;
-    const prefix = isSelected ? "▶ " : "  ";
-    const titleWidth = Math.max(0, termCols - timeWidth - prefix.length - 1);
-    const title = truncate(n.title, titleWidth);
-    const time = timeStr.padStart(timeWidth);
-    const line = `${prefix}${title.padEnd(titleWidth)} ${time}`;
+    const listTop = 3;
+    const listBottom = term.height - 1;
+    const maxItems = Math.max(1, listBottom - listTop + 1);
 
-    if (isSelected) {
-      out += REVERSE + BOLD + truncate(line, termCols).padEnd(termCols) + RESET;
-    } else {
-      out += line;
+    if (this.selected < this.scrollOffset) {
+      this.scrollOffset = this.selected;
+    } else if (this.selected >= this.scrollOffset + maxItems) {
+      this.scrollOffset = this.selected - maxItems + 1;
     }
-    out += "\n";
+
+    const timeW = 8;
+    const visible = Math.min(maxItems, this.notifications.length - this.scrollOffset);
+    for (let i = 0; i < visible; i++) {
+      const idx = i + this.scrollOffset;
+      const n = this.notifications[idx];
+      const isSelected = idx === this.selected;
+      const prefix = isSelected ? "▶ " : "  ";
+      const titleW = Math.max(0, term.width - timeW - prefix.length - 1);
+      const title = truncate(n.title, titleW).padEnd(titleW);
+      const time = formatTime(n.createdAt).padStart(timeW);
+      const line = `${prefix}${title} ${time}`;
+
+      term.moveTo(1, listTop + i);
+      const rowWidth = Math.max(0, term.width - 1);
+      if (isSelected) {
+        term.inverse.bold(truncate(line, rowWidth).padEnd(rowWidth));
+      } else {
+        term(truncate(line, rowWidth));
+      }
+    }
+
+    term.moveTo(1, term.height);
+    term.dim(
+      truncate(
+        "↑↓/jk: navigate  Enter: details  b: browser  m: mark read  r: reload  q: quit",
+        Math.max(0, term.width - 1)
+      )
+    );
   }
 
-  // ── Help line ────────────────────────────────────────────────────────────
-  out += CLEAR_LINE;
-  out +=
-    DIM +
-    "↑↓/jk: navigate  Enter: details  b: browser  m: mark read  r: reload  q: quit" +
-    RESET;
+  renderDetails(): void {
+    const n = this.current();
+    if (!n) return;
 
-  // Move cursor back to the top of the area for the next render
-  out += UP(areaHeight - 1) + "\r";
+    term.clear();
+    term.moveTo(1, 1);
+    term.bold.cyan(truncate(n.title, term.width));
 
-  process.stdout.write(out);
+    let row = 2;
+    if (n.subtitle) {
+      term.moveTo(1, row);
+      term.dim(truncate(n.subtitle, term.width));
+      row++;
+    }
+    row++; // blank line
+
+    const rows: Array<[string, string]> = [
+      ["Type", n.type],
+      ["Actor", n.actor?.name ?? "—"],
+      ["Time", `${formatTime(n.createdAt)} (${n.createdAt})`],
+    ];
+    if (n.issue)
+      rows.push(["Issue", `${n.issue.identifier} — ${n.issue.title}`]);
+    if (n.project) rows.push(["Project", n.project.name]);
+    if (n.pullRequest)
+      rows.push(["PR", `#${n.pullRequest.number} ${n.pullRequest.title}`]);
+    rows.push(["URL", n.url]);
+
+    const labelW = Math.max(...rows.map(([l]) => l.length)) + 2;
+    for (const [label, value] of rows) {
+      term.moveTo(1, row);
+      term.dim((label + ":").padEnd(labelW));
+      term(truncate(value, Math.max(0, term.width - labelW)));
+      row++;
+    }
+
+    if (n.comment?.body) {
+      row++; // blank line
+      term.moveTo(1, row);
+      term.bold("Comment");
+      row++;
+
+      const footerRow = term.height;
+      const maxBodyRows = Math.max(0, footerRow - row - 1);
+      const bodyLines = wrapText(n.comment.body, term.width);
+      const shown = bodyLines.slice(0, maxBodyRows);
+      for (const line of shown) {
+        term.moveTo(1, row);
+        term(line);
+        row++;
+      }
+      if (bodyLines.length > shown.length) {
+        term.moveTo(1, row);
+        term.dim(
+          `… (${bodyLines.length - shown.length} more line${
+            bodyLines.length - shown.length !== 1 ? "s" : ""
+          })`
+        );
+      }
+    }
+
+    term.moveTo(1, term.height);
+    const footerW = Math.max(0, term.width - 1);
+    const help = "b: browser  m: mark read  Enter/q: back";
+    const footer = this.detailsStatus
+      ? `${help}  ${this.detailsStatus}`
+      : help;
+    term.dim(truncate(footer, footerW));
+  }
+
+  enterDetails(): void {
+    this.mode = "details";
+    this.detailsStatus = "";
+    this.render();
+  }
+
+  leaveDetails(): void {
+    this.mode = "list";
+    this.render();
+  }
+
+  removeCurrent(): boolean {
+    this.notifications.splice(this.selected, 1);
+    if (this.notifications.length === 0) return false;
+    this.selected = Math.min(this.selected, this.notifications.length - 1);
+    this.listStatus = countStatus(this.notifications.length);
+    return true;
+  }
+
+  reload(): void {
+    this.listStatus = "Reloading…";
+    this.render();
+    try {
+      this.notifications = fetchUnreadNotifications();
+      this.selected = Math.min(this.selected, Math.max(0, this.notifications.length - 1));
+      this.listStatus = countStatus(this.notifications.length);
+    } catch (err) {
+      this.listStatus = `Error reloading: ${err}`;
+    }
+    this.render();
+  }
 }
 
-function renderDetails(n: Notification, statusMsg: string): void {
-  const termCols = process.stdout.columns ?? 80;
-  const termRows = process.stdout.rows ?? 24;
-
-  let out = CLEAR_SCREEN + MOVE_HOME;
-
-  out += `${BOLD}${CYAN}${truncate(n.title, termCols)}${RESET}\n`;
-  if (n.subtitle) out += `${DIM}${truncate(n.subtitle, termCols)}${RESET}\n`;
-  out += "\n";
-
-  const actor = n.actor?.name ?? "—";
-  const rows: Array<[string, string]> = [
-    ["Type", n.type],
-    ["Actor", actor],
-    ["Time", `${formatTime(n.createdAt)} (${n.createdAt})`],
-  ];
-  if (n.issue) rows.push(["Issue", `${n.issue.identifier} — ${n.issue.title}`]);
-  if (n.project) rows.push(["Project", n.project.name]);
-  if (n.pullRequest)
-    rows.push(["PR", `#${n.pullRequest.number} ${n.pullRequest.title}`]);
-  rows.push(["URL", n.url]);
-
-  const labelWidth = Math.max(...rows.map(([l]) => l.length));
-  for (const [label, value] of rows) {
-    const padded = (label + ":").padEnd(labelWidth + 2);
-    out += `${DIM}${padded}${RESET}${truncate(value, termCols - labelWidth - 2)}\n`;
+function quit(code: number = 0, finalMessage?: string): void {
+  term.hideCursor(false);
+  term.grabInput(false);
+  term.fullscreen(false);
+  if (finalMessage) {
+    process.stdout.write(finalMessage);
   }
-
-  if (n.comment?.body) {
-    out += "\n" + BOLD + "Comment" + RESET + "\n";
-    const lines = wrapText(n.comment.body, termCols);
-    // Leave 2 rows for the footer + blank line
-    const maxBodyRows = Math.max(0, termRows - 4 - rows.length - (n.subtitle ? 1 : 0) - 4);
-    for (const line of lines.slice(0, maxBodyRows)) {
-      out += line + "\n";
-    }
-    if (lines.length > maxBodyRows) {
-      out += DIM + `… (${lines.length - maxBodyRows} more line${lines.length - maxBodyRows !== 1 ? "s" : ""})` + RESET + "\n";
-    }
-  }
-
-  // Footer pinned to last row
-  out += MOVE_TO(termRows, 1) + CLEAR_LINE;
-  const help = "b: browser  m: mark read  Enter/q: back";
-  out += DIM + help + RESET;
-  if (statusMsg) {
-    out += `  ${CYAN}${statusMsg}${RESET}`;
-  }
-
-  process.stdout.write(out);
-}
-
-/** Clear all lines in the reserved area and leave cursor at the top. */
-function clearArea(): void {
-  let out = "\r";
-  for (let i = 0; i < areaHeight; i++) {
-    out += CLEAR_LINE;
-    if (i < areaHeight - 1) out += "\n";
-  }
-  if (areaHeight > 1) {
-    out += UP(areaHeight - 1);
-  }
-  out += "\r";
-  process.stdout.write(out);
+  process.exit(code);
 }
 
 async function main(): Promise<void> {
@@ -309,216 +336,135 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const stdin = process.stdin;
-  stdin.setRawMode(true);
-  stdin.resume();
-  stdin.setEncoding("utf8");
+  const app = new App(notifications);
 
-  process.stdout.write(HIDE_CURSOR);
+  term.fullscreen(true);
+  term.grabInput(true);
+  term.hideCursor(true);
 
-  let selected = 0;
-  let statusMsg = makeCountStatus(notifications.length);
-  let mode: "list" | "details" = "list";
-  let detailsStatus = "";
+  app.render();
 
-  const unreadCountStatus = () => makeCountStatus(notifications.length);
+  term.on("resize", () => {
+    app.render();
+  });
 
-  function currentNotification(): Notification | null {
-    return notifications[selected] ?? null;
-  }
+  term.on("key", (key: string) => {
+    if (key === "CTRL_C") {
+      quit(0);
+      return;
+    }
 
-  function renderCurrent(): void {
-    if (mode === "list") {
-      renderList(notifications, selected, statusMsg);
+    if (app.mode === "list") {
+      handleListKey(app, key);
     } else {
-      const n = currentNotification();
-      if (n) renderDetails(n, detailsStatus);
+      handleDetailsKey(app, key);
     }
-  }
+  });
+}
 
-  function enterDetails(): void {
-    mode = "details";
-    detailsStatus = "";
-    process.stdout.write(ALT_SCREEN_ON);
-    renderCurrent();
-  }
+function handleListKey(app: App, key: string): void {
+  switch (key) {
+    case "q":
+    case "ESCAPE":
+      quit(0);
+      return;
 
-  function leaveDetails(): void {
-    mode = "list";
-    process.stdout.write(ALT_SCREEN_OFF);
-    renderCurrent();
-  }
+    case "UP":
+    case "k":
+      app.selected = Math.max(0, app.selected - 1);
+      app.render();
+      return;
 
-  function exitApp(): void {
-    if (mode === "details") {
-      process.stdout.write(ALT_SCREEN_OFF);
-    }
-    clearArea();
-    process.stdout.write(SHOW_CURSOR);
-    stdin.setRawMode(false);
-    process.exit(0);
-  }
+    case "DOWN":
+    case "j":
+      app.selected = Math.min(app.notifications.length - 1, app.selected + 1);
+      app.render();
+      return;
 
-  function removeCurrentAndRefresh(): void {
-    notifications.splice(selected, 1);
-    if (notifications.length === 0) {
-      // No more notifications — exit cleanly
-      if (mode === "details") {
-        process.stdout.write(ALT_SCREEN_OFF);
+    case "ENTER":
+      if (app.current()) app.enterDetails();
+      return;
+
+    case "b": {
+      const n = app.current();
+      if (n?.url) {
+        openUrl(n.url);
+        app.listStatus = `Opened in browser — ${countStatus(app.notifications.length)}`;
+        app.render();
       }
-      clearArea();
-      process.stdout.write(SHOW_CURSOR);
-      stdin.setRawMode(false);
-      process.stdout.write("No unread notifications.\n");
-      process.exit(0);
-    }
-    selected = Math.min(selected, notifications.length - 1);
-    statusMsg = unreadCountStatus();
-  }
-
-  const visibleItems = computeVisibleItems(notifications.length);
-  reserveArea(visibleItems + 2); // header + items + help
-  renderCurrent();
-
-  process.stdout.on("resize", () => {
-    renderCurrent();
-  });
-
-  stdin.on("data", (key: string) => {
-    // Ctrl-C always exits
-    if (key === "\x03") {
-      exitApp();
       return;
     }
 
-    if (mode === "list") {
-      handleListKey(key);
-    } else {
-      handleDetailsKey(key);
-    }
-  });
-
-  function handleListKey(key: string): void {
-    // q or Escape
-    if (key === "q" || key === "\x1b") {
-      exitApp();
-      return;
-    }
-
-    // r - reload
-    if (key === "r") {
-      statusMsg = "Reloading…";
-      renderCurrent();
+    case "m": {
+      const n = app.current();
+      if (!n) return;
+      app.listStatus = "Marking as read…";
+      app.render();
       try {
-        notifications = fetchUnreadNotifications();
-        if (notifications.length === 0) {
-          clearArea();
-          process.stdout.write(SHOW_CURSOR);
-          stdin.setRawMode(false);
-          process.stdout.write("No unread notifications.\n");
-          process.exit(0);
+        markNotificationRead(n.id);
+        if (!app.removeCurrent()) {
+          quit(0, "No unread notifications.\n");
+          return;
         }
-        selected = Math.min(selected, notifications.length - 1);
-        statusMsg = unreadCountStatus();
       } catch (err) {
-        statusMsg = `Error reloading: ${err}`;
+        app.listStatus = `Error marking as read: ${err}`;
       }
-      renderCurrent();
+      app.render();
       return;
     }
 
-    // Arrow up / k
-    if (key === "\x1b[A" || key === "k") {
-      selected = Math.max(0, selected - 1);
-      renderCurrent();
-      return;
-    }
-
-    // Arrow down / j
-    if (key === "\x1b[B" || key === "j") {
-      selected = Math.min(notifications.length - 1, selected + 1);
-      renderCurrent();
-      return;
-    }
-
-    // Enter - show details in full-screen
-    if (key === "\r" || key === "\n") {
-      if (currentNotification()) {
-        enterDetails();
+    case "r":
+      app.reload();
+      if (app.notifications.length === 0) {
+        quit(0, "No unread notifications.\n");
       }
       return;
-    }
-
-    // b - open in browser (stay in program)
-    if (key === "b") {
-      const n = currentNotification();
-      if (n?.url) {
-        openUrl(n.url);
-        statusMsg = `Opened in browser — ${unreadCountStatus()}`;
-        renderCurrent();
-      }
-      return;
-    }
-
-    // m - mark selected as read
-    if (key === "m") {
-      const n = currentNotification();
-      if (!n) return;
-      statusMsg = "Marking as read…";
-      renderCurrent();
-      try {
-        markNotificationRead(n.id);
-        removeCurrentAndRefresh();
-      } catch (err) {
-        statusMsg = `Error marking as read: ${err}`;
-      }
-      renderCurrent();
-      return;
-    }
-  }
-
-  function handleDetailsKey(key: string): void {
-    // Enter / q / Esc - back to list
-    if (key === "\r" || key === "\n" || key === "q" || key === "\x1b") {
-      leaveDetails();
-      return;
-    }
-
-    // b - open in browser (stay in details view)
-    if (key === "b") {
-      const n = currentNotification();
-      if (n?.url) {
-        openUrl(n.url);
-        detailsStatus = "Opened in browser";
-        renderCurrent();
-      }
-      return;
-    }
-
-    // m - mark as read, then return to list
-    if (key === "m") {
-      const n = currentNotification();
-      if (!n) return;
-      detailsStatus = "Marking as read…";
-      renderCurrent();
-      try {
-        markNotificationRead(n.id);
-        removeCurrentAndRefresh();
-        leaveDetails();
-      } catch (err) {
-        detailsStatus = `Error marking as read: ${err}`;
-        renderCurrent();
-      }
-      return;
-    }
   }
 }
 
-function makeCountStatus(count: number): string {
-  return `${count} unread notification${count !== 1 ? "s" : ""}`;
+function handleDetailsKey(app: App, key: string): void {
+  switch (key) {
+    case "q":
+    case "ESCAPE":
+    case "ENTER":
+      app.leaveDetails();
+      return;
+
+    case "b": {
+      const n = app.current();
+      if (n?.url) {
+        openUrl(n.url);
+        app.detailsStatus = "Opened in browser";
+        app.render();
+      }
+      return;
+    }
+
+    case "m": {
+      const n = app.current();
+      if (!n) return;
+      app.detailsStatus = "Marking as read…";
+      app.render();
+      try {
+        markNotificationRead(n.id);
+        if (!app.removeCurrent()) {
+          quit(0, "No unread notifications.\n");
+          return;
+        }
+        app.leaveDetails();
+      } catch (err) {
+        app.detailsStatus = `Error marking as read: ${err}`;
+        app.render();
+      }
+      return;
+    }
+  }
 }
 
 main().catch((err) => {
+  term.hideCursor(false);
+  term.grabInput(false);
+  term.fullscreen(false);
   process.stderr.write(`Fatal error: ${err}\n`);
   process.exit(1);
 });

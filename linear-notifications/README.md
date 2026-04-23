@@ -23,7 +23,7 @@ This builds the TypeScript source and installs the `linear-notifications` comman
 linear-notifications
 ```
 
-If there are no unread notifications, the command exits immediately. Otherwise an inline interactive list appears:
+If there are no unread notifications, the command exits immediately. Otherwise a full-screen interactive list appears:
 
 ```
 Linear Notifications — 3 unread notifications
