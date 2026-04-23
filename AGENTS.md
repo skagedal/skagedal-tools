@@ -37,6 +37,7 @@ All shell scripts in this repository must follow these guidelines:
 
 - Use `#!/usr/bin/env bash` as the shebang line instead of `#!/bin/bash`
   - This provides better portability across different systems where bash may be installed in different locations
+- Use dashes (not underscores) in bash function names (e.g. `update-cargo`, not `update_cargo`)
 
 ## Node.js Programs
 
