@@ -30,18 +30,32 @@ Linear Notifications — 3 unread notifications
 ▶ ICC-820 Expose installation report submissions as flat tables    5m ago
   ICC-719 Update API rate limiting strategy                       2h ago
   ICC-701 Fix authentication bug in mobile app                    1d ago
-↑↓/jk: navigate  Enter: open  r: reload  q/Esc: quit
+↑↓/jk: navigate  Enter: details  b: browser  m: mark read  r: reload  q: quit
 ```
 
+Pressing `Enter` opens a full-screen details view for the selected notification. From either the list or the details view, `b` opens the notification URL in your browser without quitting, and `m` marks it as read and removes it from the list.
+
 ### Key bindings
+
+#### List view
 
 | Key | Action |
 |-----|--------|
 | `↑` / `k` | Move selection up |
 | `↓` / `j` | Move selection down |
-| `Enter` | Open selected notification URL in the browser |
+| `Enter` | Show selected notification in full-screen details view |
+| `b` | Open selected notification URL in the browser (stay in app) |
+| `m` | Mark selected notification as read |
 | `r` | Reload the notification list |
 | `q` / `Esc` | Quit |
+
+#### Details view
+
+| Key | Action |
+|-----|--------|
+| `b` | Open the notification URL in the browser |
+| `m` | Mark the notification as read and return to the list |
+| `Enter` / `q` / `Esc` | Return to the list |
 
 ## Development
 
