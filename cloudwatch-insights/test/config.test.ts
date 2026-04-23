@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { spawnSync } from "child_process";
@@ -10,6 +10,7 @@ import {
   ConfigError,
   configPath,
   defaultQueryForApp,
+  ensureConfigFile,
   findGitRoot,
   loadSettings,
   parseSettings,
@@ -130,3 +131,70 @@ function writeSettings(dir: string, contents: string): string {
   writeFileSync(path, contents, "utf8");
   return path;
 }
+
+test("ensureConfigFile: creates file + placeholder on first call, is idempotent on later calls", () => {
+  const tmpRoot = mkdtempSync(join(tmpdir(), "cwi-ensure-"));
+  try {
+    const repoRoot = join(tmpRoot, "my-service");
+    mkdirSync(repoRoot);
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+    );
+    const settingsPath = join(tmpRoot, "settings.toml");
+
+    const first = ensureConfigFile(settingsPath, repoRoot);
+    assert.equal(first.fileCreated, true);
+    assert.equal(first.addedSection, "my-service");
+
+    const contents1 = readFileSync(settingsPath, "utf8");
+    assert.match(contents1, /# \[my-service\]/);
+    assert.match(contents1, /# group = /);
+    assert.match(contents1, /# app   = "my-service"/);
+
+    const second = ensureConfigFile(settingsPath, repoRoot);
+    assert.equal(second.fileCreated, false);
+    assert.equal(second.addedSection, null, "placeholder must not be duplicated");
+    assert.equal(readFileSync(settingsPath, "utf8"), contents1);
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("ensureConfigFile: does nothing special when run outside a git repo", () => {
+  const tmpRoot = mkdtempSync(join(tmpdir(), "cwi-ensure-nogit-"));
+  try {
+    const settingsPath = join(tmpRoot, "settings.toml");
+    const result = ensureConfigFile(settingsPath, tmpRoot);
+    assert.equal(result.fileCreated, true);
+    assert.equal(result.addedSection, null);
+    const contents = readFileSync(settingsPath, "utf8");
+    assert.doesNotMatch(contents, /^\[/m, "no non-example section should be appended");
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("ensureConfigFile: skips appending when the repo already has a real section", () => {
+  const tmpRoot = mkdtempSync(join(tmpdir(), "cwi-ensure-existing-"));
+  try {
+    const repoRoot = join(tmpRoot, "my-service");
+    mkdirSync(repoRoot);
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+    );
+    const settingsPath = writeSettings(
+      tmpRoot,
+      '[my-service]\ngroup = "/prod/team"\n',
+    );
+
+    const before = readFileSync(settingsPath, "utf8");
+    const result = ensureConfigFile(settingsPath, repoRoot);
+    assert.equal(result.fileCreated, false);
+    assert.equal(result.addedSection, null);
+    assert.equal(readFileSync(settingsPath, "utf8"), before);
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});

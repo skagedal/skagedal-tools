@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import { spawnSync } from "child_process";
@@ -142,4 +142,80 @@ export function applyEnvironment(template: string, env: Environment | undefined)
 export function defaultQueryForApp(app: string): string {
   const escaped = app.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   return `fields @timestamp, @message, app | filter app = "${escaped}" | sort @timestamp desc`;
+}
+
+const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
+#
+# Each section is keyed by the git repository directory name. Supported fields:
+#   group = "/{env}/my-team"    # log group template; {env} is replaced by --environment
+#   app   = "my-service"        # default query filter on the \`app\` field
+#
+# Run \`cloudwatch-insights edit-config\` from inside a git repository and a
+# commented placeholder section for that repo will be appended below.
+`;
+
+export interface EnsureResult {
+  /** True if the config file itself was created in this call. */
+  fileCreated: boolean;
+  /** Name of a section appended for the current repo, or null if none was. */
+  addedSection: string | null;
+}
+
+/**
+ * Ensure the config file exists at `path`, creating any missing parent
+ * directories and seeding the file with a commented template if absent.
+ * Additionally, if called from inside a git repository whose basename is
+ * not yet a section in the file, append a commented-out placeholder section
+ * so the user just has to uncomment and fill in values.
+ */
+export function ensureConfigFile(
+  path: string = configPath(),
+  cwd: string = process.cwd(),
+): EnsureResult {
+  let fileCreated = false;
+  if (!existsSync(path)) {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, DEFAULT_SETTINGS_TEMPLATE, { encoding: "utf8", flag: "wx" });
+    fileCreated = true;
+  }
+
+  let addedSection: string | null = null;
+  const root = findGitRoot(cwd);
+  if (root) {
+    const name = basename(root);
+    const contents = readFileSync(path, "utf8");
+    if (!hasSectionHeader(contents, name)) {
+      const block = placeholderSection(name);
+      const prefix = endsWithNewline(contents) ? "\n" : "\n\n";
+      appendFileSync(path, prefix + block, "utf8");
+      addedSection = name;
+    }
+  }
+
+  return { fileCreated, addedSection };
+}
+
+/**
+ * Does the raw file already contain `[name]` as a section header — either
+ * as real TOML or as a commented-out placeholder? Used so we don't append
+ * a second placeholder for a repo that already has one.
+ */
+function hasSectionHeader(contents: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^\\s*#?\\s*\\[${escaped}\\]\\s*$`, "m");
+  return re.test(contents);
+}
+
+function placeholderSection(repoName: string): string {
+  return (
+    `# ${repoName}: uncomment and fill in the values you want as defaults\n` +
+    `# when running cloudwatch-insights from this repository.\n` +
+    `# [${repoName}]\n` +
+    `# group = "/{env}/my-team"\n` +
+    `# app   = "${repoName}"\n`
+  );
+}
+
+function endsWithNewline(contents: string): boolean {
+  return contents.length === 0 || contents.endsWith("\n");
 }

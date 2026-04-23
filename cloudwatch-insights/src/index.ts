@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "fs";
+import { spawnSync } from "child_process";
 import { cli, define } from "gunshi";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
@@ -9,7 +10,9 @@ import { runInsightsQuery, QueryRow } from "./insights.js";
 import {
   applyEnvironment,
   ConfigError,
+  configPath,
   defaultQueryForApp,
+  ensureConfigFile,
   Environment,
   ENVIRONMENTS,
   loadSettings,
@@ -289,8 +292,55 @@ function fail(message: string, code = 1): never {
   process.exit(code);
 }
 
+const EDIT_CONFIG_HELP =
+  "Usage: cloudwatch-insights edit-config\n\n" +
+  "Open the settings.toml in $EDITOR (or $VISUAL), creating it with a\n" +
+  "commented template if it does not yet exist.\n";
+
+function runEditConfig(argv: string[]): void {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    process.stdout.write(EDIT_CONFIG_HELP);
+    return;
+  }
+
+  const path = configPath();
+  const { fileCreated, addedSection } = ensureConfigFile(path);
+  if (fileCreated) {
+    process.stderr.write(`Created ${path}\n`);
+  }
+  if (addedSection) {
+    process.stderr.write(`Added commented placeholder section [${addedSection}] for the current repository\n`);
+  }
+
+  const editor = process.env.VISUAL || process.env.EDITOR;
+  if (!editor) {
+    fail("no editor set — define $EDITOR (or $VISUAL) and retry", 2);
+  }
+
+  const parts = editor.split(/\s+/).filter(Boolean);
+  const cmd = parts[0];
+  const args = [...parts.slice(1), path];
+  const result = spawnSync(cmd, args, { stdio: "inherit" });
+  if (result.error) {
+    fail(`failed to launch editor (${editor}): ${result.error.message}`, 1);
+  }
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status);
+  }
+}
+
+const argv = process.argv.slice(2);
+
+// edit-config is handled manually rather than through gunshi's subCommands,
+// because gunshi routes the first non-flag token to subcommand dispatch before
+// consuming flag values — that turns "-t 5m" into "Command not found: 5m".
+if (argv[0] === "edit-config") {
+  runEditConfig(argv.slice(1));
+  process.exit(0);
+}
+
 try {
-  await cli(process.argv.slice(2), command, {
+  await cli(argv, command, {
     name: "cloudwatch-insights",
     version: "1.0.0",
     description: DESCRIPTION,

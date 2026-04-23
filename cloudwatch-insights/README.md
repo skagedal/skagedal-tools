@@ -70,6 +70,14 @@ The tool detects the git repository you're running it from (via `git rev-parse -
 
 Per the skagedal-tools convention, per-tool state lives under `~/.skagedal-tools/<tool-name>/`. Override the whole base directory with `$SKAGEDAL_TOOLS_HOME`, or point at an arbitrary file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
 
+To open (and, if necessary, create) the settings file:
+
+```sh
+cloudwatch-insights edit-config
+```
+
+This opens the file in `$VISUAL` (falling back to `$EDITOR`). On first use the file is seeded with a commented template. When run from inside a git repository, a commented placeholder section for that repo is appended too — just uncomment the lines and fill in the values.
+
 ```toml
 # settings.toml
 [my-service]
