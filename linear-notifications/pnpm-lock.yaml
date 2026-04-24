@@ -13,13 +13,13 @@ importers:
         version: 3.1.2
     devDependencies:
       '@types/node':
-        specifier: ^22.0.0
+        specifier: ^22.19.17
         version: 22.19.17
       '@types/terminal-kit':
         specifier: ^2.5.7
         version: 2.5.7
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.9.3
         version: 5.9.3
 
 packages:
