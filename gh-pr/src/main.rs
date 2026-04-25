@@ -15,11 +15,11 @@ struct Cli {
 #[derive(Args)]
 struct DefaultArgs {
     /// Create the PR (as draft) if it doesn't exist
-    #[arg(long)]
+    #[arg(short, long)]
     create: bool,
 
     /// Open the PR URL in the default browser
-    #[arg(long)]
+    #[arg(short, long)]
     open: bool,
 
     /// Base branch to target when creating a PR
@@ -82,6 +82,8 @@ fn create_pr(toward: Option<&str>) -> String {
         None => default_branch().unwrap_or_else(|| "main".to_string()),
     };
 
+    push_current_branch();
+
     let output = Command::new("gh")
         .args(["pr", "create", "--draft", "--fill", "--base", &base])
         .output()
@@ -109,6 +111,19 @@ fn create_pr(toward: Option<&str>) -> String {
             eprintln!("Could not determine PR URL from gh output");
             exit(1);
         })
+}
+
+fn push_current_branch() {
+    let status = Command::new("git")
+        .args(["push", "-u", "origin", "HEAD"])
+        .status()
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to run git: {}", e);
+            exit(1);
+        });
+    if !status.success() {
+        exit(1);
+    }
 }
 
 fn default_branch() -> Option<String> {
