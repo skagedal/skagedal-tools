@@ -3,7 +3,7 @@ import { Box, Text, useApp, useInput, useStdout } from "ink";
 import clipboard from "clipboardy";
 import type { Config, FieldConfig } from "../config.js";
 import type { LogEntry } from "../entry.js";
-import { renderColumns, renderField } from "../entry.js";
+import { renderField, renderValueDetailed, stringify } from "../entry.js";
 import type { SourceHandle } from "../source.js";
 
 interface Props {
@@ -12,19 +12,38 @@ interface Props {
   sourceLabel: string;
 }
 
+/**
+ * A column definition the user can toggle at runtime. Pre-configured fields
+ * keep their friendly `name`/`from` mapping; raw keys discovered later become
+ * single-key entries with `name === from[0]`.
+ */
+interface ManagedField {
+  name: string;
+  from: string[];
+  visible: boolean;
+}
+
+type View = "list" | "detail" | "fieldsMenu";
+
 export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [cursor, setCursor] = useState(0);
-  const [view, setView] = useState<"list" | "detail">("list");
+  const [view, setView] = useState<View>("list");
   const [done, setDone] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [follow, setFollow] = useState(false);
+  const [detailCursor, setDetailCursor] = useState(0);
+  const [menuCursor, setMenuCursor] = useState(0);
+  const [fields, setFields] = useState<ManagedField[]>(() =>
+    config.fields.map((f) => ({ name: f.name, from: [...f.from], visible: true })),
+  );
 
   useEffect(() => {
     source.onEntry((entry) => {
       setEntries((prev) => [...prev, entry]);
+      setFields((prev) => mergeSeenKeys(prev, Object.keys(entry.data)));
     });
     source.onEnd(() => setDone(true));
     return () => source.close();
@@ -40,40 +59,97 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     }
   }, [entries.length, cursor, follow]);
 
-  // Reserve rows for the header (2), the status footer (1), and a margin (1).
+  // Reset detail-row cursor whenever we change entries or change view, so the
+  // cursor doesn't carry over from a previous entry's field count.
+  useEffect(() => {
+    setDetailCursor(0);
+  }, [view, cursor]);
+
   const totalRows = stdout?.rows ?? 24;
   const visible = Math.max(1, totalRows - 4);
+  const activeFields = useMemo(() => visibleFieldConfigs(fields), [fields]);
 
   useInput((input, key) => {
+    if (view === "fieldsMenu") {
+      if (input === "q" || key.escape || input === "v") {
+        setView("list");
+        return;
+      }
+      if (input === "j" || key.downArrow) {
+        setMenuCursor((c) => Math.min(fields.length - 1, c + 1));
+        return;
+      }
+      if (input === "k" || key.upArrow) {
+        setMenuCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (input === " " || input === "t") {
+        setFields((prev) => toggleAt(prev, menuCursor));
+        return;
+      }
+      if (input === "J") {
+        setFields((prev) => moveAt(prev, menuCursor, +1));
+        setMenuCursor((c) => Math.min(fields.length - 1, c + 1));
+        return;
+      }
+      if (input === "K") {
+        setFields((prev) => moveAt(prev, menuCursor, -1));
+        setMenuCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      return;
+    }
+
     if (view === "detail") {
       if (input === "q" || key.escape || input === "u") {
         setView("list");
         return;
       }
+      const entry = entries[cursor];
+      const keys = entry ? Object.keys(entry.data) : [];
+      // detailCursor 0 = entry header (whole entry); 1..keys.length = fields
       if (input === "j" || key.downArrow) {
-        setCursor((c) => Math.min(entries.length - 1, c + 1));
+        setDetailCursor((c) => Math.min(keys.length, c + 1));
         return;
       }
       if (input === "k" || key.upArrow) {
-        setCursor((c) => Math.max(0, c - 1));
+        setDetailCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (input === "v") {
+        setView("fieldsMenu");
+        return;
+      }
+      if (input === "t") {
+        if (detailCursor === 0 || !entry) return;
+        const key = keys[detailCursor - 1]!;
+        setFields((prev) => toggleByKey(prev, key));
+        const newState = toggleByKey(fields, key);
+        const fc = newState.find((f) => f.from[0] === key || f.from.includes(key));
+        flashFor(setFlash, `${fc?.visible ? "showing" : "hiding"} "${fc?.name ?? key}"`);
         return;
       }
       if (input === "c") {
-        const entry = entries[cursor];
         if (!entry) return;
-        const text = safeJson(entry.data);
-        try {
-          clipboard.writeSync(text);
-          flashFor(setFlash, `copied entry #${entry.id} (${text.length} bytes)`);
-        } catch (err) {
-          flashFor(setFlash, `copy failed: ${err instanceof Error ? err.message : String(err)}`);
+        if (detailCursor === 0) {
+          copyToClipboard(safeJson(entry.data), `entry #${entry.id} JSON`, setFlash);
+        } else {
+          const key = keys[detailCursor - 1]!;
+          const value = stringify(entry.data[key]);
+          copyToClipboard(value, `${key}`, setFlash);
         }
         return;
       }
       return;
     }
+
     if (input === "q" || key.escape) {
       exit();
+      return;
+    }
+    if (input === "v") {
+      setMenuCursor(0);
+      setView("fieldsMenu");
       return;
     }
     if (input === "f") {
@@ -114,14 +190,22 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     }
   });
 
-  // Recompute when entries arrive — but only depend on length, not entries
-  // identity, so cursor/follow toggles don't reflow the layout.
   const widths = useMemo(
-    () => columnWidths(config, entries, stdout?.columns ?? 100),
-    [config, entries.length, stdout?.columns],
+    () => columnWidths(activeFields, entries, stdout?.columns ?? 100),
+    [activeFields, entries.length, stdout?.columns],
   );
   const start = Math.max(0, Math.min(cursor - Math.floor(visible / 2), entries.length - visible));
   const window = entries.slice(start, start + visible);
+
+  if (view === "fieldsMenu") {
+    return (
+      <FieldsMenu
+        fields={fields}
+        cursor={menuCursor}
+        flash={flash}
+      />
+    );
+  }
 
   if (view === "detail" && entries[cursor]) {
     return (
@@ -129,7 +213,10 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         entry={entries[cursor]}
         sourceLabel={sourceLabel}
         position={{ index: cursor, total: entries.length }}
+        fields={fields}
+        cursor={detailCursor}
         flash={flash}
+        width={stdout?.columns ?? 100}
       />
     );
   }
@@ -137,7 +224,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   return (
     <Box flexDirection="column" height={totalRows} width={stdout?.columns}>
       <Header
-        config={config}
+        fields={activeFields}
         widths={widths}
         sourceLabel={sourceLabel}
         count={entries.length}
@@ -155,7 +242,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
               <Row
                 key={entry.id}
                 entry={entry}
-                config={config}
+                fields={activeFields}
                 widths={widths}
                 selected={selected}
                 tail={tail}
@@ -171,13 +258,13 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
             <Text dimColor>
               {" "}
               {entries.length === 0 ? 0 : cursor + 1}/{entries.length} · any nav key exits · j/k
-              move · u up · o open · g/G top/bottom · q quit
+              move · u up · o open · v fields · g/G top/bottom · q quit
             </Text>
           </Text>
         ) : (
           <Text dimColor>
             {entries.length === 0 ? 0 : cursor + 1}/{entries.length} · j/k move · u up · o open · f
-            follow · g/G top/bottom · q quit
+            follow · v fields · g/G top/bottom · q quit
           </Text>
         )}
       </Box>
@@ -186,12 +273,12 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
 };
 
 const Header: React.FC<{
-  config: Config;
+  fields: FieldConfig[];
   widths: number[];
   sourceLabel: string;
   count: number;
   done: boolean;
-}> = ({ config, widths, sourceLabel, count, done }) => (
+}> = ({ fields, widths, sourceLabel, count, done }) => (
   <Box flexDirection="column">
     <Text>
       <Text bold>log-viewer</Text>
@@ -200,7 +287,8 @@ const Header: React.FC<{
       </Text>
     </Text>
     <Box>
-      {config.fields.map((field, i) => (
+      <Text> </Text>
+      {fields.map((field, i) => (
         <Box key={field.name} width={widths[i]} marginRight={1}>
           <Text bold underline>{truncate(field.name, widths[i] - 1)}</Text>
         </Box>
@@ -211,21 +299,21 @@ const Header: React.FC<{
 
 const Row: React.FC<{
   entry: LogEntry;
-  config: Config;
+  fields: FieldConfig[];
   widths: number[];
   selected: boolean;
   tail: boolean;
-}> = ({ entry, config, widths, selected, tail }) => {
-  const cols = renderColumns(entry, config);
-  const levelValue = cols.find((c) => c.name.toLowerCase() === "level")?.value ?? "";
+}> = ({ entry, fields, widths, selected, tail }) => {
+  const levelField = fields.find((f) => f.name.toLowerCase() === "level");
+  const levelValue = levelField ? renderField(entry, levelField) : "";
   const color = selected ? undefined : levelColor(levelValue);
   return (
     <Box>
       <Text color={tail ? "green" : undefined}>{tail ? "▌" : " "}</Text>
-      {cols.map((col, i) => (
-        <Box key={col.name} width={widths[i]} marginRight={1}>
+      {fields.map((field, i) => (
+        <Box key={field.name} width={widths[i]} marginRight={1}>
           <Text inverse={selected} color={color}>
-            {truncate(col.value, Math.max(1, widths[i] - 1))}
+            {truncate(renderField(entry, field), Math.max(1, widths[i] - 1))}
           </Text>
         </Box>
       ))}
@@ -237,33 +325,185 @@ const Detail: React.FC<{
   entry: LogEntry;
   sourceLabel: string;
   position: { index: number; total: number };
+  fields: ManagedField[];
+  cursor: number;
   flash: string | null;
-}> = ({ entry, sourceLabel, position, flash }) => {
-  const pretty = safeJson(entry.data);
+  width: number;
+}> = ({ entry, sourceLabel, position, fields, cursor, flash, width }) => {
+  const keys = Object.keys(entry.data);
+  const headerSelected = cursor === 0;
+  const keyColumnWidth = Math.max(
+    8,
+    Math.min(24, keys.reduce((w, k) => Math.max(w, k.length), 0) + 1),
+  );
   return (
     <Box flexDirection="column">
-      <Text>
+      <Text inverse={headerSelected}>
         <Text bold>entry #{entry.id}</Text>
-        <Text dimColor>
+        <Text dimColor={!headerSelected}>
           {" "}
           · {position.index + 1}/{position.total} · {sourceLabel}
           {entry.wrapped ? " · wrapped" : ""}
         </Text>
       </Text>
       <Box marginTop={1} flexDirection="column">
-        {pretty.split("\n").map((line, i) => (
-          <Text key={i}>{line}</Text>
-        ))}
+        {keys.length === 0 ? (
+          <Text dimColor>(empty)</Text>
+        ) : (
+          keys.map((key, i) => {
+            const selected = cursor === i + 1;
+            const visible = isKeyVisible(fields, key);
+            return (
+              <FieldRow
+                key={key}
+                fieldName={key}
+                value={entry.data[key]}
+                visible={visible}
+                selected={selected}
+                keyColumnWidth={keyColumnWidth}
+                width={width}
+              />
+            );
+          })
+        )}
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          j/k next/prev · c copy json · u/esc back · q back
+          j/k field · u/esc back · t toggle visibility · c copy · v fields menu
           {flash ? `  ·  ${flash}` : ""}
         </Text>
       </Box>
     </Box>
   );
 };
+
+const FieldRow: React.FC<{
+  fieldName: string;
+  value: unknown;
+  visible: boolean;
+  selected: boolean;
+  keyColumnWidth: number;
+  width: number;
+}> = ({ fieldName, value, visible, selected, keyColumnWidth, width }) => {
+  const rendered = renderValueDetailed(value);
+  const lines = rendered.split("\n");
+  const valueWidth = Math.max(10, width - keyColumnWidth - 4);
+  return (
+    <Box>
+      <Box width={2}><Text>{visible ? "•" : " "}</Text></Box>
+      <Box width={keyColumnWidth} marginRight={1}>
+        <Text inverse={selected} bold dimColor={!selected && !visible}>
+          {truncate(fieldName, keyColumnWidth - 1)}
+        </Text>
+      </Box>
+      <Box flexDirection="column">
+        {lines.map((line, i) => (
+          <Text key={i} inverse={selected} dimColor={!selected && !visible}>
+            {truncate(line, valueWidth)}
+          </Text>
+        ))}
+      </Box>
+    </Box>
+  );
+};
+
+const FieldsMenu: React.FC<{
+  fields: ManagedField[];
+  cursor: number;
+  flash: string | null;
+}> = ({ fields, cursor, flash }) => {
+  const nameWidth = Math.max(
+    8,
+    fields.reduce((w, f) => Math.max(w, f.name.length), 0) + 1,
+  );
+  return (
+    <Box flexDirection="column">
+      <Text>
+        <Text bold>Fields</Text>
+        <Text dimColor> · select which columns appear and in what order</Text>
+      </Text>
+      <Box marginTop={1} flexDirection="column">
+        {fields.length === 0 ? (
+          <Text dimColor>(no fields seen yet)</Text>
+        ) : (
+          fields.map((f, i) => {
+            const selected = i === cursor;
+            const mark = f.visible ? "[x]" : "[ ]";
+            const fromHint = f.from.length > 1 || f.from[0] !== f.name
+              ? ` (from: ${f.from.join(", ")})`
+              : "";
+            return (
+              <Text key={f.name} inverse={selected} dimColor={!selected && !f.visible}>
+                {" "}{mark} {pad(f.name, nameWidth)}{fromHint}
+              </Text>
+            );
+          })
+        )}
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>
+          j/k move · space/t toggle · J/K reorder · v/q/esc back
+          {flash ? `  ·  ${flash}` : ""}
+        </Text>
+      </Box>
+    </Box>
+  );
+};
+
+function visibleFieldConfigs(fields: ManagedField[]): FieldConfig[] {
+  return fields.filter((f) => f.visible).map((f) => ({ name: f.name, from: f.from }));
+}
+
+function mergeSeenKeys(prev: ManagedField[], keys: string[]): ManagedField[] {
+  const knownFroms = new Set<string>();
+  for (const f of prev) for (const k of f.from) knownFroms.add(k);
+  let next: ManagedField[] | null = null;
+  for (const key of keys) {
+    if (knownFroms.has(key)) continue;
+    knownFroms.add(key);
+    if (!next) next = [...prev];
+    next.push({ name: key, from: [key], visible: false });
+  }
+  return next ?? prev;
+}
+
+function toggleAt(fields: ManagedField[], index: number): ManagedField[] {
+  if (index < 0 || index >= fields.length) return fields;
+  return fields.map((f, i) => (i === index ? { ...f, visible: !f.visible } : f));
+}
+
+function moveAt(fields: ManagedField[], index: number, delta: number): ManagedField[] {
+  const target = index + delta;
+  if (index < 0 || index >= fields.length || target < 0 || target >= fields.length) {
+    return fields;
+  }
+  const next = [...fields];
+  const [item] = next.splice(index, 1);
+  next.splice(target, 0, item!);
+  return next;
+}
+
+function toggleByKey(fields: ManagedField[], key: string): ManagedField[] {
+  const idx = fields.findIndex((f) => f.from.includes(key));
+  if (idx === -1) {
+    return [...fields, { name: key, from: [key], visible: true }];
+  }
+  return toggleAt(fields, idx);
+}
+
+function isKeyVisible(fields: ManagedField[], key: string): boolean {
+  const f = fields.find((f) => f.from.includes(key));
+  return f ? f.visible : false;
+}
+
+function copyToClipboard(text: string, label: string, setFlash: (v: string | null) => void): void {
+  try {
+    clipboard.writeSync(text);
+    flashFor(setFlash, `copied ${label} (${text.length} bytes)`);
+  } catch (err) {
+    flashFor(setFlash, `copy failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 function safeJson(data: unknown): string {
   try {
@@ -282,15 +522,17 @@ function flashFor(
   setTimeout(() => setFlash(null), ms);
 }
 
-function columnWidths(config: Config, entries: LogEntry[], totalColumns: number): number[] {
-  const n = config.fields.length;
+function columnWidths(
+  fields: FieldConfig[],
+  entries: LogEntry[],
+  totalColumns: number,
+): number[] {
+  const n = fields.length;
   if (n === 0) return [];
-  // Each non-last column shrinks/grows to fit its widest rendered value (and
-  // its header), capped so one huge field can't crowd out the last column.
   const cap = Math.max(20, Math.floor(totalColumns / 3));
   const widths: number[] = [];
   for (let i = 0; i < n - 1; i++) {
-    const field = config.fields[i]!;
+    const field = fields[i]!;
     let w = field.name.length;
     for (const entry of entries) {
       const v = renderField(entry, field);
@@ -300,10 +542,8 @@ function columnWidths(config: Config, entries: LogEntry[], totalColumns: number)
         break;
       }
     }
-    widths.push(w + 1); // padding so columns don't visually butt up against each other
+    widths.push(w + 1);
   }
-  // Last column absorbs whatever's left. The trailing `n` accounts for the
-  // 1-cell marginRight between columns plus the leading follow-mode marker.
   const fixed = widths.reduce((a, b) => a + b, 0);
   const last = Math.max(20, totalColumns - fixed - n);
   widths.push(last);
@@ -314,6 +554,11 @@ function truncate(value: string, width: number): string {
   const clean = value.replace(/\s+/g, " ");
   if (clean.length <= width) return clean;
   return clean.slice(0, Math.max(0, width - 1)) + "…";
+}
+
+function pad(value: string, width: number): string {
+  if (value.length >= width) return value;
+  return value + " ".repeat(width - value.length);
 }
 
 function levelColor(level: string): string | undefined {

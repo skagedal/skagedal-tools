@@ -11,6 +11,10 @@
       <header>
         <strong>log-viewer</strong>
         <span id="meta"></span>
+        <span class="header-spacer"></span>
+        <button id="fields-btn" type="button" aria-haspopup="dialog" aria-expanded="false">
+          Fields
+        </button>
       </header>
       <div id="scroll">
         <table id="log-table">
@@ -20,14 +24,18 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <section id="detail" hidden>
-        <h2>Entry <span id="detail-id"></span></h2>
-        <pre id="detail-body"></pre>
-      </section>
       <footer>
         <span id="status"></span>
-        <span class="hint">j/k move · u up · o open · f follow · g/G top/bottom · esc close detail</span>
+        <span class="hint">j/k move · u up · o open · f follow · v fields · g/G top/bottom · esc close</span>
       </footer>
+      <div id="fields-popover" class="popover" hidden role="dialog" aria-label="Manage fields">
+        <div class="popover-head">
+          <strong>Fields</strong>
+          <button id="fields-close" type="button" aria-label="Close">×</button>
+        </div>
+        <ul id="fields-list"></ul>
+        <p class="popover-hint">Drag the handle to reorder. Toggle the checkbox to show or hide a column.</p>
+      </div>
     </div>
     <script type="module" src="/app.js"></script>
   </body>

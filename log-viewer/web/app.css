@@ -9,6 +9,8 @@
   --warn: #ecc94b;
   --info: #63b3ed;
   --debug: #a0aec0;
+  --accent: #4299e1;
+  --panel: #15171c;
 }
 
 @media (prefers-color-scheme: light) {
@@ -22,6 +24,8 @@
     --warn: #b7791f;
     --info: #2b6cb0;
     --debug: #4a5568;
+    --accent: #2b6cb0;
+    --panel: #f7fafc;
   }
 }
 
@@ -48,20 +52,42 @@ header, footer {
   border-bottom: 1px solid var(--border);
   display: flex;
   gap: 12px;
-  align-items: baseline;
+  align-items: center;
 }
+
+header .header-spacer { flex: 1; }
 
 footer {
   border-bottom: none;
   border-top: 1px solid var(--border);
   justify-content: space-between;
   color: var(--dim);
+  align-items: baseline;
 }
 
 #meta { color: var(--dim); }
 .hint { color: var(--dim); }
 
-/* Scroll the body of the table, not the page; lets the header stay sticky. */
+button {
+  font: inherit;
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 #scroll {
   flex: 1;
   overflow: auto;
@@ -89,8 +115,6 @@ footer {
   z-index: 1;
 }
 
-/* Trick: width: 1% + nowrap makes a column shrink to its content. The
-   remaining column(s) without an explicit width absorb the rest. */
 #log-table .col-fit {
   width: 1%;
   white-space: nowrap;
@@ -104,19 +128,158 @@ footer {
   background: var(--selected);
 }
 
+#log-table tr {
+  cursor: pointer;
+}
+
 td.level-error { color: var(--error); }
 td.level-warn { color: var(--warn); }
 td.level-info { color: var(--info); }
 td.level-debug { color: var(--debug); }
 
-#detail {
-  position: fixed;
-  inset: 0;
-  background: var(--bg);
-  padding: 12px 16px;
-  overflow: auto;
-  border-left: 1px solid var(--border);
+#log-table tr.detail-row td {
+  background: var(--panel);
+  padding: 8px 12px;
+  cursor: default;
 }
 
-#detail h2 { margin: 0 0 8px; font-size: 14px; }
-#detail pre { white-space: pre-wrap; word-break: break-word; }
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.detail-head.detail-selected {
+  outline: 2px solid var(--accent);
+}
+
+.detail-head strong { font-size: 13px; }
+
+.detail-empty { color: var(--dim); }
+
+.detail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+}
+
+.detail-field {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.detail-field:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.detail-field.detail-selected {
+  outline: 2px solid var(--accent);
+}
+
+.detail-field.hidden-field {
+  opacity: 0.5;
+}
+
+.detail-field dt {
+  font-weight: 600;
+  color: var(--dim);
+  margin: 0;
+}
+
+.detail-field dd {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-field input[type="checkbox"] {
+  margin-top: 2px;
+}
+
+.popover {
+  position: fixed;
+  top: 44px;
+  right: 16px;
+  width: 360px;
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+  z-index: 10;
+}
+
+.popover-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.popover-head button {
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 6px;
+}
+
+.popover ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.popover li {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: grab;
+}
+
+.popover li.empty {
+  display: block;
+  color: var(--dim);
+  cursor: default;
+}
+
+.popover li.dragging { opacity: 0.5; }
+
+.popover li:hover { border-color: var(--border); }
+
+.popover li .drag-handle {
+  color: var(--dim);
+  user-select: none;
+}
+
+.popover li .field-name { font-weight: 600; }
+.popover li .field-from { color: var(--dim); font-size: 12px; }
+
+.popover-hint {
+  color: var(--dim);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
