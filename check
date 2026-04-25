@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=shared.sh
+source "$SCRIPT_DIR/shared.sh"
+
+main() {
+    for tool in "${NODE_TOOLS[@]}"; do
+        check-node "$tool"
+    done
+    for tool in "${RUST_TOOLS[@]}"; do
+        check-rust "$tool"
+    done
+    for tool in "${MAVEN_TOOLS[@]}"; do
+        check-maven "$tool"
+    done
+    echo "==> Done"
+}
+
+main "$@"

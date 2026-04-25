@@ -12,7 +12,7 @@
     "prepare": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "test": "tsc --noEmit"
+    "check": "tsc --noEmit"
   },
   devDependencies: {
     "@types/node": "^22.19.17",

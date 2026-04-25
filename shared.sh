@@ -21,18 +21,24 @@ MAVEN_TOOLS=(
 
 check-node() {
     local dir="$1"
-    echo "==> Testing $dir"
+    echo "==> Checking $dir"
     (
         cd "$SCRIPT_DIR/$dir"
         pnpm install
-        pnpm test
+        pnpm run check
     )
 }
 
 check-rust() {
     local dir="$1"
-    echo "==> Testing $dir"
+    echo "==> Checking $dir"
     (cd "$SCRIPT_DIR/$dir" && cargo test)
+}
+
+check-maven() {
+    local dir="$1"
+    echo "==> Checking $dir"
+    (cd "$SCRIPT_DIR/$dir" && mvn --batch-mode test)
 }
 
 install-node() {

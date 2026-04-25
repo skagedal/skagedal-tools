@@ -59,9 +59,16 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
   valid JS identifiers). No `package.json` is committed or generated — modern
   Node (≥ 23) auto-detects ESM from `import`/`export` syntax, and tsx has its
   own ESM detection, so the manifest stub isn't needed.
-- Every tool must have a `test` script. If there's nothing meaningful to test
-  yet, use `tsc --noEmit` as a baseline so `./install --check` exercises the
-  type-checker.
+- Every tool must have a `check` script. At a minimum it runs `tsc --noEmit`.
+  If the tool has a test suite, add a `test` script (e.g. `tsx --test test/*.test.ts`)
+  and have `check` invoke it (`"check": "tsc --noEmit && pnpm test"`).
+  If the tool uses React, also add a `lint` script that runs `eslint .` and
+  invoke it from `check` too. The top-level `./check` runs `pnpm run check`
+  in every Node tool, so this is the entry point CI exercises.
+- React tools should use ESLint v9 with the flat-config (`eslint.config.js`)
+  setup, including `@eslint/js`, `typescript-eslint`, `eslint-plugin-react`,
+  and `eslint-plugin-react-hooks`. See `log-viewer/eslint.config.js` for a
+  reference. Pin `eslint` to `^9.x` until `eslint-plugin-react` supports v10.
 - Set `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (4320 minutes = 3 days):
   ```yaml
   minimumReleaseAge: 4320
