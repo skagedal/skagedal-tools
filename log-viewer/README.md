@@ -173,8 +173,13 @@ In the list:
 | `k` / `↑` | Previous entry |
 | `u` | Up one entry |
 | `o` / Enter | Open the selected entry (full JSON) |
+| `f` | Toggle **follow** mode — pin selection to the latest entry as new ones arrive. Any navigation key turns it back off. |
 | `g` / `G` | Top / bottom |
 | `q` / Ctrl-C | Quit (TUI only) |
+
+The TUI runs in the terminal's alternate screen buffer (full-screen),
+so it doesn't pollute your scrollback; on quit, the previous terminal
+contents are restored.
 
 In the detail view:
 

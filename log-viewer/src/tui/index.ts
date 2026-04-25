@@ -4,6 +4,11 @@ import type { Config } from "../config.js";
 import type { SourceHandle } from "../source.js";
 import { App } from "./app.js";
 
+const ENTER_ALT_SCREEN = "\x1b[?1049h";
+const LEAVE_ALT_SCREEN = "\x1b[?1049l";
+const HIDE_CURSOR = "\x1b[?25l";
+const SHOW_CURSOR = "\x1b[?25h";
+
 export interface RunTuiOptions {
   config: Config;
   source: SourceHandle;
@@ -18,6 +23,23 @@ export async function runTui(opts: RunTuiOptions): Promise<void> {
         "or use a file/command source.",
     );
   }
-  const instance = render(React.createElement(App, opts));
-  await instance.waitUntilExit();
+
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    process.stdout.write(SHOW_CURSOR + LEAVE_ALT_SCREEN);
+  };
+  process.stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
+  // Best-effort cleanup if we exit through an unusual path.
+  process.once("exit", restore);
+  process.once("SIGINT", restore);
+  process.once("SIGTERM", restore);
+
+  try {
+    const instance = render(React.createElement(App, opts), { exitOnCtrlC: true });
+    await instance.waitUntilExit();
+  } finally {
+    restore();
+  }
 }

@@ -20,6 +20,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   const [view, setView] = useState<"list" | "detail">("list");
   const [done, setDone] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [follow, setFollow] = useState(false);
 
   useEffect(() => {
     source.onEntry((entry) => {
@@ -29,15 +30,19 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     return () => source.close();
   }, [source]);
 
-  // Keep cursor in bounds as entries arrive.
+  // Keep cursor in bounds as entries arrive; in follow mode, ride the tail.
   useEffect(() => {
-    if (cursor >= entries.length && entries.length > 0) {
+    if (entries.length === 0) return;
+    if (follow) {
+      setCursor(entries.length - 1);
+    } else if (cursor >= entries.length) {
       setCursor(entries.length - 1);
     }
-  }, [entries.length, cursor]);
+  }, [entries.length, cursor, follow]);
 
-  const rows = (stdout?.rows ?? 24) - 4;
-  const visible = Math.max(1, rows);
+  // Reserve rows for the header (2), the status footer (1), and a margin (1).
+  const totalRows = stdout?.rows ?? 24;
+  const visible = Math.max(1, totalRows - 4);
 
   useInput((input, key) => {
     if (view === "detail") {
@@ -72,27 +77,39 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
       exit();
       return;
     }
+    if (input === "f") {
+      setFollow((v) => !v);
+      return;
+    }
     if (input === "j" || key.downArrow) {
+      setFollow(false);
       setCursor((c) => Math.min(entries.length - 1, c + 1));
       return;
     }
     if (input === "k" || key.upArrow) {
+      setFollow(false);
       setCursor((c) => Math.max(0, c - 1));
       return;
     }
     if (input === "u") {
+      setFollow(false);
       setCursor((c) => Math.max(0, c - 1));
       return;
     }
     if (input === "o" || key.return) {
-      if (entries.length > 0) setView("detail");
+      if (entries.length > 0) {
+        setFollow(false);
+        setView("detail");
+      }
       return;
     }
     if (input === "g") {
+      setFollow(false);
       setCursor(0);
       return;
     }
     if (input === "G") {
+      setFollow(false);
       setCursor(Math.max(0, entries.length - 1));
       return;
     }
@@ -114,20 +131,30 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   }
 
   return (
-    <Box flexDirection="column">
-      <Header config={config} widths={widths} sourceLabel={sourceLabel} count={entries.length} done={done} />
-      {window.length === 0 ? (
-        <Text dimColor>(waiting for log lines…)</Text>
-      ) : (
-        window.map((entry, i) => {
-          const idx = start + i;
-          const selected = idx === cursor;
-          return <Row key={entry.id} entry={entry} config={config} widths={widths} selected={selected} />;
-        })
-      )}
-      <Box marginTop={1}>
+    <Box flexDirection="column" height={totalRows} width={stdout?.columns}>
+      <Header
+        config={config}
+        widths={widths}
+        sourceLabel={sourceLabel}
+        count={entries.length}
+        done={done}
+        follow={follow}
+      />
+      <Box flexDirection="column" flexGrow={1}>
+        {window.length === 0 ? (
+          <Text dimColor>(waiting for log lines…)</Text>
+        ) : (
+          window.map((entry, i) => {
+            const idx = start + i;
+            const selected = idx === cursor;
+            return <Row key={entry.id} entry={entry} config={config} widths={widths} selected={selected} />;
+          })
+        )}
+      </Box>
+      <Box>
         <Text dimColor>
-          {cursor + 1}/{entries.length} · j/k move · u up · o open · g/G top/bottom · q quit
+          {entries.length === 0 ? 0 : cursor + 1}/{entries.length}
+          {follow ? " · FOLLOW" : ""} · j/k move · u up · o open · f follow · g/G top/bottom · q quit
         </Text>
       </Box>
     </Box>
@@ -140,11 +167,15 @@ const Header: React.FC<{
   sourceLabel: string;
   count: number;
   done: boolean;
-}> = ({ config, widths, sourceLabel, count, done }) => (
+  follow: boolean;
+}> = ({ config, widths, sourceLabel, count, done, follow }) => (
   <Box flexDirection="column">
     <Text>
       <Text bold>log-viewer</Text>
-      <Text dimColor> · {sourceLabel} · {count} entries{done ? " (eof)" : ""}</Text>
+      <Text dimColor>
+        {" "}· {sourceLabel} · {count} entries{done ? " (eof)" : ""}
+      </Text>
+      {follow ? <Text color="green" bold> · FOLLOW</Text> : null}
     </Text>
     <Box>
       {config.fields.map((field, i) => (

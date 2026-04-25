@@ -14,6 +14,7 @@ let entries = [];
 let cursor = 0;
 let view = "list";
 let done = false;
+let follow = false;
 
 async function start() {
   const meta = await fetch("/api/meta").then((r) => r.json());
@@ -73,7 +74,11 @@ function appendRow(entry) {
     openDetail();
   });
   rowsEl.appendChild(tr);
-  if (entries.length === 1) setCursor(0);
+  if (follow) {
+    setCursor(entries.length - 1, { keepFollow: true });
+  } else if (entries.length === 1) {
+    setCursor(0);
+  }
 }
 
 function pickField(data, candidates) {
@@ -94,8 +99,12 @@ function classifyLevel(level) {
   return "other";
 }
 
-function setCursor(i) {
+function setCursor(i, opts = {}) {
   if (entries.length === 0) return;
+  if (!opts.keepFollow && follow) {
+    follow = false;
+    updateStatus();
+  }
   cursor = Math.max(0, Math.min(entries.length - 1, i));
   for (const el of rowsEl.querySelectorAll("tr.selected")) el.classList.remove("selected");
   const sel = rowsEl.children[cursor];
@@ -106,8 +115,20 @@ function setCursor(i) {
   updateStatus();
 }
 
+function toggleFollow() {
+  follow = !follow;
+  if (follow && entries.length > 0) {
+    setCursor(entries.length - 1, { keepFollow: true });
+  } else {
+    updateStatus();
+  }
+}
+
 function updateStatus() {
-  statusEl.textContent = `${entries.length === 0 ? 0 : cursor + 1}/${entries.length}${done ? " (eof)" : ""}`;
+  const pos = entries.length === 0 ? 0 : cursor + 1;
+  const eof = done ? " (eof)" : "";
+  const tag = follow ? " · FOLLOW" : "";
+  statusEl.textContent = `${pos}/${entries.length}${eof}${tag}`;
 }
 
 function openDetail() {
@@ -150,6 +171,7 @@ document.addEventListener("keydown", (ev) => {
       break;
     case "o":
     case "Enter":
+      if (follow) follow = false;
       openDetail();
       ev.preventDefault();
       break;
@@ -159,6 +181,10 @@ document.addEventListener("keydown", (ev) => {
       break;
     case "G":
       setCursor(entries.length - 1);
+      ev.preventDefault();
+      break;
+    case "f":
+      toggleFollow();
       ev.preventDefault();
       break;
   }
