@@ -2,17 +2,25 @@
 # Periodically emit fake log lines on stdout. Mostly JSONL, with the
 # occasional plain-text line so you can see how log-viewer handles those.
 #
+# Each line carries a `podname` field. The script rotates through three
+# fake pods so the second and third pods first appear well after startup
+# — that way the example trigger in examples/config.json5 (which uses a
+# 2-second startup delay) demonstrably fires only on the genuinely new
+# ones.
+#
 #   log-viewer --exec ./examples/streaming-logs
-#   log-viewer -b --exec ./examples/streaming-logs
+#   log-viewer --config examples/config.json5 --exec ./examples/streaming-logs
 set -euo pipefail
 
 interval="${INTERVAL:-0.4}"
 max="${MAX:-0}"  # 0 = run forever
+pod_period="${POD_PERIOD:-12}"  # entries per pod before rotating
 
 levels=(info info info info debug warn warn error)
 services=(api worker auth billing)
 paths=("/v1/users/42" "/v1/orders" "/v1/products/search" "/v1/sessions" "/healthz")
 methods=(GET POST DELETE PUT)
+pods=("api-server-abc123" "api-server-def456" "api-server-ghi789")
 
 i=0
 while :; do
@@ -28,13 +36,16 @@ while :; do
         error) status=500 ;;
     esac
 
-    # Sprinkle in a non-JSON line every ~10 entries so the wrapping behavior
-    # is visible.
+    pod_index=$(( (i / pod_period) % ${#pods[@]} ))
+    pod="${pods[$pod_index]}"
+
+    # Sprinkle in a non-JSON line every ~10 entries so the wrapping
+    # behavior is visible.
     if (( i % 10 == 7 )); then
         echo "[stderr-bridge] dropped frame at offset ${i}"
     else
-        printf '{"@timestamp":"%s","level":"%s","service":"%s","message":"Request","method":"%s","path":"%s","status":%d,"duration_ms":%d,"seq":%d}\n' \
-            "$ts" "$level" "$service" "$method" "$path" "$status" "$duration" "$i"
+        printf '{"@timestamp":"%s","level":"%s","service":"%s","podname":"%s","message":"Request","method":"%s","path":"%s","status":%d,"duration_ms":%d,"seq":%d}\n' \
+            "$ts" "$level" "$service" "$pod" "$method" "$path" "$status" "$duration" "$i"
     fi
 
     i=$((i + 1))

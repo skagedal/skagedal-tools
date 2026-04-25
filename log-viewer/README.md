@@ -54,8 +54,12 @@ The [`examples/`](examples/) folder ships ready-to-go input:
   multiple services, levels, nested objects, stack traces, and a couple
   of plain-text lines so you can see how non-JSON input is wrapped.
 - `examples/streaming-logs` — an executable that emits a fake log line
-  every ~400 ms (one in ten is plain text). Tweak with `INTERVAL=` and
-  `MAX=` env vars.
+  every ~400 ms (one in ten is plain text). Each line carries a
+  `podname` field that rotates through three pods over time. Tweak
+  with `INTERVAL=`, `MAX=`, `POD_PERIOD=` env vars.
+- `examples/config.json5` — surfaces a `pod` column and registers a
+  `say new pod {value} deployed` trigger on the `podname` field, with
+  a 2-second startup delay.
 
 ```bash
 # From the log-viewer/ directory:
@@ -65,11 +69,93 @@ log-viewer --exec ./examples/streaming-logs       # TUI, live stream
 log-viewer -b --exec ./examples/streaming-logs    # browser, live stream
 ```
 
+### Trying the trigger demo
+
+Run the streaming feed with the example config:
+
+```bash
+log-viewer --config examples/config.json5 --exec ./examples/streaming-logs
+```
+
+What you should see:
+
+1. The first pod, `api-server-abc123`, streams immediately. The
+   trigger does **not** fire — it's within the 2-second startup
+   delay, so log-viewer just records it as "already seen".
+2. After about 5 seconds, a brand-new `api-server-def456` shows up
+   and the trigger fires for the first time (`say new pod
+   api-server-def456 deployed` on macOS).
+3. About 5 seconds later, `api-server-ghi789` appears and the
+   trigger fires again.
+4. Then the pods rotate back through the same three names — none of
+   those fire, because they've all been seen now.
+
+If you're not on macOS (no `say`), edit the `action` in
+`examples/config.json5`. Portable alternatives:
+
+```json5
+action: "printf '\\a'"                                           // terminal bell
+action: "notify-send 'new pod' '{value}'"                        // Linux desktop
+action: "echo new pod {value} >> /tmp/log-viewer-new-pods.log"   // log to a file
+```
+
+## Using with kubectl
+
+`kubectl logs -f` streams plain-text lines, so they get wrapped under
+the `default_field` (typically `message`):
+
+```bash
+log-viewer --exec kubectl logs -f deploy/my-app -n my-ns
+```
+
+If your app already emits structured JSON logs, log-viewer will pick
+them up directly — point your `[[fields]]` `from` candidates at the
+keys your logger uses.
+
+## Using with stern
+
+[stern](https://github.com/stern/stern) tails logs across multiple pods
+and supports JSON output, which pairs naturally with log-viewer:
+
+```bash
+log-viewer --exec stern --output json my-app
+```
+
+stern's JSON shape includes `timestamp`, `message`, `podName`,
+`containerName`, and `namespace`. A matching config:
+
+```json5
+{
+  fields: [
+    { name: "time",      from: ["timestamp"] },
+    { name: "namespace", from: ["namespace"] },
+    { name: "pod",       from: ["podName"] },
+    { name: "container", from: ["containerName"] },
+    { name: "message",   from: ["message"] },
+  ],
+
+  // Make a sound whenever a new pod shows up — useful when watching
+  // a deployment roll over.
+  triggers: [
+    {
+      name: "new-pod",
+      on_new_value: "podName",
+      action: "say new pod {value}",
+      startup_delay_ms: 2000,
+    },
+  ],
+}
+```
+
+Save it as `~/.skagedal-tools/log-viewer/config.json5` (or pass
+`--config path/to/file.json5`).
+
 ### Flags
 
 | Flag | Description |
 |------|-------------|
 | `-f`, `--file <path>` | Read JSONL from a file. Use `-` for stdin. |
+| `-c`, `--config <path>` | Path to a config file (overrides `~/.skagedal-tools/log-viewer/config.json5` and `$LOG_VIEWER_CONFIG`). |
 | `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. **Every argv after the command is forwarded to it**, so `--exec kubectl logs -f my-pod` runs `kubectl logs -f my-pod`. Put log-viewer's own flags before `--exec`. |
 | `-b`, `--browser` | Start the browser app instead of the TUI. |
 | `-p`, `--port <n>` | Port for the browser server (default `5173`). |

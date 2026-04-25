@@ -1,0 +1,31 @@
+// Example config used by the trigger demo. Pair with examples/streaming-logs:
+//
+//   log-viewer --config examples/config.json5 --exec ./examples/streaming-logs
+//
+// The streaming-logs script emits a few different `podname` values over
+// time. The 2-second startup delay below means the first pod (already
+// streaming when log-viewer attaches) is recorded silently as "seen" but
+// doesn't fire the trigger — only later pods, which truly are new, do.
+{
+  default_field: "message",
+
+  fields: [
+    { name: "time",    from: ["@timestamp"] },
+    { name: "level",   from: ["level"] },
+    { name: "pod",     from: ["podname"] },
+    { name: "message", from: ["message"] },
+  ],
+
+  triggers: [
+    {
+      name: "new-pod",
+      on_new_value: "podname",
+      // On macOS this speaks the name. Replacements:
+      //   Linux:    notify-send "new pod" "{value}"
+      //   Anywhere: printf '\a'      // terminal bell
+      //   Logging:  echo new pod {value} >> /tmp/log-viewer-new-pods.log
+      action: "say new pod {value} deployed",
+      startup_delay_ms: 2000,
+    },
+  ],
+}

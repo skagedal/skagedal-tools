@@ -24,6 +24,11 @@ const main = define({
       short: "f",
       description: "JSONL file to read (use '-' for stdin)",
     },
+    config: {
+      type: "string",
+      short: "c",
+      description: "path to config file (overrides ~/.skagedal-tools/log-viewer/config.json5 and $LOG_VIEWER_CONFIG)",
+    },
     exec: {
       type: "string",
       short: "e",
@@ -57,6 +62,7 @@ const main = define({
   run: async (ctx) => {
     const values = ctx.values as {
       file?: string;
+      config?: string;
       browser: boolean;
       port: number;
       host: string;
@@ -93,7 +99,10 @@ const main = define({
       );
     }
 
-    const config = loadConfig();
+    if (values.config && !existsSync(values.config)) {
+      fail(`config file not found: ${values.config}`, 2);
+    }
+    const config = loadConfig(values.config ?? configPath());
     const source = startSource(spec, { defaultField: config.defaultField });
 
     if (config.triggers.length > 0) {
@@ -120,9 +129,16 @@ const main = define({
 const editConfigCmd = define({
   name: "edit-config",
   description: "create the config file if missing and open it in $EDITOR",
-  args: {},
-  run: () => {
-    const path = configPath();
+  args: {
+    config: {
+      type: "string",
+      short: "c",
+      description: "path to config file (overrides default and $LOG_VIEWER_CONFIG)",
+    },
+  },
+  run: (ctx) => {
+    const values = ctx.values as { config?: string };
+    const path = values.config ?? configPath();
     const created = ensureConfigFile(path);
     if (created) process.stderr.write(`Created ${path}\n`);
     openEditor(path);
