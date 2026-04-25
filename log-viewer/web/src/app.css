@@ -11,6 +11,7 @@
   --debug: #a0aec0;
   --accent: #4299e1;
   --panel: #15171c;
+  --col-fit: 200px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -41,6 +42,8 @@ html, body {
   height: 100%;
 }
 
+#root { height: 100%; }
+
 #app {
   display: flex;
   flex-direction: column;
@@ -53,6 +56,7 @@ header, footer {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 header .header-spacer { flex: 1; }
@@ -88,59 +92,79 @@ button:disabled {
   cursor: not-allowed;
 }
 
-#scroll {
+.scroll {
   flex: 1;
   overflow: auto;
+  position: relative;
+  contain: strict;
 }
 
-#log-table {
+.header-row,
+.row {
+  display: flex;
+  align-items: stretch;
   width: 100%;
-  border-collapse: collapse;
-}
-
-#log-table th,
-#log-table td {
-  text-align: left;
-  padding: 2px 8px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
 }
 
-#log-table thead th {
+.header-row {
   position: sticky;
   top: 0;
+  z-index: 2;
   background: var(--bg);
   font-weight: 600;
   color: var(--dim);
-  z-index: 1;
 }
 
-#log-table .col-fit {
-  width: 1%;
-  white-space: nowrap;
+.virtual-track {
+  position: relative;
+  width: 100%;
 }
 
-#log-table .col-flex {
-  word-break: break-word;
-}
-
-#log-table tr.selected td {
-  background: var(--selected);
-}
-
-#log-table tr {
+.row {
+  position: absolute;
+  top: 0;
+  left: 0;
   cursor: pointer;
 }
 
-td.level-error { color: var(--error); }
-td.level-warn { color: var(--warn); }
-td.level-info { color: var(--info); }
-td.level-debug { color: var(--debug); }
+.row.selected {
+  background: var(--selected);
+}
 
-#log-table tr.detail-row td {
-  background: var(--panel);
-  padding: 8px 12px;
+.cell {
+  padding: 2px 8px;
+  vertical-align: top;
+  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-fit {
+  width: var(--col-fit);
+  flex: 0 0 var(--col-fit);
+}
+
+.col-flex {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cell.level-error { color: var(--error); }
+.cell.level-warn { color: var(--warn); }
+.cell.level-info { color: var(--info); }
+.cell.level-debug { color: var(--debug); }
+
+.row.detail-row {
   cursor: default;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  display: block;
+}
+
+.detail-cell {
+  padding: 8px 12px;
 }
 
 .detail {
@@ -155,6 +179,7 @@ td.level-debug { color: var(--debug); }
   gap: 12px;
   padding: 4px 6px;
   border-radius: 4px;
+  cursor: pointer;
 }
 
 .detail-head.detail-selected {
@@ -240,7 +265,7 @@ td.level-debug { color: var(--debug); }
   padding: 0 6px;
 }
 
-.popover ul {
+.fields-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -249,7 +274,7 @@ td.level-debug { color: var(--debug); }
   gap: 4px;
 }
 
-.popover li {
+.fields-list li {
   position: relative;
   display: grid;
   grid-template-columns: auto auto 1fr auto;
@@ -261,20 +286,20 @@ td.level-debug { color: var(--debug); }
   cursor: grab;
 }
 
-.popover li.empty {
+.fields-list li.empty {
   display: block;
   color: var(--dim);
   cursor: default;
 }
 
-.popover li.dragging {
+.fields-list li.dragging {
   opacity: 0.4;
   cursor: grabbing;
 }
 
-.popover li:hover { border-color: var(--border); }
+.fields-list li:hover { border-color: var(--border); }
 
-.popover li .drag-handle {
+.fields-list li .drag-handle {
   color: var(--dim);
   font-size: 16px;
   line-height: 1;
@@ -282,10 +307,8 @@ td.level-debug { color: var(--debug); }
   padding: 0 2px;
 }
 
-/* Drop indicators: a bright bar shows exactly where the dragged item will
-   land, above (drop-before) or below (drop-after) the target row. */
-.popover li.drop-before::before,
-.popover li.drop-after::after {
+.fields-list li.drop-before::before,
+.fields-list li.drop-after::after {
   content: "";
   position: absolute;
   left: 4px;
@@ -296,11 +319,11 @@ td.level-debug { color: var(--debug); }
   pointer-events: none;
 }
 
-.popover li.drop-before::before { top: -2px; }
-.popover li.drop-after::after { bottom: -2px; }
+.fields-list li.drop-before::before { top: -2px; }
+.fields-list li.drop-after::after { bottom: -2px; }
 
-.popover li .field-name { font-weight: 600; }
-.popover li .field-from { color: var(--dim); font-size: 12px; }
+.fields-list li .field-name { font-weight: 600; }
+.fields-list li .field-from { color: var(--dim); font-size: 12px; }
 
 .popover-hint {
   color: var(--dim);

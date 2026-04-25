@@ -38,6 +38,14 @@ All shell scripts in this repository must follow these guidelines:
 - Use `#!/usr/bin/env bash` as the shebang line instead of `#!/bin/bash`
   - This provides better portability across different systems where bash may be installed in different locations
 - Use dashes (not underscores) in bash function names (e.g. `update-cargo`, not `update_cargo`)
+- Stay compatible with **bash 3.2**, which is what macOS ships by default.
+  Avoid features introduced in later versions, including:
+  - `printf '%(...)T'` (bash 4.2+) — synthesise timestamps from arithmetic, or
+    shell out to `date`
+  - associative arrays / `declare -A` (bash 4.0+)
+  - `${var,,}` / `${var^^}` case-conversion expansions (bash 4.0+)
+  - `mapfile` / `readarray` (bash 4.0+)
+  - `&>>` append redirection (bash 4.0+; use `>>file 2>&1` instead)
 
 ## Node.js Programs
 
