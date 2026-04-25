@@ -5,7 +5,7 @@ use std::process::{Command, Output};
 use tempfile::TempDir;
 
 fn pr_bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_pr"))
+    PathBuf::from(env!("CARGO_BIN_EXE_gh-pr"))
 }
 
 fn mock_gh_bin() -> PathBuf {

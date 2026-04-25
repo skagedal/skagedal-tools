@@ -25,7 +25,7 @@ install-node cloudwatch-insights
 
 install-rust git-dirty-checker
 install-rust log-jsonify
-install-rust pr
+install-rust gh-pr
 install-rust x-java-home
 
 echo "==> Done"

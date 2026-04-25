@@ -3,7 +3,7 @@ use std::process::{Command, Stdio, exit};
 
 /// Manage GitHub pull requests for the current branch.
 #[derive(Parser)]
-#[command(name = "pr", version, about, long_about = None)]
+#[command(name = "gh-pr", version, about, long_about = None)]
 struct Cli {
     #[command(flatten)]
     default_args: DefaultArgs,
