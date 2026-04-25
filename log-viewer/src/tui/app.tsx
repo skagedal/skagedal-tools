@@ -146,7 +146,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         ) : (
           window.map((entry, i) => {
             const idx = start + i;
-            const selected = idx === cursor;
+            const selected = !follow && idx === cursor;
             return <Row key={entry.id} entry={entry} config={config} widths={widths} selected={selected} />;
           })
         )}

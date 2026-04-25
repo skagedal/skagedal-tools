@@ -103,25 +103,30 @@ function setCursor(i, opts = {}) {
   if (entries.length === 0) return;
   if (!opts.keepFollow && follow) {
     follow = false;
-    updateStatus();
   }
   cursor = Math.max(0, Math.min(entries.length - 1, i));
-  for (const el of rowsEl.querySelectorAll("tr.selected")) el.classList.remove("selected");
+  applySelection();
   const sel = rowsEl.children[cursor];
-  if (sel) {
-    sel.classList.add("selected");
-    sel.scrollIntoView({ block: "nearest" });
-  }
+  if (sel) sel.scrollIntoView({ block: "nearest" });
   updateStatus();
+}
+
+function applySelection() {
+  for (const el of rowsEl.querySelectorAll("tr.selected")) el.classList.remove("selected");
+  if (follow) return;
+  const sel = rowsEl.children[cursor];
+  if (sel) sel.classList.add("selected");
 }
 
 function toggleFollow() {
   follow = !follow;
   if (follow && entries.length > 0) {
-    setCursor(entries.length - 1, { keepFollow: true });
-  } else {
-    updateStatus();
+    cursor = entries.length - 1;
+    const sel = rowsEl.children[cursor];
+    if (sel) sel.scrollIntoView({ block: "nearest" });
   }
+  applySelection();
+  updateStatus();
 }
 
 function updateStatus() {
