@@ -1,0 +1,105 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0e0f12;
+  --fg: #e6e6e6;
+  --dim: #8a8f98;
+  --selected: #2a4365;
+  --border: #2d2f36;
+  --error: #f56565;
+  --warn: #ecc94b;
+  --info: #63b3ed;
+  --debug: #a0aec0;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a202c;
+    --dim: #4a5568;
+    --selected: #bee3f8;
+    --border: #e2e8f0;
+    --error: #c53030;
+    --warn: #b7791f;
+    --info: #2b6cb0;
+    --debug: #4a5568;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  height: 100%;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header, footer {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+
+footer {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+  justify-content: space-between;
+  color: var(--dim);
+}
+
+#meta { color: var(--dim); }
+.hint { color: var(--dim); }
+
+table {
+  flex: 1;
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+  overflow: auto;
+  display: block;
+}
+
+thead, tbody { display: block; width: 100%; }
+thead { position: sticky; top: 0; background: var(--bg); }
+tr { display: table; width: 100%; table-layout: fixed; }
+
+th, td {
+  text-align: left;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+th { font-weight: 600; color: var(--dim); }
+
+tr.selected td { background: var(--selected); }
+
+td.level-error { color: var(--error); }
+td.level-warn { color: var(--warn); }
+td.level-info { color: var(--info); }
+td.level-debug { color: var(--debug); }
+
+#detail {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  padding: 12px 16px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+}
+
+#detail h2 { margin: 0 0 8px; font-size: 14px; }
+#detail pre { white-space: pre-wrap; word-break: break-word; }

@@ -22,6 +22,7 @@ install-rust() {
 
 install-node linear-notifications
 install-node cloudwatch-insights
+install-node log-viewer
 
 install-rust git-dirty-checker
 install-rust log-jsonify
