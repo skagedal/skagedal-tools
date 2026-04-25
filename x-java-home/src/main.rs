@@ -62,6 +62,15 @@ struct Args {
     verbose: bool,
 }
 
+fn parse_jvms(plist_bytes: &[u8]) -> Result<Vec<JVMInfo>> {
+    plist::from_bytes(plist_bytes).context("Failed to parse plist XML from java_home")
+}
+
+fn filter_by_name(jvms: &mut Vec<JVMInfo>, name_filter: &str) {
+    let name_lower = name_filter.to_lowercase();
+    jvms.retain(|jvm| jvm.JVMName.to_lowercase().contains(&name_lower));
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -94,13 +103,12 @@ fn main() -> Result<()> {
         }
 
         // Parse the plist XML
-        let mut jvms: Vec<JVMInfo> = plist::from_bytes(&output.stdout)
+        let mut jvms: Vec<JVMInfo> = parse_jvms(&output.stdout)
             .context("Failed to parse plist XML from java_home")?;
 
         // Filter by name if provided
         if let Some(name_filter) = &args.name {
-            let name_lower = name_filter.to_lowercase();
-            jvms.retain(|jvm| jvm.JVMName.to_lowercase().contains(&name_lower));
+            filter_by_name(&mut jvms, name_filter);
         }
 
         // Handle output
@@ -166,4 +174,52 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EXAMPLE_PLIST: &[u8] = include_bytes!("../example-input.xml");
+
+    #[test]
+    fn parses_example_plist() {
+        let jvms = parse_jvms(EXAMPLE_PLIST).unwrap();
+        assert_eq!(jvms.len(), 7);
+        assert_eq!(jvms[0].JVMName, "OpenJDK 25.0.1");
+        assert_eq!(jvms[0].JVMArch, "arm64");
+        assert!(jvms[0].JVMEnabled);
+        assert_eq!(
+            jvms[0].JVMHomePath,
+            "/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home"
+        );
+    }
+
+    #[test]
+    fn parse_jvms_rejects_invalid_input() {
+        assert!(parse_jvms(b"not a plist").is_err());
+    }
+
+    #[test]
+    fn filter_by_name_matches_substring_case_insensitive() {
+        let mut jvms = parse_jvms(EXAMPLE_PLIST).unwrap();
+        filter_by_name(&mut jvms, "zulu");
+        assert_eq!(jvms.len(), 4);
+        assert!(jvms.iter().all(|j| j.JVMName.contains("Zulu")));
+    }
+
+    #[test]
+    fn filter_by_name_uppercase_query_still_matches() {
+        let mut jvms = parse_jvms(EXAMPLE_PLIST).unwrap();
+        filter_by_name(&mut jvms, "GRAALVM");
+        assert_eq!(jvms.len(), 1);
+        assert_eq!(jvms[0].JVMName, "Oracle GraalVM 25.0.1+8.1");
+    }
+
+    #[test]
+    fn filter_by_name_no_matches_yields_empty() {
+        let mut jvms = parse_jvms(EXAMPLE_PLIST).unwrap();
+        filter_by_name(&mut jvms, "nonexistent");
+        assert!(jvms.is_empty());
+    }
 }

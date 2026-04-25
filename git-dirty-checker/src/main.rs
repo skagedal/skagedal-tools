@@ -423,3 +423,93 @@ fn render(f: &mut Frame, app: &App) {
     };
     f.render_widget(footer, chunks[2]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn snooze_key_replaces_slashes() {
+        let path = Path::new("/Users/simon/code/foo");
+        assert_eq!(repo_snooze_key(path), "__Users__simon__code__foo");
+    }
+
+    #[test]
+    fn format_snooze_remaining_uses_hours_and_minutes() {
+        let now = SystemTime::now();
+        let expiry = now + Duration::from_secs(2 * 3600 + 15 * 60);
+        let formatted = format_snooze_remaining(&expiry);
+        // Allow for a slight slip between SystemTime::now() calls.
+        assert!(
+            formatted == "2h15m" || formatted == "2h14m",
+            "got {formatted}"
+        );
+    }
+
+    #[test]
+    fn format_snooze_remaining_uses_minutes_only_under_an_hour() {
+        let expiry = SystemTime::now() + Duration::from_secs(45 * 60);
+        let formatted = format_snooze_remaining(&expiry);
+        assert!(
+            formatted == "45m" || formatted == "44m",
+            "got {formatted}"
+        );
+    }
+
+    #[test]
+    fn format_snooze_remaining_returns_expired_for_past_times() {
+        let expiry = SystemTime::now() - Duration::from_secs(60);
+        assert_eq!(format_snooze_remaining(&expiry), "expired");
+    }
+
+    fn make_app(repos: Vec<&str>) -> App {
+        // Build an App without consulting the snooze directory on disk.
+        let repos: Vec<PathBuf> = repos.into_iter().map(PathBuf::from).collect();
+        App {
+            all_repos: repos.clone(),
+            filtered_repos: repos,
+            snoozed: HashMap::new(),
+            selected: 0,
+            mode: Mode::Normal,
+            query: String::new(),
+        }
+    }
+
+    #[test]
+    fn update_filter_matches_substring_case_insensitive() {
+        let mut app = make_app(vec!["/a/Foo", "/a/bar", "/a/foobar"]);
+        app.query = "FOO".to_string();
+        app.update_filter();
+        assert_eq!(app.filtered_repos.len(), 2);
+        assert!(
+            app.filtered_repos
+                .iter()
+                .all(|p| p.to_string_lossy().to_lowercase().contains("foo"))
+        );
+    }
+
+    #[test]
+    fn update_filter_clamps_selection_when_results_shrink() {
+        let mut app = make_app(vec!["/a/one", "/a/two", "/a/three"]);
+        app.selected = 2;
+        app.query = "no-match".to_string();
+        app.update_filter();
+        assert!(app.filtered_repos.is_empty());
+        assert_eq!(app.selected, 0);
+    }
+
+    #[test]
+    fn move_up_and_down_clamp_at_bounds() {
+        let mut app = make_app(vec!["/a/one", "/a/two"]);
+        app.move_up(); // already at 0, stays at 0
+        assert_eq!(app.selected, 0);
+        app.move_down();
+        assert_eq!(app.selected, 1);
+        app.move_down(); // last, stays
+        assert_eq!(app.selected, 1);
+        app.move_up();
+        assert_eq!(app.selected, 0);
+    }
+}

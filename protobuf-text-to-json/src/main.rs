@@ -108,11 +108,11 @@ impl Parser {
                             // Hex escape \xNN
                             let mut hex = String::new();
                             for _ in 0..2 {
-                                if let Some(h) = self.peek() {
-                                    if h.is_ascii_hexdigit() {
-                                        hex.push(h);
-                                        self.advance();
-                                    }
+                                if let Some(h) = self.peek()
+                                    && h.is_ascii_hexdigit()
+                                {
+                                    hex.push(h);
+                                    self.advance();
                                 }
                             }
                             if let Ok(byte) = u8::from_str_radix(&hex, 16) {
@@ -450,5 +450,128 @@ fn main() {
             eprintln!("Failed to parse protobuf text format");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn parse(input: &str) -> Value {
+        Parser::new(input)
+            .parse_top_level()
+            .unwrap_or_else(|| panic!("failed to parse: {input}"))
+    }
+
+    #[test]
+    fn parses_simple_scalar_fields() {
+        let got = parse(r#"name: "Alice" id: 7 active: true"#);
+        assert_eq!(got, json!({"name": "Alice", "id": 7, "active": true}));
+    }
+
+    #[test]
+    fn parses_nested_message_with_braces() {
+        let got = parse(r#"point { x: 1 y: 2 }"#);
+        assert_eq!(got, json!({"point": {"x": 1, "y": 2}}));
+    }
+
+    #[test]
+    fn parses_nested_message_with_angle_brackets() {
+        let got = parse(r#"point < x: 1 y: 2 >"#);
+        assert_eq!(got, json!({"point": {"x": 1, "y": 2}}));
+    }
+
+    #[test]
+    fn repeated_fields_become_array() {
+        let got = parse(r#"tag: "a" tag: "b" tag: "c""#);
+        assert_eq!(got, json!({"tag": ["a", "b", "c"]}));
+    }
+
+    #[test]
+    fn repeated_messages_become_array() {
+        let got = parse(r#"phone { number: "1" } phone { number: "2" }"#);
+        assert_eq!(
+            got,
+            json!({"phone": [{"number": "1"}, {"number": "2"}]})
+        );
+    }
+
+    #[test]
+    fn array_literal_syntax() {
+        let got = parse(r#"nums: [1, 2, 3]"#);
+        assert_eq!(got, json!({"nums": [1, 2, 3]}));
+    }
+
+    #[test]
+    fn enum_values_become_strings() {
+        let got = parse(r#"type: HOME"#);
+        assert_eq!(got, json!({"type": "HOME"}));
+    }
+
+    #[test]
+    fn handles_floats_and_negatives() {
+        let got = parse(r#"score: 98.5 delta: -3"#);
+        assert_eq!(got, json!({"score": 98.5, "delta": -3}));
+    }
+
+    #[test]
+    fn handles_hex_numbers() {
+        let got = parse(r#"flags: 0xff"#);
+        assert_eq!(got, json!({"flags": 255}));
+    }
+
+    #[test]
+    fn handles_string_escapes() {
+        let got = parse(r#"s: "line1\nline2\t!""#);
+        assert_eq!(got, json!({"s": "line1\nline2\t!"}));
+    }
+
+    #[test]
+    fn skips_line_comments() {
+        let got = parse("# leading\nname: \"x\" # trailing\nid: 1\n");
+        assert_eq!(got, json!({"name": "x", "id": 1}));
+    }
+
+    #[test]
+    fn parses_optional_comma_and_semicolon_separators() {
+        let got = parse(r#"a: 1, b: 2; c: 3"#);
+        assert_eq!(got, json!({"a": 1, "b": 2, "c": 3}));
+    }
+
+    #[test]
+    fn parses_full_example_file() {
+        let input = include_str!("../example.textproto");
+        let got = parse(input);
+        assert_eq!(
+            got,
+            json!({
+                "name": "John Doe",
+                "id": 1234,
+                "email": "jdoe@example.com",
+                "phones": [
+                    {"number": "555-4321", "type": "HOME"},
+                    {"number": "555-1234", "type": "MOBILE"}
+                ],
+                "active": true,
+                "score": 98.5,
+                "metadata": {
+                    "created_at": 1609459200,
+                    "tags": ["important", "verified"]
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn empty_input_yields_none() {
+        assert!(Parser::new("").parse_top_level().is_none());
+        assert!(Parser::new("   \n  ").parse_top_level().is_none());
+    }
+
+    #[test]
+    fn top_level_braces_message() {
+        let got = parse(r#"{ a: 1 b: 2 }"#);
+        assert_eq!(got, json!({"a": 1, "b": 2}));
     }
 }

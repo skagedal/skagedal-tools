@@ -12,11 +12,13 @@
     "prepare": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "check": "tsc --noEmit"
+    "test": "tsx --test test/*.test.ts",
+    "check": "tsc --noEmit && pnpm test"
   },
   devDependencies: {
     "@types/node": "latest",
     "@types/terminal-kit": "latest",
+    "tsx": "latest",
     "typescript": "latest"
   },
   packageManager: "pnpm@10.33.0",

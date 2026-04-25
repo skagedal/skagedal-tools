@@ -80,6 +80,7 @@ await cli(process.argv.slice(2), main, {
   version: "1.0.0",
   description: "A demo CLI for comparing argument parsing libraries",
   plugins: [completion()],
+  renderHeader: null,
   subCommands: {
     greet,
     farewell,

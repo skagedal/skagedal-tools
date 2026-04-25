@@ -5,12 +5,13 @@
   description: "Comparison of CLI argument parsing libraries for Node.js/TypeScript",
   type: "module",
   scripts: {
-    "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "check": "tsc --noEmit && pnpm test",
     "commander": "tsx src/commander.ts",
     "yargs": "tsx src/yargs.ts",
-    "meow": "tsx src/meow.ts",
+    "meow": "tsx src/meow.mts",
     "citty": "tsx src/citty.ts",
-    "gunshi": "tsx src/gunshi.ts"
+    "gunshi": "tsx src/gunshi.mts"
   },
   dependencies: {
     "@gunshi/plugin-completion": "latest",
