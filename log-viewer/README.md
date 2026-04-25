@@ -45,6 +45,25 @@ log-viewer --browser app.jsonl
 log-viewer -b -c "kubectl logs -f my-pod" --port 5174 --open
 ```
 
+## Examples
+
+The [`examples/`](examples/) folder ships ready-to-go input:
+
+- `examples/sample.jsonl` — a static file with ~30 entries covering
+  multiple services, levels, nested objects, stack traces, and a couple
+  of plain-text lines so you can see how non-JSON input is wrapped.
+- `examples/streaming-logs` — an executable that emits a fake log line
+  every ~400 ms (one in ten is plain text). Tweak with `INTERVAL=` and
+  `MAX=` env vars.
+
+```bash
+# From the log-viewer/ directory:
+log-viewer examples/sample.jsonl                  # TUI, file
+log-viewer -b examples/sample.jsonl               # browser, file
+log-viewer -c ./examples/streaming-logs           # TUI, live stream
+log-viewer -b -c ./examples/streaming-logs        # browser, live stream
+```
+
 ### Flags
 
 | Flag | Description |

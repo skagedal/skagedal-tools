@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Periodically emit fake log lines on stdout. Mostly JSONL, with the
+# occasional plain-text line so you can see how log-viewer handles those.
+#
+#   log-viewer -c ./examples/streaming-logs
+#   log-viewer -b -c ./examples/streaming-logs
+set -euo pipefail
+
+interval="${INTERVAL:-0.4}"
+max="${MAX:-0}"  # 0 = run forever
+
+levels=(info info info info debug warn warn error)
+services=(api worker auth billing)
+paths=("/v1/users/42" "/v1/orders" "/v1/products/search" "/v1/sessions" "/healthz")
+methods=(GET POST DELETE PUT)
+
+i=0
+while :; do
+    ts="$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")"
+    level="${levels[$((RANDOM % ${#levels[@]}))]}"
+    service="${services[$((RANDOM % ${#services[@]}))]}"
+    method="${methods[$((RANDOM % ${#methods[@]}))]}"
+    path="${paths[$((RANDOM % ${#paths[@]}))]}"
+    duration=$((RANDOM % 500 + 1))
+    status=200
+    case "$level" in
+        warn)  status=429 ;;
+        error) status=500 ;;
+    esac
+
+    # Sprinkle in a non-JSON line every ~10 entries so the wrapping behavior
+    # is visible.
+    if (( i % 10 == 7 )); then
+        echo "[stderr-bridge] dropped frame at offset ${i}"
+    else
+        printf '{"@timestamp":"%s","level":"%s","service":"%s","message":"Request","method":"%s","path":"%s","status":%d,"duration_ms":%d,"seq":%d}\n' \
+            "$ts" "$level" "$service" "$method" "$path" "$status" "$duration" "$i"
+    fi
+
+    i=$((i + 1))
+    if (( max > 0 && i >= max )); then
+        break
+    fi
+    sleep "$interval"
+done
