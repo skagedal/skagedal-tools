@@ -53,7 +53,7 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
 - Use **[gunshi](https://github.com/kazupon/gunshi)** for CLI argument parsing. It is
   declarative (`define({ args, run })` + `cli()`), written in TypeScript with inferred
   argument types, and supports shell completion via `@gunshi/plugin-completion`. Prefer
-  it over commander/yargs/meow/citty for new tools. See `typescript-cli-arguments/src/gunshi.ts`
+  it over commander/yargs/meow/citty for new tools. See `comparison-typescript-cli-arguments/src/gunshi.ts`
   for a reference setup, including subcommands and completion.
   - gunshi is ESM-first and requires Node.js ≥ 20. Set `"type": "module"` in `package.json`
     and use `"module": "NodeNext"` + `"moduleResolution": "NodeNext"` in `tsconfig.json`.
