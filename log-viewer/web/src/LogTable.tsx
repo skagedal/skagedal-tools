@@ -70,6 +70,7 @@ export function LogTable(props: Props) {
 
   // TanStack Table's useReactTable returns functions that the React Compiler
   // can't memoize safely. Nothing actionable here until the library updates.
+  // See https://github.com/TanStack/table/issues/6137
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: entries,
