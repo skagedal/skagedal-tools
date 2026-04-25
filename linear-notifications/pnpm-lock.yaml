@@ -18,6 +18,9 @@ importers:
       '@types/terminal-kit':
         specifier: ^2.5.7
         version: 2.5.7
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -50,6 +53,11 @@ packages:
 
   jpeg-js@0.4.4:
     resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==}
+
+  json5@2.2.3:
+    resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
+    engines: {node: '>=6'}
+    hasBin: true
 
   lazyness@1.2.0:
     resolution: {integrity: sha512-KenL6EFbwxBwRxG93t0gcUyi0Nw0Ub31FJKN1laA4UscdkL1K1AxUd0gYZdcLU3v+x+wcFi4uQKS5hL+fk500g==}
@@ -138,6 +146,8 @@ snapshots:
   is-buffer@1.1.6: {}
 
   jpeg-js@0.4.4: {}
+
+  json5@2.2.3: {}
 
   lazyness@1.2.0: {}
 

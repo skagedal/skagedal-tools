@@ -1,19 +1,20 @@
+// Manifest for log-viewer
 {
-  "name": "log-viewer",
-  "version": "1.0.0",
-  "description": "View JSONL logs in a TUI or browser, with vi-like navigation and drill-down",
-  "type": "module",
-  "main": "dist/index.js",
-  "bin": {
+  name: "log-viewer",
+  version: "1.0.0",
+  description: "View JSONL logs in a TUI or browser, with vi-like navigation and drill-down",
+  type: "module",
+  main: "dist/index.js",
+  bin: {
     "log-viewer": "dist/index.js"
   },
-  "scripts": {
-    "build": "tsc",
-    "prepare": "tsc",
+  scripts: {
+    "build": "json5 -c package.json5 && tsc",
+    "prepare": "json5 -c package.json5 && tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts"
   },
-  "dependencies": {
+  dependencies: {
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.24",
     "@vitejs/plugin-react": "^4.7.0",
@@ -25,12 +26,12 @@
     "react-dom": "^18.3.1",
     "vite": "^5.4.21"
   },
-  "devDependencies": {
+  devDependencies: {
     "@types/node": "^22.19.17",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
-  "packageManager": "pnpm@10.33.0"
+  packageManager: "pnpm@10.33.0"
 }

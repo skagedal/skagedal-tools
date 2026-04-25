@@ -30,6 +30,9 @@ importers:
       '@types/yargs':
         specifier: ^17.0.35
         version: 17.0.35
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -297,6 +300,11 @@ packages:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
 
+  json5@2.2.3:
+    resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
+    engines: {node: '>=6'}
+    hasBin: true
+
   meow@13.2.0:
     resolution: {integrity: sha512-pxQJQzB6djGPXh08dacEloMFopsOqGVRKFPYvPOt9XDZ1HasbgDZA74CJGreSU4G3Ak7EFJGoiH2auq+yXISgA==}
     engines: {node: '>=18'}
@@ -520,6 +528,8 @@ snapshots:
   gunshi@0.29.4: {}
 
   is-fullwidth-code-point@3.0.0: {}
+
+  json5@2.2.3: {}
 
   meow@13.2.0: {}
 
