@@ -54,11 +54,39 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   }, [stdout]);
 
   useEffect(() => {
+    // Batch incoming entries on the event loop so a high-throughput stream
+    // doesn't trigger a React render per line.
+    let buffer: LogEntry[] = [];
+    let flushPending = false;
+    const flush = () => {
+      flushPending = false;
+      if (buffer.length === 0) return;
+      const batch = buffer;
+      buffer = [];
+      setEntries((prev) => prev.concat(batch));
+      setFields((prev) => {
+        const keys: string[] = [];
+        const seen = new Set<string>();
+        for (const e of batch) {
+          for (const k of Object.keys(e.data)) {
+            if (seen.has(k)) continue;
+            seen.add(k);
+            keys.push(k);
+          }
+        }
+        return mergeSeenKeys(prev, keys);
+      });
+    };
     source.onEntry((entry) => {
-      setEntries((prev) => [...prev, entry]);
-      setFields((prev) => mergeSeenKeys(prev, Object.keys(entry.data)));
+      buffer.push(entry);
+      if (flushPending) return;
+      flushPending = true;
+      setImmediate(flush);
     });
-    source.onEnd(() => setDone(true));
+    source.onEnd(() => {
+      flush();
+      setDone(true);
+    });
     return () => source.close();
   }, [source]);
 
@@ -551,12 +579,16 @@ function columnWidths(
   const n = fields.length;
   if (n === 0) return [];
   const cap = Math.max(20, Math.floor(totalColumns / 3));
+  // Only sample the most recent entries — scanning all of them turns each
+  // render into O(N×F) work, which collapses on high-throughput streams.
+  const sampleLimit = 200;
+  const sampleStart = Math.max(0, entries.length - sampleLimit);
   const widths: number[] = [];
   for (let i = 0; i < n - 1; i++) {
     const field = fields[i]!;
     let w = field.name.length;
-    for (const entry of entries) {
-      const v = renderField(entry, field);
+    for (let j = sampleStart; j < entries.length; j++) {
+      const v = renderField(entries[j]!, field);
       if (v.length > w) w = v.length;
       if (w >= cap) {
         w = cap;

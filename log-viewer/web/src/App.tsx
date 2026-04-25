@@ -27,12 +27,25 @@ export default function App() {
       .then((meta) => {
         if (cancelled) return;
         setSourceLabel(meta.sourceLabel ?? "");
-        const initial: ManagedField[] = (meta.config.fields ?? []).map((f) => ({
-          name: f.name,
-          from: [...f.from],
-          visible: true,
-        }));
-        setFields(initial);
+        // Merge with any fields discovery has already added — entries can
+        // arrive over SSE before /api/meta resolves, and we don't want to
+        // drop keys we've already seen.
+        setFields((prev) => {
+          const merged: ManagedField[] = (meta.config.fields ?? []).map((f) => ({
+            name: f.name,
+            from: [...f.from],
+            visible: true,
+          }));
+          const known = new Set<string>();
+          for (const f of merged) for (const k of f.from) known.add(k);
+          for (const f of prev) {
+            const remaining = f.from.filter((k) => !known.has(k));
+            if (remaining.length === 0) continue;
+            for (const k of remaining) known.add(k);
+            merged.push({ ...f, from: remaining });
+          }
+          return merged;
+        });
       })
       .catch(() => {
         /* the SSE error UI will surface failures */
@@ -45,12 +58,17 @@ export default function App() {
   // Discover new keys from incoming entries and add hidden columns for them.
   const processedRef = useRef(0);
   useEffect(() => {
-    if (entries.length === processedRef.current) return;
+    const start = processedRef.current;
+    if (entries.length === start) return;
+    // Capture start in a local — the setFields updater runs during the next
+    // render, after we mutate processedRef below, so reading the ref inside
+    // the closure would see the post-mutation value and skip the loop.
+    processedRef.current = entries.length;
     setFields((prev) => {
       const known = new Set<string>();
       for (const f of prev) for (const k of f.from) known.add(k);
       let next = prev;
-      for (let i = processedRef.current; i < entries.length; i++) {
+      for (let i = start; i < entries.length; i++) {
         for (const key of Object.keys(entries[i]!.data)) {
           if (known.has(key)) continue;
           known.add(key);
@@ -60,7 +78,6 @@ export default function App() {
       }
       return next;
     });
-    processedRef.current = entries.length;
   }, [entries]);
 
   // When the very first entry arrives, snap cursor to 0. In follow mode, keep
