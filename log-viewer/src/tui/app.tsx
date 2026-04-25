@@ -147,15 +147,36 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
           window.map((entry, i) => {
             const idx = start + i;
             const selected = !follow && idx === cursor;
-            return <Row key={entry.id} entry={entry} config={config} widths={widths} selected={selected} />;
+            const tail = follow && idx === entries.length - 1;
+            return (
+              <Row
+                key={entry.id}
+                entry={entry}
+                config={config}
+                widths={widths}
+                selected={selected}
+                tail={tail}
+              />
+            );
           })
         )}
       </Box>
       <Box>
-        <Text dimColor>
-          {entries.length === 0 ? 0 : cursor + 1}/{entries.length}
-          {follow ? " · FOLLOW" : ""} · j/k move · u up · o open · f follow · g/G top/bottom · q quit
-        </Text>
+        {follow ? (
+          <Text>
+            <Text color="green" bold inverse>{" FOLLOW "}</Text>
+            <Text dimColor>
+              {" "}
+              {entries.length === 0 ? 0 : cursor + 1}/{entries.length} · any nav key exits · j/k
+              move · u up · o open · g/G top/bottom · q quit
+            </Text>
+          </Text>
+        ) : (
+          <Text dimColor>
+            {entries.length === 0 ? 0 : cursor + 1}/{entries.length} · j/k move · u up · o open · f
+            follow · g/G top/bottom · q quit
+          </Text>
+        )}
       </Box>
     </Box>
   );
@@ -171,11 +192,16 @@ const Header: React.FC<{
 }> = ({ config, widths, sourceLabel, count, done, follow }) => (
   <Box flexDirection="column">
     <Text>
+      {follow ? (
+        <>
+          <Text color="green" bold inverse>{" FOLLOW "}</Text>
+          <Text> </Text>
+        </>
+      ) : null}
       <Text bold>log-viewer</Text>
       <Text dimColor>
         {" "}· {sourceLabel} · {count} entries{done ? " (eof)" : ""}
       </Text>
-      {follow ? <Text color="green" bold> · FOLLOW</Text> : null}
     </Text>
     <Box>
       {config.fields.map((field, i) => (
@@ -192,12 +218,14 @@ const Row: React.FC<{
   config: Config;
   widths: number[];
   selected: boolean;
-}> = ({ entry, config, widths, selected }) => {
+  tail: boolean;
+}> = ({ entry, config, widths, selected, tail }) => {
   const cols = renderColumns(entry, config);
   const levelValue = cols.find((c) => c.name.toLowerCase() === "level")?.value ?? "";
   const color = selected ? undefined : levelColor(levelValue);
   return (
     <Box>
+      <Text color={tail ? "green" : undefined}>{tail ? "▌" : " "}</Text>
       {cols.map((col, i) => (
         <Box key={col.name} width={widths[i]} marginRight={1}>
           <Text inverse={selected} color={color}>
