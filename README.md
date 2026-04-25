@@ -12,6 +12,7 @@ A collection of small tools.
 | [log-viewer](log-viewer/) | View JSONL logs in a TUI or browser with vi-like navigation and JSON drill-down |
 | [comparison-typescript-cli-arguments](comparison-typescript-cli-arguments/) | Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript |
 | [comparison-aws-emulation](comparison-aws-emulation/) | Comparison of tools for emulating AWS services locally (LocalStack, Moto, DynamoDB Local, MinIO, Adobe S3Mock) |
+| [protobuf-text-to-json](protobuf-text-to-json/) | Converts protobuf text format to JSON |
 | [x-java-home](x-java-home/) | A drop-in replacement for macOS java_home with JSON output support |
 | [linear-notifications](linear-notifications/) | Interactive CLI for viewing and opening unread Linear notifications |
 | [cloudwatch-insights](cloudwatch-insights/) | Download logs from AWS CloudWatch Logs Insights with a flexible time-range syntax |
