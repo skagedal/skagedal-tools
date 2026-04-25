@@ -34,10 +34,17 @@ export interface FieldConfig {
   from: string[];
 }
 
+export interface Profile {
+  name: string;
+  fields?: FieldConfig[];
+  defaultField?: string;
+}
+
 export interface Config {
   fields: FieldConfig[];
   defaultField: string;
   triggers: TriggerConfig[];
+  profiles: Profile[];
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -48,6 +55,7 @@ export const DEFAULT_CONFIG: Config = {
   ],
   defaultField: "message",
   triggers: [],
+  profiles: [],
 };
 
 export class ConfigError extends Error {
@@ -87,7 +95,42 @@ export function parseConfig(source: string): Config {
   const defaultField =
     typeof doc.default_field === "string" ? doc.default_field : DEFAULT_CONFIG.defaultField;
   const triggers = parseTriggers(doc.triggers);
-  return { fields, defaultField, triggers };
+  const profiles = parseProfiles(doc.profiles);
+  return { fields, defaultField, triggers, profiles };
+}
+
+function parseProfiles(value: unknown): Profile[] {
+  if (!Array.isArray(value)) return [];
+  const out: Profile[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const name = typeof e.name === "string" ? e.name : null;
+    if (!name) continue;
+    const fields = parseFields(e.fields) ?? undefined;
+    const defaultField =
+      typeof e.default_field === "string" ? e.default_field : undefined;
+    out.push({ name, fields, defaultField });
+  }
+  return out;
+}
+
+/**
+ * Apply a named profile to the loaded config. The profile's `fields` and
+ * `default_field` (when present) replace the top-level values; everything
+ * else (triggers, profile list) is preserved.
+ */
+export function applyProfile(config: Config, profileName: string): Config {
+  const profile = config.profiles.find((p) => p.name === profileName);
+  if (!profile) {
+    const known = config.profiles.map((p) => p.name).join(", ") || "(none)";
+    throw new ConfigError(`unknown profile "${profileName}" (defined: ${known})`);
+  }
+  return {
+    ...config,
+    fields: profile.fields ?? config.fields,
+    defaultField: profile.defaultField ?? config.defaultField,
+  };
 }
 
 function parseTriggers(value: unknown): TriggerConfig[] {
@@ -155,6 +198,20 @@ const TEMPLATE = `// log-viewer config (JSON5: comments, trailing commas, unquot
     //   on_new_value: "podname",
     //   action: "say new pod {value} deployed",
     //   startup_delay_ms: 2000,
+    // },
+  ],
+
+  // Profiles override \`fields\` (and optionally \`default_field\`) when selected
+  // via \`--profile <name>\`. Useful for switching between different log
+  // shapes — e.g. one for app logs, one for kubectl/stern.
+  profiles: [
+    // {
+    //   name: "stern",
+    //   fields: [
+    //     { name: "time", from: ["timestamp"] },
+    //     { name: "pod",  from: ["podName"] },
+    //     { name: "msg",  from: ["message"] },
+    //   ],
     // },
   ],
 }

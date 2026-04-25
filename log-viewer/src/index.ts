@@ -2,7 +2,7 @@
 import { existsSync } from "fs";
 import { spawnSync } from "child_process";
 import { cli, define } from "gunshi";
-import { configPath, ensureConfigFile, loadConfig } from "./config.js";
+import { applyProfile, configPath, ensureConfigFile, loadConfig } from "./config.js";
 import { startSource, type SourceSpec } from "./source.js";
 import { createTriggerRuntime } from "./triggers.js";
 import { runTui } from "./tui/index.js";
@@ -28,6 +28,10 @@ const main = define({
       type: "string",
       short: "c",
       description: "path to config file (overrides ~/.skagedal-tools/log-viewer/config.json5 and $LOG_VIEWER_CONFIG)",
+    },
+    profile: {
+      type: "string",
+      description: "name of a profile defined in the config file; overrides default fields/default_field",
     },
     exec: {
       type: "string",
@@ -63,6 +67,7 @@ const main = define({
     const values = ctx.values as {
       file?: string;
       config?: string;
+      profile?: string;
       browser: boolean;
       port: number;
       host: string;
@@ -102,7 +107,14 @@ const main = define({
     if (values.config && !existsSync(values.config)) {
       fail(`config file not found: ${values.config}`, 2);
     }
-    const config = loadConfig(values.config ?? configPath());
+    let config = loadConfig(values.config ?? configPath());
+    if (values.profile) {
+      try {
+        config = applyProfile(config, values.profile);
+      } catch (err) {
+        fail(err instanceof Error ? err.message : String(err), 2);
+      }
+    }
     const source = startSource(spec, { defaultField: config.defaultField });
 
     if (config.triggers.length > 0) {

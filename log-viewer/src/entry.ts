@@ -47,11 +47,23 @@ export function renderField(entry: LogEntry, field: FieldConfig): string {
   return "";
 }
 
-function stringify(value: unknown): string {
+export function stringify(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   try {
     return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/** Render a value as a multi-line string suitable for the field detail view. */
+export function renderValueDetailed(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
   } catch {
     return String(value);
   }

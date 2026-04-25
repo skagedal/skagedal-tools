@@ -14,9 +14,19 @@ drill-down.
 - vi-like navigation in both: `j`/`k` (and arrows) move, `u` moves up, `o`
   (or Enter) opens the entry in detail view, `g`/`G` jump to top/bottom,
   `q`/Esc quits or closes the detail.
+- Detail view shows each field on its own row, so you can navigate
+  field-by-field, copy a single value, or toggle a field's visibility
+  in the main list with `t`.
+- Field management: `v` opens a menu listing every field ever seen,
+  with toggles for visibility and `J`/`K` to reorder columns. The
+  browser exposes the same menu as a popover with checkboxes and drag
+  reordering.
 - Configurable display fields and configurable default field name for
   non-JSON lines (matches the convention from
   [log-jsonify](../log-jsonify/)).
+- Named **profiles** in the config file, picked at startup with
+  `--profile <name>`, swap in different field layouts for different
+  log shapes (e.g. app logs vs. `kubectl`/`stern`).
 
 ## Install
 
@@ -156,6 +166,7 @@ Save it as `~/.skagedal-tools/log-viewer/config.json5` (or pass
 |------|-------------|
 | `-f`, `--file <path>` | Read JSONL from a file. Use `-` for stdin. |
 | `-c`, `--config <path>` | Path to a config file (overrides `~/.skagedal-tools/log-viewer/config.json5` and `$LOG_VIEWER_CONFIG`). |
+| `--profile <name>` | Activate a profile defined in the config file (overrides the top-level `fields` and optional `default_field`). |
 | `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. **Every argv after the command is forwarded to it**, so `--exec kubectl logs -f my-pod` runs `kubectl logs -f my-pod`. Put log-viewer's own flags before `--exec`. |
 | `-b`, `--browser` | Start the browser app instead of the TUI. |
 | `-p`, `--port <n>` | Port for the browser server (default `5173`). |
@@ -267,8 +278,9 @@ In the list:
 | `j` / `↓` | Next entry |
 | `k` / `↑` | Previous entry |
 | `u` | Up one entry |
-| `o` / Enter | Open the selected entry (full JSON) |
+| `o` / Enter | Open the selected entry (field-row detail view) |
 | `f` | Toggle **follow** mode — pin selection to the latest entry as new ones arrive. Any navigation key turns it back off. |
+| `v` | Open the **fields menu** (toggle visibility, reorder columns). |
 | `g` / `G` | Top / bottom |
 | `q` / Ctrl-C | Quit (TUI only) |
 
@@ -280,7 +292,72 @@ In the detail view:
 
 | Key | Action |
 |-----|--------|
-| `j` / `↓` | Next entry (stay in detail) |
-| `k` / `↑` | Previous entry (stay in detail) |
-| `c` | Copy the entry's JSON to the system clipboard |
+| `j` / `↓` | Move down (entry header → first field → next field, …) |
+| `k` / `↑` | Move up |
+| `n` / `p` | Next / previous entry (stay in detail) |
+| `c` | Copy the selected field's value, or the full JSON when the entry header is selected |
+| `t` | Toggle visibility of the selected field in the main list |
+| `v` | Open the fields menu |
 | `u` / `Esc` / `q` | Back to the list |
+
+The browser shows the same expanded view inline under the clicked
+entry, with a checkbox next to each field for show/hide and a per-field
+"Copy" button.
+
+In the fields menu:
+
+| Key | Action |
+|-----|--------|
+| `j` / `↓`, `k` / `↑` / `u` | Move the cursor |
+| `space` / `t` | Toggle the highlighted field's visibility |
+| `J` / `K` | Move the highlighted field down / up in the column order |
+| `v` / `q` / `Esc` | Close the menu |
+
+In the browser, the same menu is available as a popover from the
+"Fields" button in the header. Toggle visibility with the checkbox,
+reorder with the up/down arrows or by drag-and-drop.
+
+## Profiles
+
+A profile is a named override for `fields` (and optionally
+`default_field`) that you can pick at startup:
+
+```json5
+{
+  fields: [
+    { name: "time", from: ["@timestamp"] },
+    { name: "level", from: ["level"] },
+    { name: "message", from: ["message"] },
+  ],
+
+  profiles: [
+    {
+      name: "stern",
+      fields: [
+        { name: "time",      from: ["timestamp"] },
+        { name: "namespace", from: ["namespace"] },
+        { name: "pod",       from: ["podName"] },
+        { name: "msg",       from: ["message"] },
+      ],
+    },
+    {
+      name: "wide",
+      fields: [
+        { name: "time",    from: ["@timestamp"] },
+        { name: "level",   from: ["level"] },
+        { name: "service", from: ["service"] },
+        { name: "host",    from: ["host", "hostname"] },
+        { name: "message", from: ["message"] },
+      ],
+    },
+  ],
+}
+```
+
+```bash
+log-viewer --profile stern --exec stern --output json my-app
+log-viewer --profile wide app.jsonl
+```
+
+Profiles only override the field layout — triggers and the rest of the
+config still apply. Unknown profile names exit with a non-zero status.
