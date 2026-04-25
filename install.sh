@@ -58,7 +58,7 @@ install-rust() {
     (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
 }
 
-NODE_TOOLS=(linear-notifications cloudwatch-insights)
+NODE_TOOLS=(linear-notifications cloudwatch-insights log-viewer)
 RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr x-java-home)
 
 tool-kind() {

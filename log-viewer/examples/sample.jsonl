@@ -1,0 +1,32 @@
+{"@timestamp":"2026-04-25T08:00:00.012Z","level":"info","message":"Server starting","service":"api","version":"1.4.2","pid":4821}
+{"@timestamp":"2026-04-25T08:00:00.045Z","level":"info","message":"Loaded config","service":"api","config_path":"/etc/api/config.toml","keys":["db","redis","auth"]}
+{"@timestamp":"2026-04-25T08:00:00.118Z","level":"info","message":"Connected to database","service":"api","db":"postgres","host":"db-01.internal","pool_size":10}
+{"@timestamp":"2026-04-25T08:00:00.205Z","level":"info","message":"Listening on :8080","service":"api","addr":"0.0.0.0:8080"}
+{"@timestamp":"2026-04-25T08:00:01.301Z","level":"debug","msg":"healthcheck","service":"api","route":"/healthz","status":200,"duration_ms":2}
+{"@timestamp":"2026-04-25T08:00:03.872Z","level":"info","message":"Request","service":"api","method":"GET","path":"/v1/users/42","status":200,"duration_ms":17,"trace_id":"4f1c0e2a-9e3a-4b1e-9e21-6a3b9b4f12cc"}
+{"@timestamp":"2026-04-25T08:00:04.130Z","level":"info","message":"Request","service":"api","method":"POST","path":"/v1/users","status":201,"duration_ms":42,"trace_id":"a93b1d2e-5a8c-4711-b03f-7dc9e6e3aa10","user_id":1338}
+[2026-04-25T08:00:04.512Z] [warn] cache miss for key=user:1337 region=eu-west
+{"@timestamp":"2026-04-25T08:00:05.001Z","level":"warn","message":"Slow query","service":"api","sql":"SELECT * FROM events WHERE created_at > $1","duration_ms":1532,"trace_id":"7ce11ea3-8b22-44d5-9fca-56d7e1a0b8aa"}
+{"@timestamp":"2026-04-25T08:00:06.244Z","level":"info","message":"Request","service":"api","method":"GET","path":"/v1/orders","status":200,"duration_ms":23,"trace_id":"21f9c1a4-8f1e-4d22-9acc-1138bba27c0e"}
+{"@timestamp":"2026-04-25T08:00:07.118Z","level":"error","message":"Failed to publish event","service":"api","topic":"orders.created","error":"connection refused","retries":3,"trace_id":"21f9c1a4-8f1e-4d22-9acc-1138bba27c0e","stack":"Error: connection refused\n    at Producer.send (/app/lib/kafka.js:88:13)\n    at OrderService.create (/app/services/order.js:42:7)"}
+{"@timestamp":"2026-04-25T08:00:07.220Z","level":"info","message":"Retrying","service":"api","attempt":1,"backoff_ms":250}
+plain stdout line from a sidecar process
+{"@timestamp":"2026-04-25T08:00:08.450Z","level":"warn","message":"Token nearly expired","service":"auth","user_id":1338,"expires_in_s":42}
+{"@timestamp":"2026-04-25T08:00:09.012Z","level":"info","message":"Request","service":"api","method":"DELETE","path":"/v1/sessions/abc","status":204,"duration_ms":8,"trace_id":"d34c6d11-a3e1-49c0-9d58-2c5b7b22c2f1"}
+{"@timestamp":"2026-04-25T08:00:09.430Z","level":"debug","msg":"flushing buffer","service":"api","items":128}
+{"@timestamp":"2026-04-25T08:00:10.221Z","level":"error","message":"Unhandled exception","service":"api","error":"TypeError: Cannot read property 'id' of undefined","trace_id":"19ab7c2e-77e5-4a8d-a6cc-22a1f2ea1100","stack":"TypeError: Cannot read property 'id' of undefined\n    at handler (/app/routes/users.js:31:14)\n    at Layer.handle (/app/node_modules/express/lib/router/layer.js:95:5)"}
+{"@timestamp":"2026-04-25T08:00:10.500Z","level":"info","message":"Reconnecting to kafka","service":"api","host":"kafka-01.internal:9092"}
+{"@timestamp":"2026-04-25T08:00:11.012Z","level":"info","message":"Reconnected","service":"api","host":"kafka-01.internal:9092"}
+{"@timestamp":"2026-04-25T08:00:12.044Z","level":"info","message":"Request","service":"api","method":"GET","path":"/v1/products/search","status":200,"duration_ms":56,"query":{"q":"socks","limit":20},"trace_id":"55e2c318-2d61-4fa1-8aa0-13c2d0e6a811"}
+{"@timestamp":"2026-04-25T08:00:13.221Z","level":"info","message":"Request","service":"api","method":"GET","path":"/v1/products/42","status":404,"duration_ms":4,"trace_id":"77e6f902-a1c7-4f12-9bcd-d04e1b2271aa"}
+{"@timestamp":"2026-04-25T08:00:14.330Z","level":"warn","message":"Rate limit hit","service":"api","client_ip":"203.0.113.17","route":"/v1/login","window":"1m"}
+panic: runtime error: invalid memory address or nil pointer dereference
+	at github.com/example/api/internal/db.(*Pool).Acquire (db.go:122)
+{"@timestamp":"2026-04-25T08:00:15.001Z","level":"error","message":"Worker crashed","service":"worker","worker_id":3,"exit_code":2}
+{"@timestamp":"2026-04-25T08:00:15.220Z","level":"info","message":"Restarting worker","service":"worker","worker_id":3}
+{"@timestamp":"2026-04-25T08:00:16.005Z","level":"info","message":"Worker started","service":"worker","worker_id":3,"pid":4905}
+{"@timestamp":"2026-04-25T08:00:17.412Z","level":"debug","msg":"job dequeued","service":"worker","queue":"emails","job_id":"e8a3","priority":5}
+{"@timestamp":"2026-04-25T08:00:17.520Z","level":"info","message":"Email sent","service":"worker","to":"alice@example.com","template":"welcome","duration_ms":211}
+{"@timestamp":"2026-04-25T08:00:18.130Z","level":"warn","message":"Disk usage high","service":"api","host":"api-02","mount":"/var/lib/api","used_pct":92}
+{"@timestamp":"2026-04-25T08:00:19.001Z","level":"info","message":"GC ran","service":"api","duration_ms":42,"freed_mb":128}
+{"@timestamp":"2026-04-25T08:00:20.450Z","level":"info","message":"Shutting down","service":"api","reason":"SIGTERM"}
