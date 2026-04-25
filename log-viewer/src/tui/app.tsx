@@ -138,7 +138,6 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         sourceLabel={sourceLabel}
         count={entries.length}
         done={done}
-        follow={follow}
       />
       <Box flexDirection="column" flexGrow={1}>
         {window.length === 0 ? (
@@ -188,16 +187,9 @@ const Header: React.FC<{
   sourceLabel: string;
   count: number;
   done: boolean;
-  follow: boolean;
-}> = ({ config, widths, sourceLabel, count, done, follow }) => (
+}> = ({ config, widths, sourceLabel, count, done }) => (
   <Box flexDirection="column">
     <Text>
-      {follow ? (
-        <>
-          <Text color="green" bold inverse>{" FOLLOW "}</Text>
-          <Text> </Text>
-        </>
-      ) : null}
       <Text bold>log-viewer</Text>
       <Text dimColor>
         {" "}· {sourceLabel} · {count} entries{done ? " (eof)" : ""}
