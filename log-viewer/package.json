@@ -15,20 +15,20 @@
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
-    "@tanstack/react-virtual": "^3.13.12",
+    "@tanstack/react-virtual": "^3.13.24",
     "@vitejs/plugin-react": "^4.7.0",
     "clipboardy": "^5.3.1",
     "gunshi": "^0.29.4",
-    "ink": "^5.2.0",
+    "ink": "^5.2.1",
     "json5": "^2.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "vite": "^5.4.10"
+    "vite": "^5.4.21"
   },
   "devDependencies": {
     "@types/node": "^22.19.17",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
