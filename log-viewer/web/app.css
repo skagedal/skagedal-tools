@@ -61,40 +61,48 @@ footer {
 #meta { color: var(--dim); }
 .hint { color: var(--dim); }
 
-table {
+/* Scroll the body of the table, not the page; lets the header stay sticky. */
+#scroll {
   flex: 1;
-  border-collapse: collapse;
-  width: 100%;
-  table-layout: auto;
   overflow: auto;
-  display: block;
 }
 
-thead, tbody { display: block; width: 100%; }
-thead { position: sticky; top: 0; background: var(--bg); }
-tr { display: table; width: 100%; table-layout: auto; }
+#log-table {
+  width: 100%;
+  border-collapse: collapse;
+}
 
-th, td {
+#log-table th,
+#log-table td {
   text-align: left;
   padding: 2px 8px;
   border-bottom: 1px solid var(--border);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  vertical-align: top;
 }
 
-/* Non-last columns shrink to their content; the last column takes the rest. */
-th.col-fit, td.col-fit {
+#log-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--dim);
+  z-index: 1;
+}
+
+/* Trick: width: 1% + nowrap makes a column shrink to its content. The
+   remaining column(s) without an explicit width absorb the rest. */
+#log-table .col-fit {
   width: 1%;
   white-space: nowrap;
 }
-th.col-flex, td.col-flex {
-  width: auto;
-  white-space: nowrap;
+
+#log-table .col-flex {
+  word-break: break-word;
 }
 
-th { font-weight: 600; color: var(--dim); }
-
-tr.selected td { background: var(--selected); }
+#log-table tr.selected td {
+  background: var(--selected);
+}
 
 td.level-error { color: var(--error); }
 td.level-warn { color: var(--warn); }
