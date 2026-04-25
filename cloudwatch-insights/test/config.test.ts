@@ -12,47 +12,167 @@ import {
   defaultQuery,
   ensureConfigFile,
   findGitRoot,
+  isValidEnvironmentName,
   loadSettings,
   parseSettings,
+  resolveEnvConfig,
   resolveRepoDefaults,
 } from "../src/config.js";
 
-test("parseSettings: extracts group and app from a named section", () => {
+test("parseSettings: extracts defaults and per-repo configs", () => {
   const settings = parseSettings(
     [
-      "[installer-notification]",
+      "[defaults]",
+      'flatten-fields = ["@message"]',
+      "",
+      "[repo.installer-notification]",
       'group = "/{env}/team-icc"',
       'app = "installer-notification"',
       "",
-      "[another-service]",
+      "[repo.another-service]",
       'group = "/prod/another"',
     ].join("\n"),
   );
 
-  assert.deepEqual(settings.sections["installer-notification"], {
+  assert.deepEqual(settings.defaults, { flattenFields: ["@message"] });
+  assert.deepEqual(settings.repos["installer-notification"], {
     group: "/{env}/team-icc",
     app: "installer-notification",
   });
-  assert.deepEqual(settings.sections["another-service"], {
+  assert.deepEqual(settings.repos["another-service"], {
     group: "/prod/another",
   });
+});
+
+test("parseSettings: empty file yields empty defaults, repos, and environments", () => {
+  const settings = parseSettings("");
+  assert.deepEqual(settings.defaults, {});
+  assert.deepEqual(settings.repos, {});
+  assert.deepEqual(settings.environments, {});
 });
 
 test("parseSettings: ignores unknown keys and non-table values", () => {
   const settings = parseSettings(
     [
       "unused = 42",
-      "[repo]",
+      "[repo.foo]",
       'group = "/foo"',
       "extra = 99",
     ].join("\n"),
   );
-  assert.deepEqual(settings.sections["repo"], { group: "/foo" });
-  assert.ok(!("unused" in settings.sections));
+  assert.deepEqual(settings.repos["foo"], { group: "/foo" });
 });
 
 test("parseSettings: rejects malformed TOML with a ConfigError", () => {
   assert.throws(() => parseSettings("[broken"), ConfigError);
+});
+
+test("parseSettings: parses [env.<name>] sections at the top level", () => {
+  const settings = parseSettings(
+    [
+      "[env.prod]",
+      'aws-profile = "company-prod"',
+      'region = "us-east-1"',
+      "",
+      "[env.systest]",
+      'aws-profile = "company-systest"',
+    ].join("\n"),
+  );
+  assert.deepEqual(settings.environments, {
+    prod: { awsProfile: "company-prod", region: "us-east-1" },
+    systest: { awsProfile: "company-systest" },
+  });
+});
+
+test("parseSettings: parses [repo.<name>.env.<env>] per-repo overrides", () => {
+  const settings = parseSettings(
+    [
+      "[env.prod]",
+      'aws-profile = "company-prod"',
+      'region = "us-east-1"',
+      "",
+      "[repo.special-service.env.prod]",
+      'aws-profile = "special-prod"',
+    ].join("\n"),
+  );
+  assert.deepEqual(settings.repos["special-service"].envOverrides, {
+    prod: { awsProfile: "special-prod" },
+  });
+});
+
+test("parseSettings: silently drops env names that aren't lower kebab-case", () => {
+  const settings = parseSettings(
+    [
+      "[env.PROD]",
+      'aws-profile = "x"',
+      "",
+      "[env.us_east_1]",
+      'aws-profile = "y"',
+      "",
+      "[env.prod]",
+      'aws-profile = "ok"',
+    ].join("\n"),
+  );
+  assert.deepEqual(Object.keys(settings.environments).sort(), ["prod"]);
+});
+
+test("isValidEnvironmentName: accepts/rejects per kebab-case rules", () => {
+  for (const ok of ["prod", "p", "us-east-1", "a-b-c", "env1"]) {
+    assert.equal(isValidEnvironmentName(ok), true, `${ok} should be valid`);
+  }
+  for (const bad of ["", "PROD", "us_east", "1prod", "-prod", "prod-", "a--b"]) {
+    assert.equal(isValidEnvironmentName(bad), false, `${bad} should be invalid`);
+  }
+});
+
+test("resolveEnvConfig: returns top-level entry when no per-repo override", () => {
+  const settings = parseSettings(
+    [
+      "[env.prod]",
+      'aws-profile = "company-prod"',
+      'region = "us-east-1"',
+    ].join("\n"),
+  );
+  assert.deepEqual(resolveEnvConfig(settings, null, "prod"), {
+    awsProfile: "company-prod",
+    region: "us-east-1",
+  });
+  assert.deepEqual(resolveEnvConfig(settings, "any-repo", "prod"), {
+    awsProfile: "company-prod",
+    region: "us-east-1",
+  });
+});
+
+test("resolveEnvConfig: per-repo override merges per key on top of top-level", () => {
+  const settings = parseSettings(
+    [
+      "[env.prod]",
+      'aws-profile = "company-prod"',
+      'region = "us-east-1"',
+      "",
+      "[repo.foo.env.prod]",
+      'aws-profile = "foo-prod"',
+    ].join("\n"),
+  );
+  assert.deepEqual(resolveEnvConfig(settings, "foo", "prod"), {
+    awsProfile: "foo-prod",
+    region: "us-east-1",
+  });
+});
+
+test("resolveEnvConfig: returns empty when no top-level [env.<env>] and no override", () => {
+  const settings = parseSettings("");
+  assert.deepEqual(resolveEnvConfig(settings, "foo", "prod"), {});
+});
+
+test("parseSettings: filters non-string entries from flatten-fields", () => {
+  const settings = parseSettings(
+    [
+      "[defaults]",
+      'flatten-fields = ["@message", 42, "context"]',
+    ].join("\n"),
+  );
+  assert.deepEqual(settings.defaults.flattenFields, ["@message", "context"]);
 });
 
 test("applyEnvironment: substitutes {env} and passes through otherwise", () => {
@@ -71,7 +191,7 @@ test("defaultQuery: substitutes {app} placeholder", () => {
     [
       "fields @timestamp, @message",
       "| sort @timestamp desc",
-      "| filter app = my-service",
+      "| filter app = 'my-service'",
       "| filter level in ['WARN', 'ERROR']",
       "| limit 200",
     ].join("\n"),
@@ -101,20 +221,24 @@ test("configPath: honors CLOUDWATCH_INSIGHTS_CONFIG and SKAGEDAL_TOOLS_HOME", ()
   );
 });
 
-test("findGitRoot + resolveRepoDefaults work against a real git repo", () => {
+test("resolveRepoDefaults: per-repo values override defaults; unspecified keys inherit", () => {
   const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "cwi-test-")));
   try {
     const repoRoot = join(tmpRoot, "installer-notification");
     mkdirSync(repoRoot);
-    const gitInit = spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot });
-    assert.equal(gitInit.status, 0, "git init failed");
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+      "git init failed",
+    );
 
-    // Sanity: detect root
     assert.equal(findGitRoot(repoRoot), repoRoot);
 
-    // Load minimal settings and resolve
     const settings = loadSettings(writeSettings(tmpRoot, [
-      "[installer-notification]",
+      "[defaults]",
+      'flatten-fields = ["@message"]',
+      "",
+      "[repo.installer-notification]",
       'group = "/{env}/team-icc"',
       'app = "installer-notification"',
     ].join("\n")));
@@ -123,6 +247,56 @@ test("findGitRoot + resolveRepoDefaults work against a real git repo", () => {
     assert.equal(sectionName, "installer-notification");
     assert.equal(defaults.group, "/{env}/team-icc");
     assert.equal(defaults.app, "installer-notification");
+    assert.deepEqual(defaults.flattenFields, ["@message"]);
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("resolveRepoDefaults: per-repo flatten-fields fully replaces the defaults array", () => {
+  const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "cwi-replace-")));
+  try {
+    const repoRoot = join(tmpRoot, "my-service");
+    mkdirSync(repoRoot);
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+    );
+
+    const settings = loadSettings(writeSettings(tmpRoot, [
+      "[defaults]",
+      'flatten-fields = ["@message"]',
+      "",
+      "[repo.my-service]",
+      'flatten-fields = ["context"]',
+    ].join("\n")));
+
+    const { defaults } = resolveRepoDefaults(settings, repoRoot);
+    assert.deepEqual(defaults.flattenFields, ["context"]);
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("resolveRepoDefaults: returns defaults-only when no matching [repo.<name>]", () => {
+  const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "cwi-nomatch-")));
+  try {
+    const repoRoot = join(tmpRoot, "unknown-repo");
+    mkdirSync(repoRoot);
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+    );
+
+    const settings = loadSettings(writeSettings(tmpRoot, [
+      "[defaults]",
+      'flatten-fields = ["@message"]',
+    ].join("\n")));
+
+    const { sectionName, defaults } = resolveRepoDefaults(settings, repoRoot);
+    assert.equal(sectionName, "unknown-repo");
+    assert.deepEqual(defaults.flattenFields, ["@message"]);
+    assert.equal(defaults.group, undefined);
   } finally {
     rmSync(tmpRoot, { recursive: true, force: true });
   }
@@ -159,7 +333,7 @@ test("ensureConfigFile: creates file + placeholder on first call, is idempotent 
     assert.equal(first.addedSection, "my-service");
 
     const contents1 = readFileSync(settingsPath, "utf8");
-    assert.match(contents1, /# \[my-service\]/);
+    assert.match(contents1, /# \[repo\.my-service\]/);
     assert.match(contents1, /# group = /);
     assert.match(contents1, /# app   = "my-service"/);
 
@@ -197,7 +371,7 @@ test("ensureConfigFile: skips appending when the repo already has a real section
     );
     const settingsPath = writeSettings(
       tmpRoot,
-      '[my-service]\ngroup = "/prod/team"\n',
+      '[repo.my-service]\ngroup = "/prod/team"\n',
     );
 
     const before = readFileSync(settingsPath, "utf8");

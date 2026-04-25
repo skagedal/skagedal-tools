@@ -16,7 +16,7 @@
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync, lstatSync, unlinkSync, symlinkSync } from "fs";
 import { basename, dirname, join } from "path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import { configPath, defaultQuery, findGitRoot } from "./config.js";
 
@@ -55,14 +55,30 @@ export function latestRunPath(): string {
 }
 
 /**
- * Ensure a current.insights file exists for the current slot, seeding it
- * with a template that uses `app` for the default filter when provided.
- * Returns whether a new file was written.
+ * Values pre-filled into the seeded front-matter so the user can see exactly
+ * what will be executed, and edit them before saving.
  */
-export function ensureCurrentInsights(path: string, app?: string): boolean {
+export interface SeedFrontMatter {
+  time?: string;
+  environment?: string;
+  logGroup?: string | string[];
+}
+
+export interface SeedOptions {
+  app?: string;
+  frontMatter?: SeedFrontMatter;
+}
+
+/**
+ * Ensure a current.insights file exists for the current slot, seeding it
+ * with a template that uses `app` for the default filter when provided and
+ * pre-fills the YAML front-matter with the supplied values. Returns whether
+ * a new file was written.
+ */
+export function ensureCurrentInsights(path: string, options: SeedOptions = {}): boolean {
   if (existsSync(path)) return false;
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, seedContent(app), { encoding: "utf8", flag: "wx" });
+  writeFileSync(path, seedContent(options), { encoding: "utf8", flag: "wx" });
   return true;
 }
 
@@ -70,9 +86,9 @@ export function ensureCurrentInsights(path: string, app?: string): boolean {
  * Unconditionally reset current.insights to the default template (used
  * by `query --clear`). Returns the path that was written.
  */
-export function resetCurrentInsights(path: string, app?: string): string {
+export function resetCurrentInsights(path: string, options: SeedOptions = {}): string {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, seedContent(app), "utf8");
+  writeFileSync(path, seedContent(options), "utf8");
   return path;
 }
 
@@ -124,7 +140,7 @@ export function runResultPath(cwd: string = process.cwd(), now: Date = new Date(
 
 export interface WriteResultsOptions {
   path: string;
-  rows: Array<Record<string, string>>;
+  rows: Array<Record<string, unknown>>;
 }
 
 /** Write rows as JSONL, creating the parent directory as needed. */
@@ -154,14 +170,19 @@ export function updateLatestSymlink(target: string): string {
   return linkPath;
 }
 
-function seedContent(app?: string): string {
+function seedContent({ app, frontMatter = {} }: SeedOptions): string {
   return `---
-# Front-matter (YAML). Optional defaults for this query.
-# Examples:
-#   time: 5h
-#   environment: systest
-#   logGroup: /my/group
----
+# Front-matter (YAML). CLI/config values are pre-filled below — edit as needed.
+${renderFrontMatter(frontMatter)}---
 ${defaultQuery(app)}
 `;
+}
+
+function renderFrontMatter(fm: SeedFrontMatter): string {
+  const obj: Record<string, unknown> = {};
+  if (fm.time !== undefined) obj.time = fm.time;
+  if (fm.environment !== undefined) obj.environment = fm.environment;
+  if (fm.logGroup !== undefined) obj.logGroup = fm.logGroup;
+  if (Object.keys(obj).length === 0) return "";
+  return stringifyYaml(obj);
 }

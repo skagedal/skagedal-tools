@@ -64,9 +64,10 @@ After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/la
 ```sh
 cloudwatch-insights show
 cloudwatch-insights show | jq .
+cloudwatch-insights show --path        # print the path to latest-run.jsonl instead
 ```
 
-Streams `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` to stdout. Handy for re-inspecting or re-formatting the most recent run without re-querying.
+Streams `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` to stdout. Handy for re-inspecting or re-formatting the most recent run without re-querying. Pass `--path` to print just the file path (useful for piping into other tools).
 
 ### `edit-config`
 
@@ -88,7 +89,7 @@ logGroup: /my/group
 ---
 fields @timestamp, @message
 | sort @timestamp desc
-| filter app = my-service
+| filter app = 'my-service'
 | filter level in ['WARN', 'ERROR']
 | limit 200
 ```
@@ -102,6 +103,8 @@ Front-matter fields:
 | `logGroup`    | a log group, or an array of log groups                               |
 
 CLI flags always win over front-matter, and front-matter wins over the repo defaults in `settings.toml`. The result `limit` belongs in the query body itself (`| limit 200`), not the front-matter.
+
+When seeding a fresh `current.insights` (first run, or with `--clear`), the front-matter is **pre-filled** with the values that would currently be used — `--time` (or `1h`), `--environment`, and the CLI `--log-group` or the configured `group` template — so you can see and tweak exactly what will run. Existing files are never rewritten.
 
 Pass `--clear` to `query` to overwrite the current file with a fresh default template before opening the editor.
 
@@ -132,30 +135,57 @@ The tool detects the git repository you're running it from (via `git rev-parse -
 
 Per the skagedal-tools convention, per-tool state lives under `~/.skagedal-tools/<tool-name>/`. Override the whole base directory with `$SKAGEDAL_TOOLS_HOME`, or point at an arbitrary config file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
 
-Example:
+The file has a top-level `[defaults]` block that applies to every repo, plus per-repo `[repo.<name>]` blocks. Per-repo values fully replace the corresponding `[defaults]` value (arrays are not merged).
 
 ```toml
 # settings.toml
-[my-service]
-group = "/{env}/my-team"
+[defaults]
+flatten-fields = ["@message"]
+
+[env.prod]
+aws-profile = "company-prod"
+region      = "us-east-1"
+
+[env.systest]
+aws-profile = "company-systest"
+region      = "eu-west-1"
+
+[repo.my-service]
+group = "/{env}/logs"
 app   = "my-service"
 
-[another-repo]
+[repo.another-repo]
 group = "/prod/another"
+flatten-fields = ["@message", "context"]   # replaces the defaults entry entirely
+
+# Per-repo override for one env: only keys you mention are overridden.
+# Region for special-service+prod still comes from [env.prod].
+[repo.special-service.env.prod]
+aws-profile = "special-prod"
 ```
 
-Fields:
+Fields legal in both `[defaults]` and `[repo.<name>]`:
 
 - `group` — log group used when no `--log-group` / front-matter `logGroup` is given. `{env}` is substituted with `--environment`.
 - `app` — used only when seeding a fresh `current.insights`: the seeded query body will filter on `app = "<app>"`.
+- `flatten-fields` — array of field names whose value is a JSON-encoded object. After each query, those fields are JSON-decoded and their keys merged into the row (the original field is removed). If a value isn't valid JSON or isn't a plain object, the field is left untouched. Useful for log-line fields like `@message` that wrap structured payloads.
+
+`[env.<name>]` declares an environment (any lower kebab-case name — e.g. `prod`, `systest`, `us-east-1`). Supported keys:
+
+- `aws-profile` — exported as `AWS_PROFILE` for the run unless `--profile` overrides it.
+- `region` — passed to the AWS SDK unless `--region` / `AWS_REGION` overrides it.
+
+A repo can override individual keys via `[repo.<repo>.env.<env>]`. Inside an env block the merge is **per-key**: only the fields you mention are overridden; the rest fall through to the top-level entry. Resolution order at query time: `--profile` / `--region` > `[repo.X.env.Y]` > `[env.Y]` > `AWS_PROFILE` / `AWS_REGION` env vars > SDK default chain.
+
+Using `--environment <name>` for an env name that has no `[env.<name>]` section is fine — `{env}` substitution still works; `aws-profile` and `region` simply aren't auto-set.
 
 ## `--environment`
 
 ```
--e, --environment <env>      systest | uat | prod
+-e, --environment <name>     any lower kebab-case env name (e.g. prod, systest, us-east-1)
 ```
 
-Substituted into `{env}` in the log group template (from CLI, front-matter, or config). Required whenever the template contains `{env}`.
+Substituted into `{env}` in the log group template (from CLI, front-matter, or config) and used to look up `[env.<name>]` for `aws-profile` / `region`. Required whenever the template contains `{env}`. Unknown env names are accepted — they simply don't auto-set a profile or region.
 
 ## Directory layout
 

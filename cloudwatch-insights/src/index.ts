@@ -8,14 +8,16 @@ import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
 import { parseTimeRange, TimeRangeParseError } from "./time-range.js";
 import { runInsightsQuery } from "./insights.js";
+import { flattenRow } from "./flatten.js";
 import {
   applyEnvironment,
   ConfigError,
   configPath,
   ensureConfigFile,
-  Environment,
-  ENVIRONMENTS,
+  isValidEnvironmentName,
   loadSettings,
+  RepoConfig,
+  resolveEnvConfig,
   resolveRepoDefaults,
 } from "./config.js";
 import {
@@ -27,6 +29,7 @@ import {
   parseQueryFile,
   resetCurrentInsights,
   runResultPath,
+  SeedFrontMatter,
   updateLatestSymlink,
   writeResults,
 } from "./query-file.js";
@@ -71,7 +74,7 @@ const queryCmd = define({
     environment: {
       type: "string",
       short: "e",
-      description: "substituted for {env} in the log group template: systest | uat | prod",
+      description: "environment name (lower kebab-case); substituted for {env} in the log group template",
     },
     limit: {
       type: "number",
@@ -124,9 +127,14 @@ async function runQuery(values: QueryValues): Promise<void> {
   const settings = loadSettings();
   const { defaults, sectionName } = resolveRepoDefaults(settings);
 
-  const { queryBody, frontMatter } = await resolveQuerySource(values, defaults.app);
+  // Validate the CLI environment up-front so the seeded front-matter (and any
+  // error from an invalid value) appears before we open the editor.
+  const cliEnvironment = validateEnvironmentArg(values.environment, "--environment");
 
-  const environment = pickEnvironment(values.environment ?? frontMatter.environment);
+  const { queryBody, frontMatter } = await resolveQuerySource(values, defaults, cliEnvironment);
+
+  const environment =
+    cliEnvironment ?? validateEnvironmentArg(frontMatter.environment, "front-matter `environment`");
   const timeExpr = values.time ?? frontMatter.time ?? "1h";
   const limit = values.limit;
 
@@ -146,12 +154,22 @@ async function runQuery(values: QueryValues): Promise<void> {
     sectionName,
   });
 
-  if (values.profile) {
-    process.env.AWS_PROFILE = values.profile;
+  const envConfig = environment ? resolveEnvConfig(settings, sectionName, environment) : {};
+  const profile = values.profile ?? envConfig.awsProfile;
+  const region = values.region ?? envConfig.region ?? process.env.AWS_REGION;
+  if (profile) {
+    process.env.AWS_PROFILE = profile;
   }
-  const client = new CloudWatchLogsClient({
-    region: values.region ?? process.env.AWS_REGION,
-  });
+  const client = new CloudWatchLogsClient({ region });
+
+  if (!values.quiet) {
+    if (profile && !values.profile) {
+      process.stderr.write(`  AWS_PROFILE: ${profile} (from [env.${environment}])\n`);
+    }
+    if (envConfig.region && !values.region) {
+      process.stderr.write(`  AWS region:  ${envConfig.region} (from [env.${environment}])\n`);
+    }
+  }
 
   if (!values.quiet) {
     process.stderr.write(
@@ -176,8 +194,13 @@ async function runQuery(values: QueryValues): Promise<void> {
     },
   });
 
+  const flattenFields = defaults.flattenFields ?? [];
+  const rows = flattenFields.length === 0
+    ? result.rows
+    : result.rows.map((r) => flattenRow(r, flattenFields));
+
   const outPath = runResultPath();
-  writeResults({ path: outPath, rows: result.rows });
+  writeResults({ path: outPath, rows });
   const linkPath = updateLatestSymlink(outPath);
 
   process.stdout.write(outPath + "\n");
@@ -199,7 +222,8 @@ interface QuerySource {
 
 async function resolveQuerySource(
   values: QueryValues,
-  configApp: string | undefined,
+  defaults: RepoConfig,
+  cliEnvironment: string | undefined,
 ): Promise<QuerySource> {
   if (values.query) {
     return { queryBody: values.query, frontMatter: {} };
@@ -212,13 +236,18 @@ async function resolveQuerySource(
     return { queryBody: parsed.body, frontMatter: parsed.frontMatter };
   }
 
-  // Editor flow
+  // Editor flow: pre-fill the front-matter with what we'd actually run, so
+  // the user can see and edit it before saving.
+  const seedOptions = {
+    app: defaults.app,
+    frontMatter: buildSeedFrontMatter(values, defaults, cliEnvironment),
+  };
   const path = currentInsightsPath();
   if (values.clear) {
-    resetCurrentInsights(path, configApp);
+    resetCurrentInsights(path, seedOptions);
     if (!values.quiet) process.stderr.write(`Reset ${path} to default template\n`);
   } else {
-    const seeded = ensureCurrentInsights(path, configApp);
+    const seeded = ensureCurrentInsights(path, seedOptions);
     if (seeded && !values.quiet) {
       process.stderr.write(`Seeded ${path}\n`);
     }
@@ -231,11 +260,32 @@ async function resolveQuerySource(
   return { queryBody: parsed.body, frontMatter: parsed.frontMatter };
 }
 
+function buildSeedFrontMatter(
+  values: QueryValues,
+  defaults: RepoConfig,
+  cliEnvironment: string | undefined,
+): SeedFrontMatter {
+  const cliLogGroups = flatten((values["log-group"] ?? []).map((s) => s.split(",")))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let logGroup: string | string[] | undefined;
+  if (cliLogGroups.length === 1) logGroup = cliLogGroups[0];
+  else if (cliLogGroups.length > 1) logGroup = cliLogGroups;
+  else if (defaults.group) logGroup = defaults.group;
+
+  return {
+    time: values.time ?? "1h",
+    environment: cliEnvironment,
+    logGroup,
+  };
+}
+
 interface ResolveLogGroupsArgs {
   cliLogGroups: string[];
   frontMatterLogGroup: string | string[] | undefined;
   configGroupTemplate: string | undefined;
-  environment: Environment | undefined;
+  environment: string | undefined;
   sectionName: string | null;
 }
 
@@ -281,11 +331,21 @@ function resolveLogGroups(args: ResolveLogGroupsArgs): string[] {
 const showCmd = define({
   name: "show",
   description: "Stream the contents of latest-run.jsonl to stdout",
-  args: {},
-  run: async () => {
+  args: {
+    path: {
+      type: "boolean",
+      default: false,
+      description: "print the path to latest-run.jsonl instead of its contents",
+    },
+  },
+  run: async (ctx) => {
     const path = latestRunPath();
     if (!existsSync(path)) {
       fail(`no runs found (${path} does not exist). Run \`cloudwatch-insights query\` first.`, 2);
+    }
+    if (ctx.values.path) {
+      process.stdout.write(path + "\n");
+      return;
     }
     await pipeline(createReadStream(path), process.stdout);
   },
@@ -333,12 +393,15 @@ function openEditor(path: string): void {
   }
 }
 
-function pickEnvironment(raw: string | undefined): Environment | undefined {
+function validateEnvironmentArg(raw: string | undefined, source: string): string | undefined {
   if (raw === undefined) return undefined;
-  if (!ENVIRONMENTS.includes(raw as Environment)) {
-    fail(`--environment must be one of: ${ENVIRONMENTS.join(", ")} (got ${JSON.stringify(raw)})`, 2);
+  if (!isValidEnvironmentName(raw)) {
+    fail(
+      `${source} must be lower kebab-case (e.g. "prod", "us-east-1") — got ${JSON.stringify(raw)}`,
+      2,
+    );
   }
-  return raw as Environment;
+  return raw;
 }
 
 function toArray<T>(value: T | T[] | undefined): T[] {

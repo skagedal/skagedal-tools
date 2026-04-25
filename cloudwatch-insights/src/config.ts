@@ -4,24 +4,39 @@ import { basename, dirname, join } from "path";
 import { spawnSync } from "child_process";
 import { parse as parseToml } from "smol-toml";
 
-export type Environment = "systest" | "uat" | "prod";
-
-export const ENVIRONMENTS: readonly Environment[] = ["systest", "uat", "prod"];
+/** AWS-related settings scoped to a single environment. */
+export interface EnvConfig {
+  awsProfile?: string;
+  region?: string;
+}
 
 /**
- * A single named section in settings.toml. Additional keys are ignored so
- * users can extend the schema without breaking old builds of this tool.
+ * Configuration that applies to a repository — either as the top-level
+ * [defaults] block or a per-repo [repo.<name>] block. Per-repo values
+ * fully replace defaults values (arrays are not merged).
  */
-export interface RepoDefaults {
+export interface RepoConfig {
   /** Log group template, may contain "{env}" placeholder. */
   group?: string;
   /** App name — used to build a default Insights query. */
   app?: string;
+  /** Field names whose value is a JSON object to be flattened into the row. */
+  flattenFields?: string[];
+  /**
+   * Per-environment overrides scoped to this repo, parsed from
+   * [repo.<repo>.env.<env>] sections. Each entry is merged on top of the
+   * top-level [env.<env>] config on a per-key basis.
+   */
+  envOverrides?: Record<string, EnvConfig>;
 }
 
 export interface Settings {
-  /** Map from section name (conventionally: git repo basename) to defaults. */
-  sections: Record<string, RepoDefaults>;
+  /** Defaults applied to every repo when not overridden. */
+  defaults: RepoConfig;
+  /** Per-repo configuration, keyed by git repo basename. */
+  repos: Record<string, RepoConfig>;
+  /** Top-level [env.<name>] sections — defaults for every repo. */
+  environments: Record<string, EnvConfig>;
 }
 
 export class ConfigError extends Error {
@@ -29,6 +44,18 @@ export class ConfigError extends Error {
     super(message);
     this.name = "ConfigError";
   }
+}
+
+const ENV_NAME_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+
+/**
+ * Returns true if `name` is a syntactically valid environment name —
+ * lower kebab-case: starts with a letter, segments separated by single
+ * dashes, no underscores or uppercase. Used both to validate CLI input
+ * and to filter [env.<name>] keys in the config.
+ */
+export function isValidEnvironmentName(name: string): boolean {
+  return ENV_NAME_RE.test(name);
 }
 
 /**
@@ -54,7 +81,7 @@ export function configPath(env: NodeJS.ProcessEnv = process.env): string {
  */
 export function loadSettings(path: string = configPath()): Settings {
   if (!existsSync(path)) {
-    return { sections: {} };
+    return { defaults: {}, repos: {}, environments: {} };
   }
   const contents = readFileSync(path, "utf8");
   return parseSettings(contents);
@@ -70,17 +97,56 @@ export function parseSettings(toml: string): Settings {
     throw new ConfigError(`failed to parse settings.toml: ${message}`);
   }
 
-  const sections: Record<string, RepoDefaults> = {};
-  for (const [key, value] of Object.entries(doc)) {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const section = value as Record<string, unknown>;
-      const defaults: RepoDefaults = {};
-      if (typeof section.group === "string") defaults.group = section.group;
-      if (typeof section.app === "string") defaults.app = section.app;
-      sections[key] = defaults;
+  const defaults = isPlainObject(doc.defaults) ? parseRepoConfig(doc.defaults) : {};
+
+  const repos: Record<string, RepoConfig> = {};
+  if (isPlainObject(doc.repo)) {
+    for (const [name, value] of Object.entries(doc.repo)) {
+      if (isPlainObject(value)) {
+        repos[name] = parseRepoConfig(value);
+      }
     }
   }
-  return { sections };
+
+  const environments = isPlainObject(doc.env) ? parseEnvironmentMap(doc.env) : {};
+
+  return { defaults, repos, environments };
+}
+
+function parseRepoConfig(section: Record<string, unknown>): RepoConfig {
+  const config: RepoConfig = {};
+  if (typeof section.group === "string") config.group = section.group;
+  if (typeof section.app === "string") config.app = section.app;
+  if (Array.isArray(section["flatten-fields"])) {
+    const fields = section["flatten-fields"].filter((f): f is string => typeof f === "string");
+    config.flattenFields = fields;
+  }
+  if (isPlainObject(section.env)) {
+    const overrides = parseEnvironmentMap(section.env);
+    if (Object.keys(overrides).length > 0) config.envOverrides = overrides;
+  }
+  return config;
+}
+
+function parseEnvironmentMap(section: Record<string, unknown>): Record<string, EnvConfig> {
+  const out: Record<string, EnvConfig> = {};
+  for (const [name, value] of Object.entries(section)) {
+    if (!isValidEnvironmentName(name)) continue;
+    if (!isPlainObject(value)) continue;
+    out[name] = parseEnvConfig(value);
+  }
+  return out;
+}
+
+function parseEnvConfig(section: Record<string, unknown>): EnvConfig {
+  const config: EnvConfig = {};
+  if (typeof section["aws-profile"] === "string") config.awsProfile = section["aws-profile"];
+  if (typeof section.region === "string") config.region = section.region;
+  return config;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -109,27 +175,57 @@ export function findGitRoot(cwd: string = process.cwd()): string | null {
 }
 
 /**
- * Pick the defaults section for the current git repo (by basename of the
- * repo root). Returns both the section name we looked up and the defaults
- * we found, so the caller can print a helpful message.
+ * Pick the configuration for the current git repo (by basename of the repo
+ * root), merging on top of the [defaults] section. Per-repo values fully
+ * replace defaults values (arrays are not concatenated). Returns the
+ * section name we looked up so callers can print a helpful message.
  */
 export function resolveRepoDefaults(
   settings: Settings,
   cwd: string = process.cwd(),
-): { sectionName: string | null; defaults: RepoDefaults } {
+): { sectionName: string | null; defaults: RepoConfig } {
   const root = findGitRoot(cwd);
-  if (!root) return { sectionName: null, defaults: {} };
+  if (!root) return { sectionName: null, defaults: { ...settings.defaults } };
   const name = basename(root);
-  const defaults = settings.sections[name] ?? {};
-  return { sectionName: name, defaults };
+  const repo = settings.repos[name];
+  return { sectionName: name, defaults: mergeRepoConfig(settings.defaults, repo) };
+}
+
+function mergeRepoConfig(base: RepoConfig, override: RepoConfig | undefined): RepoConfig {
+  if (!override) return { ...base };
+  return {
+    group: override.group ?? base.group,
+    app: override.app ?? base.app,
+    flattenFields: override.flattenFields ?? base.flattenFields,
+    envOverrides: override.envOverrides ?? base.envOverrides,
+  };
+}
+
+/**
+ * Resolve the effective env config for a repo + environment by merging the
+ * top-level [env.<env>] entry with the per-repo [repo.<repo>.env.<env>]
+ * override on a per-key basis (override wins for keys it sets).
+ */
+export function resolveEnvConfig(
+  settings: Settings,
+  repoName: string | null,
+  envName: string,
+): EnvConfig {
+  const base = settings.environments[envName] ?? {};
+  const override = repoName ? settings.repos[repoName]?.envOverrides?.[envName] : undefined;
+  if (!override) return { ...base };
+  return {
+    awsProfile: override.awsProfile ?? base.awsProfile,
+    region: override.region ?? base.region,
+  };
 }
 
 /** Substitute "{env}" in a template. Throws if the template uses {env} but none was supplied. */
-export function applyEnvironment(template: string, env: Environment | undefined): string {
+export function applyEnvironment(template: string, env: string | undefined): string {
   if (!template.includes("{env}")) return template;
   if (!env) {
     throw new ConfigError(
-      `log group template "${template}" uses {env} — pass --environment systest|uat|prod`,
+      `log group template "${template}" uses {env} — pass --environment <name>`,
     );
   }
   return template.replaceAll("{env}", env);
@@ -142,7 +238,7 @@ export function applyEnvironment(template: string, env: Environment | undefined)
  */
 export const DEFAULT_QUERY_TEMPLATE = `fields @timestamp, @message
 | sort @timestamp desc
-| filter app = {app}
+| filter app = '{app}'
 | filter level in ['WARN', 'ERROR']
 | limit 200`;
 
@@ -157,9 +253,41 @@ export function defaultQuery(app?: string): string {
 
 const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
 #
-# Each section is keyed by the git repository directory name. Supported fields:
-#   group = "/{env}/my-team"    # log group template; {env} is replaced by --environment
-#   app   = "my-service"        # default query filter on the \`app\` field
+# Top-level [defaults] applies to every repo. Per-repo overrides live under
+# [repo.<repo-name>] and fully replace the corresponding defaults value
+# (arrays are not merged).
+#
+# Supported fields (in either [defaults] or [repo.<name>]):
+#   group           = "/{env}/logs"   # log group template; {env} replaced by --environment
+#   app             = "my-service"        # default app filter for the seeded query
+#   flatten-fields  = ["@message"]        # JSON-decode these fields and merge their keys into the row
+#
+# Environments are declared as [env.<name>] (any lower kebab-case name) and may
+# set:
+#   aws-profile = "..."   # exported as AWS_PROFILE for the run
+#   region      = "..."   # AWS region used for the run
+#
+# A repo can override individual env keys via [repo.<repo>.env.<env>] — only
+# keys you mention are overridden; the rest fall through to the top-level entry.
+#
+# Example:
+#   [defaults]
+#   flatten-fields = ["@message"]
+#
+#   [env.systest]
+#   aws-profile = "company-systest"
+#   region      = "eu-west-1"
+#
+#   [env.prod]
+#   aws-profile = "company-prod"
+#   region      = "us-east-1"
+#
+#   [repo.example-service]
+#   group = "/{env}/logs"
+#   app   = "example-service"
+#
+#   [repo.example-service.env.prod]
+#   aws-profile = "example-prod"   # region inherits from [env.prod]
 #
 # Run \`cloudwatch-insights edit-config\` from inside a git repository and a
 # commented placeholder section for that repo will be appended below.
@@ -195,7 +323,7 @@ export function ensureConfigFile(
   if (root) {
     const name = basename(root);
     const contents = readFileSync(path, "utf8");
-    if (!hasSectionHeader(contents, name)) {
+    if (!hasRepoSectionHeader(contents, name)) {
       const block = placeholderSection(name);
       const prefix = endsWithNewline(contents) ? "\n" : "\n\n";
       appendFileSync(path, prefix + block, "utf8");
@@ -207,13 +335,13 @@ export function ensureConfigFile(
 }
 
 /**
- * Does the raw file already contain `[name]` as a section header — either
- * as real TOML or as a commented-out placeholder? Used so we don't append
- * a second placeholder for a repo that already has one.
+ * Does the raw file already contain `[repo.<name>]` as a section header —
+ * either as real TOML or as a commented-out placeholder? Used so we don't
+ * append a second placeholder for a repo that already has one.
  */
-function hasSectionHeader(contents: string, name: string): boolean {
+function hasRepoSectionHeader(contents: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`^\\s*#?\\s*\\[${escaped}\\]\\s*$`, "m");
+  const re = new RegExp(`^\\s*#?\\s*\\[repo\\.${escaped}\\]\\s*$`, "m");
   return re.test(contents);
 }
 
@@ -221,8 +349,8 @@ function placeholderSection(repoName: string): string {
   return (
     `# ${repoName}: uncomment and fill in the values you want as defaults\n` +
     `# when running cloudwatch-insights from this repository.\n` +
-    `# [${repoName}]\n` +
-    `# group = "/{env}/my-team"\n` +
+    `# [repo.${repoName}]\n` +
+    `# group = "/{env}/logs"\n` +
     `# app   = "${repoName}"\n`
   );
 }
