@@ -65,22 +65,31 @@ table {
   flex: 1;
   border-collapse: collapse;
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
   overflow: auto;
   display: block;
 }
 
 thead, tbody { display: block; width: 100%; }
 thead { position: sticky; top: 0; background: var(--bg); }
-tr { display: table; width: 100%; table-layout: fixed; }
+tr { display: table; width: 100%; table-layout: auto; }
 
 th, td {
   text-align: left;
   padding: 2px 8px;
   border-bottom: 1px solid var(--border);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Non-last columns shrink to their content; the last column takes the rest. */
+th.col-fit, td.col-fit {
+  width: 1%;
+  white-space: nowrap;
+}
+th.col-flex, td.col-flex {
+  width: auto;
+  white-space: nowrap;
 }
 
 th { font-weight: 600; color: var(--dim); }

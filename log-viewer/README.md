@@ -73,7 +73,7 @@ log-viewer -b -c ./examples/streaming-logs        # browser, live stream
 | `-b`, `--browser` | Start the browser app instead of the TUI. |
 | `-p`, `--port <n>` | Port for the browser server (default `5173`). |
 | `--host <h>` | Host for the browser server (default `127.0.0.1`). |
-| `--open` | Open the browser automatically (browser mode only). |
+| `--no-open` | Skip auto-opening the browser (browser mode opens it by default). |
 | `--init-config` | Write a default config file if missing. |
 
 If no input flag and no positional argument are given but stdin is piped,
@@ -165,6 +165,8 @@ so they show up in the same column as your real `message` fields.
 
 ## Keyboard
 
+In the list:
+
 | Key | Action |
 |-----|--------|
 | `j` / `↓` | Next entry |
@@ -172,5 +174,13 @@ so they show up in the same column as your real `message` fields.
 | `u` | Up one entry |
 | `o` / Enter | Open the selected entry (full JSON) |
 | `g` / `G` | Top / bottom |
-| `Esc` / `u` (in detail) | Back to the list |
 | `q` / Ctrl-C | Quit (TUI only) |
+
+In the detail view:
+
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Next entry (stay in detail) |
+| `k` / `↑` | Previous entry (stay in detail) |
+| `c` | Copy the entry's JSON to the system clipboard |
+| `u` / `Esc` / `q` | Back to the list |

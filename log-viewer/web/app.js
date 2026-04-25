@@ -25,9 +25,12 @@ async function start() {
 
 function renderHeader() {
   headerRow.replaceChildren();
-  for (const field of config.fields) {
+  const last = config.fields.length - 1;
+  for (let i = 0; i < config.fields.length; i++) {
+    const field = config.fields[i];
     const th = document.createElement("th");
     th.textContent = field.name;
+    th.classList.add(i === last ? "col-flex" : "col-fit");
     headerRow.appendChild(th);
   }
 }
@@ -53,10 +56,13 @@ function startStream() {
 function appendRow(entry) {
   const tr = document.createElement("tr");
   tr.dataset.id = String(entry.id);
-  for (const field of config.fields) {
+  const last = config.fields.length - 1;
+  for (let i = 0; i < config.fields.length; i++) {
+    const field = config.fields[i];
     const td = document.createElement("td");
     const value = pickField(entry.data, field.from);
     td.textContent = value;
+    td.classList.add(i === last ? "col-flex" : "col-fit");
     if (field.name.toLowerCase() === "level") {
       td.classList.add(`level-${classifyLevel(value)}`);
     }

@@ -42,8 +42,9 @@ const main = define({
     },
     open: {
       type: "boolean",
-      description: "open the browser automatically (browser mode only)",
-      default: false,
+      negatable: true,
+      description: "open the browser automatically in browser mode (use --no-open to suppress)",
+      default: true,
     },
     "init-config": {
       type: "boolean",

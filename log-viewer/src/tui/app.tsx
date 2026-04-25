@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import clipboard from "clipboardy";
 import type { Config } from "../config.js";
 import type { LogEntry } from "../entry.js";
 import { renderColumns } from "../entry.js";
@@ -18,6 +19,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   const [cursor, setCursor] = useState(0);
   const [view, setView] = useState<"list" | "detail">("list");
   const [done, setDone] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => {
     source.onEntry((entry) => {
@@ -41,6 +43,26 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     if (view === "detail") {
       if (input === "q" || key.escape || input === "u") {
         setView("list");
+        return;
+      }
+      if (input === "j" || key.downArrow) {
+        setCursor((c) => Math.min(entries.length - 1, c + 1));
+        return;
+      }
+      if (input === "k" || key.upArrow) {
+        setCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (input === "c") {
+        const entry = entries[cursor];
+        if (!entry) return;
+        const text = safeJson(entry.data);
+        try {
+          clipboard.writeSync(text);
+          flashFor(setFlash, `copied entry #${entry.id} (${text.length} bytes)`);
+        } catch (err) {
+          flashFor(setFlash, `copy failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
         return;
       }
       return;
@@ -81,7 +103,14 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   const window = entries.slice(start, start + visible);
 
   if (view === "detail" && entries[cursor]) {
-    return <Detail entry={entries[cursor]} sourceLabel={sourceLabel} />;
+    return (
+      <Detail
+        entry={entries[cursor]}
+        sourceLabel={sourceLabel}
+        position={{ index: cursor, total: entries.length }}
+        flash={flash}
+      />
+    );
   }
 
   return (
@@ -149,19 +178,22 @@ const Row: React.FC<{
   );
 };
 
-const Detail: React.FC<{ entry: LogEntry; sourceLabel: string }> = ({ entry, sourceLabel }) => {
-  const pretty = (() => {
-    try {
-      return JSON.stringify(entry.data, null, 2);
-    } catch {
-      return entry.raw;
-    }
-  })();
+const Detail: React.FC<{
+  entry: LogEntry;
+  sourceLabel: string;
+  position: { index: number; total: number };
+  flash: string | null;
+}> = ({ entry, sourceLabel, position, flash }) => {
+  const pretty = safeJson(entry.data);
   return (
     <Box flexDirection="column">
       <Text>
         <Text bold>entry #{entry.id}</Text>
-        <Text dimColor> · {sourceLabel}{entry.wrapped ? " · wrapped" : ""}</Text>
+        <Text dimColor>
+          {" "}
+          · {position.index + 1}/{position.total} · {sourceLabel}
+          {entry.wrapped ? " · wrapped" : ""}
+        </Text>
       </Text>
       <Box marginTop={1} flexDirection="column">
         {pretty.split("\n").map((line, i) => (
@@ -169,11 +201,31 @@ const Detail: React.FC<{ entry: LogEntry; sourceLabel: string }> = ({ entry, sou
         ))}
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>u/esc back · q back</Text>
+        <Text dimColor>
+          j/k next/prev · c copy json · u/esc back · q back
+          {flash ? `  ·  ${flash}` : ""}
+        </Text>
       </Box>
     </Box>
   );
 };
+
+function safeJson(data: unknown): string {
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return String(data);
+  }
+}
+
+function flashFor(
+  setFlash: (v: string | null) => void,
+  message: string,
+  ms = 1500,
+): void {
+  setFlash(message);
+  setTimeout(() => setFlash(null), ms);
+}
 
 function columnWidths(config: Config, totalColumns: number): number[] {
   const n = config.fields.length;
