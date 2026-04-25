@@ -8,7 +8,7 @@ import { createTriggerRuntime } from "./triggers.js";
 import { runTui } from "./tui/index.js";
 import { runBrowser } from "./browser/server.js";
 
-const DESCRIPTION = "View JSONL logs in a TUI or browser, with vi-like navigation.";
+const DESCRIPTION = "View JSONL logs in a TUI or browser.";
 
 // Pull --exec out of argv before gunshi parses, so any flags meant for the
 // executed command (e.g. `--exec kubectl logs -f my-pod`) aren't interpreted

@@ -24,22 +24,33 @@ export async function runTui(opts: RunTuiOptions): Promise<void> {
     );
   }
 
-  let restored = false;
-  const restore = () => {
-    if (restored) return;
-    restored = true;
+  // Single cleanup path: close the input source and restore the terminal.
+  // Runs at most once, regardless of how we exit (normal q/Esc, Ink's
+  // built-in Ctrl-C handling, SIGINT/SIGTERM, or a thrown error).
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    opts.source.close();
     process.stdout.write(SHOW_CURSOR + LEAVE_ALT_SCREEN);
   };
+
   process.stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
-  // Best-effort cleanup if we exit through an unusual path.
-  process.once("exit", restore);
-  process.once("SIGINT", restore);
-  process.once("SIGTERM", restore);
+  process.once("exit", cleanup);
+  // For signals, do our cleanup and then re-raise the default behavior so
+  // the process exits with the conventional 128+signal status.
+  const onSignal = (signal: NodeJS.Signals, code: number) => {
+    cleanup();
+    process.exit(code);
+  };
+  process.once("SIGINT", () => onSignal("SIGINT", 130));
+  process.once("SIGTERM", () => onSignal("SIGTERM", 143));
+  process.once("SIGHUP", () => onSignal("SIGHUP", 129));
 
   try {
     const instance = render(React.createElement(App, opts), { exitOnCtrlC: true });
     await instance.waitUntilExit();
   } finally {
-    restore();
+    cleanup();
   }
 }

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import clipboard from "clipboardy";
-import type { Config } from "../config.js";
+import type { Config, FieldConfig } from "../config.js";
 import type { LogEntry } from "../entry.js";
-import { renderColumns } from "../entry.js";
+import { renderColumns, renderField } from "../entry.js";
 import type { SourceHandle } from "../source.js";
 
 interface Props {
@@ -72,8 +72,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
       }
       return;
     }
-    if (input === "q" || key.escape || (key.ctrl && input === "c")) {
-      source.close();
+    if (input === "q" || key.escape) {
       exit();
       return;
     }
@@ -115,7 +114,12 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     }
   });
 
-  const widths = useMemo(() => columnWidths(config, stdout?.columns ?? 100), [config, stdout?.columns]);
+  // Recompute when entries arrive — but only depend on length, not entries
+  // identity, so cursor/follow toggles don't reflow the layout.
+  const widths = useMemo(
+    () => columnWidths(config, entries, stdout?.columns ?? 100),
+    [config, entries.length, stdout?.columns],
+  );
   const start = Math.max(0, Math.min(cursor - Math.floor(visible / 2), entries.length - visible));
   const window = entries.slice(start, start + visible);
 
@@ -278,14 +282,32 @@ function flashFor(
   setTimeout(() => setFlash(null), ms);
 }
 
-function columnWidths(config: Config, totalColumns: number): number[] {
+function columnWidths(config: Config, entries: LogEntry[], totalColumns: number): number[] {
   const n = config.fields.length;
   if (n === 0) return [];
-  // Give the last column whatever's left; share the rest evenly with sane minimums.
-  const minimums = config.fields.map((f) => Math.max(8, f.name.length + 2));
-  const fixed = minimums.slice(0, -1).reduce((a, b) => a + b, 0);
+  // Each non-last column shrinks/grows to fit its widest rendered value (and
+  // its header), capped so one huge field can't crowd out the last column.
+  const cap = Math.max(20, Math.floor(totalColumns / 3));
+  const widths: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const field = config.fields[i]!;
+    let w = field.name.length;
+    for (const entry of entries) {
+      const v = renderField(entry, field);
+      if (v.length > w) w = v.length;
+      if (w >= cap) {
+        w = cap;
+        break;
+      }
+    }
+    widths.push(w + 1); // padding so columns don't visually butt up against each other
+  }
+  // Last column absorbs whatever's left. The trailing `n` accounts for the
+  // 1-cell marginRight between columns plus the leading follow-mode marker.
+  const fixed = widths.reduce((a, b) => a + b, 0);
   const last = Math.max(20, totalColumns - fixed - n);
-  return [...minimums.slice(0, -1), last];
+  widths.push(last);
+  return widths;
 }
 
 function truncate(value: string, width: number): string {
