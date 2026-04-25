@@ -32,7 +32,11 @@ check-node() {
 check-rust() {
     local dir="$1"
     echo "==> Checking $dir"
-    (cd "$SCRIPT_DIR/$dir" && cargo test)
+    (
+        cd "$SCRIPT_DIR/$dir"
+        cargo clippy --all-targets -- -D warnings
+        cargo test
+    )
 }
 
 check-maven() {

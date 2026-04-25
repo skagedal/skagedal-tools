@@ -59,11 +59,9 @@ fn default_command(args: DefaultArgs) {
 
     println!("{}", url);
 
-    if args.open {
-        if let Err(e) = opener::open_browser(&url) {
-            eprintln!("Failed to open browser: {}", e);
-            exit(1);
-        }
+    if args.open && let Err(e) = opener::open_browser(&url) {
+        eprintln!("Failed to open browser: {}", e);
+        exit(1);
     }
 }
 

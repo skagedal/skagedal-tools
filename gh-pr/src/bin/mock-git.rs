@@ -9,10 +9,10 @@ use std::process::exit;
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-    if let Ok(path) = env::var("MOCK_GIT_LOG") {
-        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
-            let _ = writeln!(f, "{}", args.join(" "));
-        }
+    if let Ok(path) = env::var("MOCK_GIT_LOG")
+        && let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path)
+    {
+        let _ = writeln!(f, "{}", args.join(" "));
     }
     if env::var("MOCK_GIT_FAIL").is_ok() {
         eprintln!("mock-git: configured to fail");

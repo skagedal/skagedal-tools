@@ -115,3 +115,7 @@ All Rust projects in this repository must follow these guidelines:
 
 - Use `edition = "2024"` in Cargo.toml
   - This ensures projects use the latest Rust edition with modern language features and best practices
+- Code must be clippy-clean. The top-level `./check` runs
+  `cargo clippy --all-targets -- -D warnings && cargo test` per crate, so any
+  clippy lint becomes a CI failure. Fix the lint at the source rather than
+  reaching for `#[allow(...)]`.
