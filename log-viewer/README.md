@@ -111,6 +111,41 @@ name = "message"
 from = ["message", "msg", "@message"]
 ```
 
+## Triggers
+
+A trigger runs a shell command the first time a configured field takes
+on a value `log-viewer` hasn't seen before. The motivating use case is
+"make a sound when a new pod is deployed":
+
+```toml
+[[triggers]]
+name = "pod-deployed"
+on_new_value = "podname"
+action = "say new pod {value} deployed"
+startup_delay_ms = 2000
+```
+
+- `on_new_value` is the field to watch (a string, or a list of
+  candidate keys like the `from` lists for columns).
+- `{value}` and `{field}` in `action` are substituted as **shell-quoted**
+  strings, so values with spaces or quotes are safe.
+- `startup_delay_ms` suppresses the action for that long after start.
+  Values seen during the delay are still recorded as "already seen", so
+  when log-viewer attaches to e.g. `kubectl logs`, the existing pods
+  don't all fire the trigger — only genuinely new ones do.
+
+The action runs with these env vars set:
+
+| Var | Value |
+|-----|-------|
+| `LOG_VIEWER_VALUE` | the new value |
+| `LOG_VIEWER_FIELD` | the first key in `on_new_value` |
+| `LOG_VIEWER_TRIGGER` | the trigger's `name` |
+| `LOG_VIEWER_ENTRY` | the entry's full JSON |
+
+You can have multiple `[[triggers]]` blocks; each tracks its own set of
+seen values independently.
+
 ## Non-JSON lines
 
 Like [log-jsonify](../log-jsonify/), lines that don't parse as JSON are

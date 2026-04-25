@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import { parse as parseToml } from "smol-toml";
+import type { TriggerConfig } from "./triggers.js";
 
 /**
  * Configuration for log-viewer. The config file lives at
@@ -32,6 +33,7 @@ export interface FieldConfig {
 export interface Config {
   fields: FieldConfig[];
   defaultField: string;
+  triggers: TriggerConfig[];
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -41,6 +43,7 @@ export const DEFAULT_CONFIG: Config = {
     { name: "message", from: ["message", "msg", "@message"] },
   ],
   defaultField: "message",
+  triggers: [],
 };
 
 export class ConfigError extends Error {
@@ -74,7 +77,32 @@ export function parseConfig(toml: string): Config {
   const fields = parseFields(doc.fields) ?? DEFAULT_CONFIG.fields;
   const defaultField =
     typeof doc.default_field === "string" ? doc.default_field : DEFAULT_CONFIG.defaultField;
-  return { fields, defaultField };
+  const triggers = parseTriggers(doc.triggers);
+  return { fields, defaultField, triggers };
+}
+
+function parseTriggers(value: unknown): TriggerConfig[] {
+  if (!Array.isArray(value)) return [];
+  const out: TriggerConfig[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const action = typeof e.action === "string" ? e.action : null;
+    if (!action) continue;
+    const onNewValue = Array.isArray(e.on_new_value)
+      ? e.on_new_value.filter((v): v is string => typeof v === "string")
+      : typeof e.on_new_value === "string"
+        ? [e.on_new_value]
+        : [];
+    if (onNewValue.length === 0) continue;
+    const name = typeof e.name === "string" ? e.name : onNewValue[0]!;
+    const startupDelayMs =
+      typeof e.startup_delay_ms === "number" && e.startup_delay_ms >= 0
+        ? e.startup_delay_ms
+        : 0;
+    out.push({ name, onNewValue, action, startupDelayMs });
+  }
+  return out;
 }
 
 function parseFields(value: unknown): FieldConfig[] | null {
@@ -113,6 +141,18 @@ from = ["level", "severity", "lvl"]
 [[fields]]
 name = "message"
 from = ["message", "msg", "@message"]
+
+# Triggers run a shell command the first time a field takes on a new value.
+# Useful for noticing new pods, hosts, jobs, etc. in a streaming feed.
+# {value} and {field} are substituted (shell-quoted) into \`action\`.
+# \`startup_delay_ms\` suppresses the trigger for that long after startup so
+# values that already exist when log-viewer attaches don't fire it.
+#
+# [[triggers]]
+# name = "pod-deployed"
+# on_new_value = "podname"
+# action = "say new pod {value} deployed"
+# startup_delay_ms = 2000
 `;
 
 export function ensureConfigFile(path: string = configPath()): boolean {

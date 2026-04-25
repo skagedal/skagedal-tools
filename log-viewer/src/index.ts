@@ -3,6 +3,7 @@ import { existsSync } from "fs";
 import { cli, define } from "gunshi";
 import { configPath, ensureConfigFile, loadConfig } from "./config.js";
 import { startSource, type SourceSpec } from "./source.js";
+import { createTriggerRuntime } from "./triggers.js";
 import { runTui } from "./tui/index.js";
 import { runBrowser } from "./browser/server.js";
 
@@ -100,6 +101,12 @@ const main = define({
 
     const config = loadConfig();
     const source = startSource(spec, { defaultField: config.defaultField });
+
+    if (config.triggers.length > 0) {
+      const triggers = createTriggerRuntime(config.triggers);
+      triggers.start();
+      source.onEntry((entry) => triggers.handle(entry));
+    }
 
     if (values.browser) {
       await runBrowser({
