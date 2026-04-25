@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { spawnSync } from "child_process";
@@ -102,7 +102,7 @@ test("configPath: honors CLOUDWATCH_INSIGHTS_CONFIG and SKAGEDAL_TOOLS_HOME", ()
 });
 
 test("findGitRoot + resolveRepoDefaults work against a real git repo", () => {
-  const tmpRoot = mkdtempSync(join(tmpdir(), "cwi-test-"));
+  const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "cwi-test-")));
   try {
     const repoRoot = join(tmpRoot, "installer-notification");
     mkdirSync(repoRoot);
