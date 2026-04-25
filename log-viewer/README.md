@@ -75,7 +75,12 @@ log-viewer -b --exec ./examples/streaming-logs    # browser, live stream
 | `-p`, `--port <n>` | Port for the browser server (default `5173`). |
 | `--host <h>` | Host for the browser server (default `127.0.0.1`). |
 | `--no-open` | Skip auto-opening the browser (browser mode opens it by default). |
-| `--init-config` | Write a default config file if missing. |
+
+There's also one subcommand:
+
+| Subcommand | Description |
+|------------|-------------|
+| `log-viewer edit-config` | Create the config file if missing, then open it in `$EDITOR` (or `$VISUAL`). |
 
 If no input flag and no positional argument are given but stdin is piped,
 `log-viewer` reads stdin.
@@ -91,7 +96,8 @@ The config file lives at:
 Override the base directory with `SKAGEDAL_TOOLS_HOME`, or set
 `LOG_VIEWER_CONFIG` to point at a specific file.
 
-`log-viewer --init-config` creates the file with sensible defaults.
+`log-viewer edit-config` creates the file with sensible defaults if it
+doesn't exist yet, then opens it in `$EDITOR` (or `$VISUAL`).
 
 ```toml
 # Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.

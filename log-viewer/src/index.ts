@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from "fs";
+import { spawnSync } from "child_process";
 import { cli, define } from "gunshi";
 import { configPath, ensureConfigFile, loadConfig } from "./config.js";
 import { startSource, type SourceSpec } from "./source.js";
@@ -52,11 +53,6 @@ const main = define({
       description: "open the browser automatically in browser mode (use --no-open to suppress)",
       default: true,
     },
-    "init-config": {
-      type: "boolean",
-      description: "create the config file if missing and exit",
-      default: false,
-    },
   },
   run: async (ctx) => {
     const values = ctx.values as {
@@ -65,15 +61,7 @@ const main = define({
       port: number;
       host: string;
       open: boolean;
-      "init-config": boolean;
     };
-
-    if (values["init-config"]) {
-      const path = configPath();
-      const created = ensureConfigFile(path);
-      process.stdout.write(`${created ? "created" : "already exists"}: ${path}\n`);
-      return;
-    }
 
     if (values.file && execArgv) {
       fail("--file and --exec are mutually exclusive", 2);
@@ -129,6 +117,35 @@ const main = define({
   },
 });
 
+const editConfigCmd = define({
+  name: "edit-config",
+  description: "create the config file if missing and open it in $EDITOR",
+  args: {},
+  run: () => {
+    const path = configPath();
+    const created = ensureConfigFile(path);
+    if (created) process.stderr.write(`Created ${path}\n`);
+    openEditor(path);
+  },
+});
+
+function openEditor(path: string): void {
+  const editor = process.env.VISUAL || process.env.EDITOR;
+  if (!editor) {
+    fail("no editor set — define $EDITOR (or $VISUAL) and retry", 2);
+  }
+  const parts = editor.split(/\s+/).filter(Boolean);
+  const cmd = parts[0]!;
+  const args = [...parts.slice(1), path];
+  const result = spawnSync(cmd, args, { stdio: "inherit" });
+  if (result.error) {
+    fail(`failed to launch editor (${editor}): ${result.error.message}`, 1);
+  }
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status);
+  }
+}
+
 /**
  * Extract `--exec`/`-e` and the rest of argv that follows it. Everything from
  * the flag onward (after its value) is consumed as positional args to the
@@ -168,6 +185,10 @@ try {
     version: "1.0.0",
     description: DESCRIPTION,
     renderHeader: null,
+    fallbackToEntry: true,
+    subCommands: {
+      "edit-config": editConfigCmd,
+    },
   });
 } catch (err) {
   const message = err instanceof Error ? err.message : String(err);
