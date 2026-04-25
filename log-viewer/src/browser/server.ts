@@ -104,16 +104,38 @@ export async function runBrowser(opts: RunBrowserOptions): Promise<void> {
     });
   }
 
-  await new Promise<void>((resolve) => {
-    const stop = () => {
-      server.close();
-      vite.close();
-      opts.source.close();
-      resolve();
-    };
-    process.once("SIGINT", stop);
-    process.once("SIGTERM", stop);
-  });
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) {
+      // Second signal: bail immediately.
+      process.exit(130);
+    }
+    stopping = true;
+    for (const res of subscribers) {
+      try {
+        res.end();
+      } catch {
+        /* ignore */
+      }
+    }
+    subscribers.clear();
+    server.closeAllConnections?.();
+    // Hard cap so a stuck close() can't trap the user in the terminal.
+    const forceExit = setTimeout(() => process.exit(0), 1500);
+    forceExit.unref();
+    await Promise.allSettled([
+      new Promise<void>((r) => server.close(() => r())),
+      vite.close(),
+    ]);
+    opts.source.close();
+    clearTimeout(forceExit);
+    process.exit(0);
+  };
+  process.on("SIGINT", stop);
+  process.on("SIGTERM", stop);
+
+  // Park forever; stop() exits the process directly.
+  await new Promise<void>(() => {});
 }
 
 async function openBrowser(url: string): Promise<void> {
