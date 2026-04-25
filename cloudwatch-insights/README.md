@@ -15,7 +15,7 @@ Install globally using pnpm:
 pnpm link --global
 ```
 
-This builds the TypeScript source and installs the `cloudwatch-insights` command on your `PATH`. The `install.sh` at the repo root does the same for every tool in the repo.
+This builds the TypeScript source and installs the `cloudwatch-insights` command on your `PATH`. The `install` script at the repo root does the same for every tool in the repo.
 
 ## Subcommands
 

@@ -1,0 +1,76 @@
+# shellcheck shell=bash
+# Sourced by install and update. Expects SCRIPT_DIR to be set.
+
+NODE_TOOLS=(
+    cloudwatch-insights
+    comparison-typescript-cli-arguments
+    linear-notifications
+    log-viewer
+)
+
+RUST_TOOLS=(
+    gh-pr
+    git-dirty-checker
+    log-jsonify
+    x-java-home
+)
+
+MAVEN_TOOLS=(
+    git-repos-latest-activity
+)
+
+check-node() {
+    local dir="$1"
+    echo "==> Testing $dir"
+    (
+        cd "$SCRIPT_DIR/$dir"
+        pnpm install
+        if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test ? 0 : 1)"; then
+            pnpm test
+        else
+            echo "    (no test script defined, skipping)"
+        fi
+    )
+}
+
+check-rust() {
+    local dir="$1"
+    echo "==> Testing $dir"
+    (cd "$SCRIPT_DIR/$dir" && cargo test)
+}
+
+install-node() {
+    local dir="$1"
+    echo "==> Installing $dir"
+    (
+        cd "$SCRIPT_DIR/$dir"
+        pnpm install
+        pnpm run build
+        pnpm link --global
+    )
+}
+
+install-rust() {
+    local dir="$1"
+    echo "==> Installing $dir"
+    (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
+}
+
+update-node() {
+    local dir="$1"
+    echo "==> Updating $dir"
+    (cd "$SCRIPT_DIR/$dir" && pnpm update)
+}
+
+update-rust() {
+    local dir="$1"
+    echo "==> Updating $dir"
+    (cd "$SCRIPT_DIR/$dir" && cargo update)
+}
+
+update-maven() {
+    local dir="$1"
+    echo "==> Updating $dir"
+    (cd "$SCRIPT_DIR/$dir" && mvn versions:use-latest-releases)
+}
+

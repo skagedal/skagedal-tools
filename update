@@ -2,33 +2,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=shared.sh
+source "$SCRIPT_DIR/shared.sh"
 
-update-cargo() {
-    local dir="$1"
-    echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && cargo update)
+main() {
+    for tool in "${RUST_TOOLS[@]}"; do
+        update-rust "$tool"
+    done
+    for tool in "${NODE_TOOLS[@]}"; do
+        update-node "$tool"
+    done
+    for tool in "${MAVEN_TOOLS[@]}"; do
+        update-maven "$tool"
+    done
+    echo "==> Done"
 }
 
-update-pnpm() {
-    local dir="$1"
-    echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && pnpm update)
-}
-
-update-maven() {
-    local dir="$1"
-    echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && mvn versions:use-latest-releases)
-}
-
-update-cargo git-dirty-checker
-update-cargo log-jsonify
-update-cargo x-java-home
-
-update-pnpm linear-notifications
-update-pnpm comparison-typescript-cli-arguments
-update-pnpm cloudwatch-insights
-
-update-maven git-repos-latest-activity
-
-echo "==> Done"
+main "$@"

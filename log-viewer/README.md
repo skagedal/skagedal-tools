@@ -36,7 +36,7 @@ pnpm run build
 pnpm link --global
 ```
 
-The repo's `install.sh` does this for you.
+The repo's `install` script does this for you.
 
 ## Usage
 
