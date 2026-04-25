@@ -9,8 +9,8 @@
     "cloudwatch-insights": "dist/index.js"
   },
   scripts: {
-    "build": "json5 -c package.json5 && tsc",
-    "prepare": "json5 -c package.json5 && tsc",
+    "build": "tsc",
+    "prepare": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "tsx --test test/*.test.ts"
@@ -24,7 +24,6 @@
   },
   devDependencies: {
     "@types/node": "^22.19.17",
-    "json5": "^2.2.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },

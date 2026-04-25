@@ -25,11 +25,7 @@ check-node() {
     (
         cd "$SCRIPT_DIR/$dir"
         pnpm install
-        if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.test ? 0 : 1)"; then
-            pnpm test
-        else
-            echo "    (no test script defined, skipping)"
-        fi
+        pnpm test
     )
 }
 

@@ -52,14 +52,16 @@ All shell scripts in this repository must follow these guidelines:
 All Node.js/TypeScript projects in this repository must follow these guidelines:
 
 - Use **pnpm** as the package manager
-- The package manifest is `package.json5`, not `package.json`. The committed file
-  is JSON5 — it should start with a `// Manifest for <tool-name>` comment and use
-  unquoted top-level keys (`name`, `version`, `scripts`, …). pnpm reads
-  `package.json5` natively, but Node itself only reads `package.json`, so each
-  tool has a `prepare` script that runs `json5 -c package.json5` to generate a
-  `package.json` stub. The generated `package.json` is gitignored. `json5` must
-  be a `devDependencies` entry. When adding/removing scripts or deps, edit
-  `package.json5` only.
+- The package manifest is `package.json5`, not `package.json`. pnpm reads
+  `package.json5` natively. The file should start with a
+  `// Manifest for <tool-name>` comment and use unquoted top-level keys
+  (`name`, `version`, `scripts`, …). Nested keys stay quoted (many aren't
+  valid JS identifiers). No `package.json` is committed or generated — modern
+  Node (≥ 23) auto-detects ESM from `import`/`export` syntax, and tsx has its
+  own ESM detection, so the manifest stub isn't needed.
+- Every tool must have a `test` script. If there's nothing meaningful to test
+  yet, use `tsc --noEmit` as a baseline so `./install --check` exercises the
+  type-checker.
 - Set `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (4320 minutes = 3 days):
   ```yaml
   minimumReleaseAge: 4320
@@ -71,8 +73,10 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
   argument types, and supports shell completion via `@gunshi/plugin-completion`. Prefer
   it over commander/yargs/meow/citty for new tools. See `comparison-typescript-cli-arguments/src/gunshi.ts`
   for a reference setup, including subcommands and completion.
-  - gunshi is ESM-first and requires Node.js ≥ 20. Set `"type": "module"` in `package.json`
-    and use `"module": "NodeNext"` + `"moduleResolution": "NodeNext"` in `tsconfig.json`.
+  - gunshi is ESM-first and requires Node.js ≥ 20. Use `"module": "ESNext"` +
+    `"moduleResolution": "Bundler"` in `tsconfig.json` so tsc emits ESM unconditionally
+    without consulting `package.json`. Node ≥ 23 detects ESM from `import`/`export`
+    syntax at runtime, so no `"type": "module"` declaration is needed.
   - Pass `renderHeader: null` to `cli()` when you don't want the command description
     reprinted before every invocation.
 

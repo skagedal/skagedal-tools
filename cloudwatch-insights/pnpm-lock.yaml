@@ -27,9 +27,6 @@ importers:
       '@types/node':
         specifier: ^22.19.17
         version: 22.19.17
-      json5:
-        specifier: ^2.2.3
-        version: 2.2.3
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -545,11 +542,6 @@ packages:
   gunshi@0.29.4:
     resolution: {integrity: sha512-Dstvn5GzwR2OpYKJBjYY2YHs31J4d3ht0uKQCex2bLsOD63PmQZX59rYfk5wFhG95jmrVcwbyBzBnolkVDS5kg==}
     engines: {node: '>= 20'}
-
-  json5@2.2.3:
-    resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
-    engines: {node: '>=6'}
-    hasBin: true
 
   path-expression-matcher@1.5.0:
     resolution: {integrity: sha512-cbrerZV+6rvdQrrD+iGMcZFEiiSrbv9Tfdkvnusy6y0x0GKBXREFg/Y65GhIfm0tnLntThhzCnfKwp1WRjeCyQ==}
@@ -1388,8 +1380,6 @@ snapshots:
       resolve-pkg-maps: 1.0.0
 
   gunshi@0.29.4: {}
-
-  json5@2.2.3: {}
 
   path-expression-matcher@1.5.0: {}
 

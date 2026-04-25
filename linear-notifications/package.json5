@@ -8,15 +8,15 @@
     "linear-notifications": "dist/index.js"
   },
   scripts: {
-    "build": "json5 -c package.json5 && tsc",
-    "prepare": "json5 -c package.json5 && tsc",
+    "build": "tsc",
+    "prepare": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "ts-node src/index.ts",
+    "test": "tsc --noEmit"
   },
   devDependencies: {
     "@types/node": "^22.19.17",
     "@types/terminal-kit": "^2.5.7",
-    "json5": "^2.2.3",
     "typescript": "^5.9.3"
   },
   packageManager: "pnpm@10.33.0",
