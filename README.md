@@ -10,7 +10,9 @@ A collection of small tools.
 | [git-repos-latest-activity](git-repos-latest-activity/) | Lists git repositories sorted by date of latest commit |
 | [log-jsonify](log-jsonify/) | Processes JSONL streams, wrapping non-JSON lines in JSON envelopes |
 | [log-viewer](log-viewer/) | View JSONL logs in a TUI or browser with vi-like navigation and JSON drill-down |
-| [typescript-cli-arguments](typescript-cli-arguments/) | Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript |
+| [comparison-typescript-cli-arguments](comparison-typescript-cli-arguments/) | Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript |
+| [comparison-aws-emulation](comparison-aws-emulation/) | Comparison of tools for emulating AWS services locally (LocalStack, Moto, DynamoDB Local, MinIO, Adobe S3Mock) |
 | [x-java-home](x-java-home/) | A drop-in replacement for macOS java_home with JSON output support |
 | [linear-notifications](linear-notifications/) | Interactive CLI for viewing and opening unread Linear notifications |
 | [cloudwatch-insights](cloudwatch-insights/) | Download logs from AWS CloudWatch Logs Insights with a flexible time-range syntax |
+| [gh-pr](gh-pr/) | Manage GitHub pull requests for the current branch via the `gh` CLI |

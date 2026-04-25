@@ -26,7 +26,7 @@ update-cargo log-jsonify
 update-cargo x-java-home
 
 update-pnpm linear-notifications
-update-pnpm typescript-cli-arguments
+update-pnpm comparison-typescript-cli-arguments
 update-pnpm cloudwatch-insights
 
 update-maven git-repos-latest-activity
