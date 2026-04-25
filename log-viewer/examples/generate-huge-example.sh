@@ -59,13 +59,19 @@ STACK
 # Replace newlines with literal \n for embedding into a JSON string.
 stack_json="${stack//$'\n'/\\n}"
 
-epoch=$(date -u +%s)
-
 write-rows() {
     local i=0
     while (( i < rows )); do
         local ts level service method path host region pod duration status seq trace_id user_id
-        ts=$(printf '%(%Y-%m-%dT%H:%M:%S)T.%03dZ' $((epoch + i / 10)) $((i % 1000)))
+        # Synthesise an ISO-ish timestamp from i using only arithmetic, so this
+        # works on macOS bash 3.2 (no printf '%(...)T') and stays fast at high
+        # row counts (no per-row `date` fork).
+        local hh mm ss ms
+        hh=$(( (i / 3600) % 24 ))
+        mm=$(( (i / 60) % 60 ))
+        ss=$(( i % 60 ))
+        ms=$(( (i * 137) % 1000 ))
+        ts=$(printf '2026-04-25T%02d:%02d:%02d.%03dZ' "$hh" "$mm" "$ss" "$ms")
         level="${levels[$((RANDOM % ${#levels[@]}))]}"
         service="${services[$((RANDOM % ${#services[@]}))]}"
         method="${methods[$((RANDOM % ${#methods[@]}))]}"
