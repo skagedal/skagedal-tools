@@ -51,11 +51,11 @@ install-node() {
 install-rust() {
     local dir="$1"
     echo "==> Installing $dir"
-    (cd "$SCRIPT_DIR/$dir" && cargo install --path .)
+    (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
 }
 
 NODE_TOOLS=(linear-notifications cloudwatch-insights)
-RUST_TOOLS=(git-dirty-checker log-jsonify x-java-home)
+RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr x-java-home)
 
 if [[ $CHECK -eq 1 ]]; then
     for tool in "${NODE_TOOLS[@]}"; do
