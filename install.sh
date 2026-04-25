@@ -3,23 +3,71 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-CHECK=0
-REQUESTED_TOOLS=()
-for arg in "$@"; do
-    case "$arg" in
-        --check)
-            CHECK=1
-            ;;
-        -*)
-            echo "Unknown argument: $arg" >&2
-            echo "Usage: $0 [--check] [tool ...]" >&2
+NODE_TOOLS=(linear-notifications cloudwatch-insights log-viewer)
+RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr x-java-home)
+
+usage() {
+    echo "Usage: $0 [--check] [tool ...]" >&2
+}
+
+parse-args() {
+    CHECK=0
+    REQUESTED_TOOLS=()
+    for arg in "$@"; do
+        case "$arg" in
+            --check)
+                CHECK=1
+                ;;
+            -*)
+                echo "Unknown argument: $arg" >&2
+                usage
+                exit 1
+                ;;
+            *)
+                REQUESTED_TOOLS+=("$arg")
+                ;;
+        esac
+    done
+}
+
+tool-kind() {
+    local tool="$1"
+    for t in "${NODE_TOOLS[@]}"; do
+        if [[ "$t" == "$tool" ]]; then
+            echo "node"
+            return 0
+        fi
+    done
+    for t in "${RUST_TOOLS[@]}"; do
+        if [[ "$t" == "$tool" ]]; then
+            echo "rust"
+            return 0
+        fi
+    done
+    return 1
+}
+
+select-tools() {
+    SELECTED_NODE_TOOLS=()
+    SELECTED_RUST_TOOLS=()
+    if [[ ${#REQUESTED_TOOLS[@]} -eq 0 ]]; then
+        SELECTED_NODE_TOOLS=("${NODE_TOOLS[@]}")
+        SELECTED_RUST_TOOLS=("${RUST_TOOLS[@]}")
+        return
+    fi
+    for tool in "${REQUESTED_TOOLS[@]}"; do
+        local kind
+        kind="$(tool-kind "$tool")" || {
+            echo "Unknown tool: $tool" >&2
+            echo "Available tools: ${NODE_TOOLS[*]} ${RUST_TOOLS[*]}" >&2
             exit 1
-            ;;
-        *)
-            REQUESTED_TOOLS+=("$arg")
-            ;;
-    esac
-done
+        }
+        case "$kind" in
+            node) SELECTED_NODE_TOOLS+=("$tool") ;;
+            rust) SELECTED_RUST_TOOLS+=("$tool") ;;
+        esac
+    done
+}
 
 check-node() {
     local dir="$1"
@@ -58,59 +106,32 @@ install-rust() {
     (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
 }
 
-NODE_TOOLS=(linear-notifications cloudwatch-insights log-viewer)
-RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr x-java-home)
-
-tool-kind() {
-    local tool="$1"
-    for t in "${NODE_TOOLS[@]}"; do
-        if [[ "$t" == "$tool" ]]; then
-            echo "node"
-            return 0
-        fi
-    done
-    for t in "${RUST_TOOLS[@]}"; do
-        if [[ "$t" == "$tool" ]]; then
-            echo "rust"
-            return 0
-        fi
-    done
-    return 1
-}
-
-if [[ ${#REQUESTED_TOOLS[@]} -gt 0 ]]; then
-    SELECTED_NODE_TOOLS=()
-    SELECTED_RUST_TOOLS=()
-    for tool in "${REQUESTED_TOOLS[@]}"; do
-        kind="$(tool-kind "$tool")" || {
-            echo "Unknown tool: $tool" >&2
-            echo "Available tools: ${NODE_TOOLS[*]} ${RUST_TOOLS[*]}" >&2
-            exit 1
-        }
-        case "$kind" in
-            node) SELECTED_NODE_TOOLS+=("$tool") ;;
-            rust) SELECTED_RUST_TOOLS+=("$tool") ;;
-        esac
-    done
-else
-    SELECTED_NODE_TOOLS=("${NODE_TOOLS[@]}")
-    SELECTED_RUST_TOOLS=("${RUST_TOOLS[@]}")
-fi
-
-if [[ $CHECK -eq 1 ]]; then
-    for tool in "${SELECTED_NODE_TOOLS[@]}"; do
+run-checks() {
+    for tool in ${SELECTED_NODE_TOOLS[@]+"${SELECTED_NODE_TOOLS[@]}"}; do
         check-node "$tool"
     done
-    for tool in "${SELECTED_RUST_TOOLS[@]}"; do
+    for tool in ${SELECTED_RUST_TOOLS[@]+"${SELECTED_RUST_TOOLS[@]}"}; do
         check-rust "$tool"
     done
-fi
+}
 
-for tool in "${SELECTED_NODE_TOOLS[@]}"; do
-    install-node "$tool"
-done
-for tool in "${SELECTED_RUST_TOOLS[@]}"; do
-    install-rust "$tool"
-done
+run-installs() {
+    for tool in ${SELECTED_NODE_TOOLS[@]+"${SELECTED_NODE_TOOLS[@]}"}; do
+        install-node "$tool"
+    done
+    for tool in ${SELECTED_RUST_TOOLS[@]+"${SELECTED_RUST_TOOLS[@]}"}; do
+        install-rust "$tool"
+    done
+}
 
-echo "==> Done"
+main() {
+    parse-args "$@"
+    select-tools
+    if [[ $CHECK -eq 1 ]]; then
+        run-checks
+    fi
+    run-installs
+    echo "==> Done"
+}
+
+main "$@"
