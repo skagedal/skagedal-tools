@@ -17,29 +17,31 @@
     "check": "tsc --noEmit && pnpm lint"
   },
   dependencies: {
-    "@tanstack/react-table": "^8.21.3",
-    "@tanstack/react-virtual": "^3.13.24",
-    "@vitejs/plugin-react": "^4.7.0",
-    "clipboardy": "^5.3.1",
-    "gunshi": "^0.29.4",
-    "ink": "^5.2.1",
-    "json5": "^2.2.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "^5.4.21"
+    "@tanstack/react-table": "latest",
+    "@tanstack/react-virtual": "latest",
+    "@vitejs/plugin-react": "latest",
+    "clipboardy": "latest",
+    "gunshi": "latest",
+    "ink": "latest",
+    "json5": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
   },
   devDependencies: {
-    "@eslint/js": "^9.39.4",
-    "@types/node": "^22.19.17",
-    "@types/react": "^18.3.28",
-    "@types/react-dom": "^18.3.7",
-    "eslint": "^9.39.4",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.5.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.59.0"
+    // Pinned to ^9: eslint-plugin-react does not yet support eslint v10
+    // (peer is "^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7").
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint-plugin-react": "latest",
+    "eslint-plugin-react-hooks": "latest",
+    "globals": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "typescript-eslint": "latest"
   },
   packageManager: "pnpm@10.33.0"
 }

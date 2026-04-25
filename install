@@ -9,16 +9,16 @@ INSTALL_NODE_TOOLS=(linear-notifications cloudwatch-insights log-viewer)
 INSTALL_RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr x-java-home)
 
 usage() {
-    echo "Usage: $0 [--check] [tool ...]" >&2
+    echo "Usage: $0 [--no-check] [tool ...]" >&2
 }
 
 parse-args() {
-    CHECK=0
+    CHECK=1
     REQUESTED_TOOLS=()
     for arg in "$@"; do
         case "$arg" in
-            --check)
-                CHECK=1
+            --no-check)
+                CHECK=0
                 ;;
             -*)
                 echo "Unknown argument: $arg" >&2

@@ -91,20 +91,23 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   }, [source]);
 
   // Keep cursor in bounds as entries arrive; in follow mode, ride the tail.
-  useEffect(() => {
-    if (entries.length === 0) return;
-    if (follow) {
-      setCursor(entries.length - 1);
-    } else if (cursor >= entries.length) {
+  // Implemented as "adjust state during render" rather than a useEffect, since
+  // react-hooks/set-state-in-effect flags the equivalent effect.
+  const [prevTail, setPrevTail] = useState({ entriesLength: entries.length, follow });
+  if (entries.length !== prevTail.entriesLength || follow !== prevTail.follow) {
+    setPrevTail({ entriesLength: entries.length, follow });
+    if (entries.length > 0 && (follow || cursor >= entries.length)) {
       setCursor(entries.length - 1);
     }
-  }, [entries.length, cursor, follow]);
+  }
 
   // Reset detail-row cursor whenever we change entries or change view, so the
   // cursor doesn't carry over from a previous entry's field count.
-  useEffect(() => {
+  const [prevDetail, setPrevDetail] = useState({ view, cursor });
+  if (view !== prevDetail.view || cursor !== prevDetail.cursor) {
+    setPrevDetail({ view, cursor });
     setDetailCursor(0);
-  }, [view, cursor]);
+  }
 
   const totalRows = size.rows;
   const visible = Math.max(1, totalRows - 4);
@@ -241,7 +244,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
 
   const widths = useMemo(
     () => columnWidths(activeFields, entries, size.cols),
-    [activeFields, entries.length, size.cols],
+    [activeFields, entries, size.cols],
   );
   const start = Math.max(0, Math.min(cursor - Math.floor(visible / 2), entries.length - visible));
   const window = entries.slice(start, start + visible);

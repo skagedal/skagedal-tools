@@ -81,18 +81,16 @@ export default function App() {
   }, [entries]);
 
   // When the very first entry arrives, snap cursor to 0. In follow mode, keep
-  // the cursor pinned to the latest row as new entries land.
-  useEffect(() => {
-    if (entries.length === 0) return;
-    if (follow) {
-      setCursor(entries.length - 1);
-    } else if (cursor >= entries.length) {
+  // the cursor pinned to the latest row as new entries land. Implemented as
+  // "adjust state during render" rather than a useEffect — the equivalent
+  // effect would trip react-hooks/set-state-in-effect.
+  const [prevTail, setPrevTail] = useState({ entriesLength: entries.length, follow });
+  if (entries.length !== prevTail.entriesLength || follow !== prevTail.follow) {
+    setPrevTail({ entriesLength: entries.length, follow });
+    if (entries.length > 0 && (follow || cursor >= entries.length)) {
       setCursor(entries.length - 1);
     }
-    // We intentionally do not depend on cursor; this effect is about reacting
-    // to entry-count changes, not cursor moves.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries.length, follow]);
+  }
 
   const flash = useCallback((msg: string) => {
     setFlashMsg(msg);

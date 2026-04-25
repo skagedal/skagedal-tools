@@ -13,18 +13,18 @@
     "gunshi": "tsx src/gunshi.ts"
   },
   dependencies: {
-    "@gunshi/plugin-completion": "^0.29.4",
-    "citty": "^0.1.6",
-    "commander": "^12.1.0",
-    "gunshi": "^0.29.4",
-    "meow": "^13.2.0",
-    "yargs": "^17.7.2"
+    "@gunshi/plugin-completion": "latest",
+    "citty": "latest",
+    "commander": "latest",
+    "gunshi": "latest",
+    "meow": "latest",
+    "yargs": "latest"
   },
   devDependencies: {
-    "@types/node": "^22.19.17",
-    "@types/yargs": "^17.0.35",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "@types/node": "latest",
+    "@types/yargs": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
   },
   pnpm: {
     "ignoredBuiltDependencies": [

@@ -51,7 +51,8 @@ All shell scripts in this repository must follow these guidelines:
 
 All Node.js/TypeScript projects in this repository must follow these guidelines:
 
-- Use **pnpm** as the package manager
+- Use **pnpm** as the package manager. Use `pnpm dlx <pkg>` for one-off
+  invocations (do not use `npx`).
 - The package manifest is `package.json5`, not `package.json`. pnpm reads
   `package.json5` natively. The file should start with a
   `// Manifest for <tool-name>` comment and use unquoted top-level keys
