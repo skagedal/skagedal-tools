@@ -250,8 +250,9 @@ td.level-debug { color: var(--debug); }
 }
 
 .popover li {
+  position: relative;
   display: grid;
-  grid-template-columns: auto auto 1fr auto auto;
+  grid-template-columns: auto auto 1fr auto;
   gap: 6px;
   align-items: center;
   padding: 4px 6px;
@@ -266,14 +267,37 @@ td.level-debug { color: var(--debug); }
   cursor: default;
 }
 
-.popover li.dragging { opacity: 0.5; }
+.popover li.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
 
 .popover li:hover { border-color: var(--border); }
 
 .popover li .drag-handle {
   color: var(--dim);
+  font-size: 16px;
+  line-height: 1;
   user-select: none;
+  padding: 0 2px;
 }
+
+/* Drop indicators: a bright bar shows exactly where the dragged item will
+   land, above (drop-before) or below (drop-after) the target row. */
+.popover li.drop-before::before,
+.popover li.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.popover li.drop-before::before { top: -2px; }
+.popover li.drop-after::after { bottom: -2px; }
 
 .popover li .field-name { font-weight: 600; }
 .popover li .field-from { color: var(--dim); font-size: 12px; }

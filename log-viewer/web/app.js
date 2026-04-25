@@ -402,36 +402,39 @@ function renderFieldsList() {
       li.appendChild(hint);
     }
 
-    const up = document.createElement("button");
-    up.type = "button";
-    up.textContent = "↑";
-    up.title = "Move up";
-    up.disabled = i === 0;
-    up.addEventListener("click", () => moveField(i, -1));
-    li.appendChild(up);
-
-    const down = document.createElement("button");
-    down.type = "button";
-    down.textContent = "↓";
-    down.title = "Move down";
-    down.disabled = i === fields.length - 1;
-    down.addEventListener("click", () => moveField(i, +1));
-    li.appendChild(down);
-
     li.addEventListener("dragstart", (ev) => {
       ev.dataTransfer.effectAllowed = "move";
       ev.dataTransfer.setData("text/plain", String(i));
       li.classList.add("dragging");
     });
-    li.addEventListener("dragend", () => li.classList.remove("dragging"));
+    li.addEventListener("dragend", () => {
+      li.classList.remove("dragging");
+      clearDropIndicators();
+    });
     li.addEventListener("dragover", (ev) => {
       ev.preventDefault();
       ev.dataTransfer.dropEffect = "move";
+      const rect = li.getBoundingClientRect();
+      const before = ev.clientY < rect.top + rect.height / 2;
+      clearDropIndicators();
+      li.classList.add(before ? "drop-before" : "drop-after");
+    });
+    li.addEventListener("dragleave", (ev) => {
+      // Only clear if the pointer actually left this li (and not just moved
+      // onto a child element). relatedTarget being inside li means it's still
+      // hovering this li.
+      if (ev.relatedTarget && li.contains(ev.relatedTarget)) return;
+      li.classList.remove("drop-before", "drop-after");
     });
     li.addEventListener("drop", (ev) => {
       ev.preventDefault();
       const from = Number(ev.dataTransfer.getData("text/plain"));
-      const to = i;
+      const rect = li.getBoundingClientRect();
+      const before = ev.clientY < rect.top + rect.height / 2;
+      let to = i + (before ? 0 : 1);
+      // Account for removing `from` first when it's above the insertion point.
+      if (from < to) to -= 1;
+      clearDropIndicators();
       if (Number.isFinite(from) && from !== to) reorderField(from, to);
     });
 
@@ -445,14 +448,10 @@ function renderFieldsList() {
   }
 }
 
-function moveField(index, delta) {
-  const target = index + delta;
-  if (target < 0 || target >= fields.length) return;
-  const [item] = fields.splice(index, 1);
-  fields.splice(target, 0, item);
-  renderHeader();
-  renderRows();
-  renderFieldsList();
+function clearDropIndicators() {
+  for (const el of fieldsList.querySelectorAll(".drop-before, .drop-after")) {
+    el.classList.remove("drop-before", "drop-after");
+  }
 }
 
 function reorderField(from, to) {
