@@ -2,6 +2,8 @@
 
 Converts Protocol Buffers text format to JSON.
 
+**Note:** This tool is not well tested. Use with caution.
+
 ## Purpose
 
 When debugging protobuf-encoded data, you might use `protoc --decode` to get a human-readable text representation. This tool converts that text format into JSON, which is often more convenient for processing with tools like `jq`.
