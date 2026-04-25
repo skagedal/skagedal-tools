@@ -104,6 +104,14 @@ export function LogTable(props: Props) {
     getScrollElement: () => parentRef.current,
     estimateSize: (i) => (items[i]?.kind === "detail" ? 220 : 24),
     overscan: 24,
+    // Key by entry id + kind so measured sizes follow their item when the
+    // items array shifts (e.g. collapsing a detail row removes one item).
+    // Without this the cache is keyed by index and leaves a phantom gap.
+    getItemKey: (index) => {
+      const item = items[index];
+      if (!item) return index;
+      return `${item.kind}-${entries[item.entryIdx]!.id}`;
+    },
   });
 
   // Re-measure when columns change (their widths affect text wrapping → row heights).
