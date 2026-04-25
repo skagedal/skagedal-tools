@@ -52,6 +52,14 @@ All shell scripts in this repository must follow these guidelines:
 All Node.js/TypeScript projects in this repository must follow these guidelines:
 
 - Use **pnpm** as the package manager
+- The package manifest is `package.json5`, not `package.json`. The committed file
+  is JSON5 — it should start with a `// Manifest for <tool-name>` comment and use
+  unquoted top-level keys (`name`, `version`, `scripts`, …). pnpm reads
+  `package.json5` natively, but Node itself only reads `package.json`, so each
+  tool has a `prepare` script that runs `json5 -c package.json5` to generate a
+  `package.json` stub. The generated `package.json` is gitignored. `json5` must
+  be a `devDependencies` entry. When adding/removing scripts or deps, edit
+  `package.json5` only.
 - Set `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (4320 minutes = 3 days):
   ```yaml
   minimumReleaseAge: 4320
