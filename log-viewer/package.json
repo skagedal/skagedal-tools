@@ -17,8 +17,8 @@
     "clipboardy": "^5.3.1",
     "gunshi": "^0.29.4",
     "ink": "^5.2.0",
+    "json5": "^2.2.3",
     "react": "^18.3.1",
-    "smol-toml": "^1.6.1",
     "vite": "^5.4.10"
   },
   "devDependencies": {

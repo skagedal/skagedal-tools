@@ -1,27 +1,31 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
-import { parse as parseToml } from "smol-toml";
+import JSON5 from "json5";
 import type { TriggerConfig } from "./triggers.js";
 
 /**
  * Configuration for log-viewer. The config file lives at
- *   ~/.skagedal-tools/log-viewer/config.toml
+ *   ~/.skagedal-tools/log-viewer/config.json5
  * (override via $SKAGEDAL_TOOLS_HOME for tests, or $LOG_VIEWER_CONFIG for an
  * explicit path).
  *
+ * JSON5 lets the file have comments, trailing commas, and unquoted keys.
+ *
  * Example:
  *
- *   # Fields displayed in the log list, in order. The first that resolves to a
- *   # non-empty value wins per logical column.
- *   fields = [
- *     { name = "time", from = ["@timestamp", "ts", "time"] },
- *     { name = "level", from = ["level", "severity"] },
- *     { name = "message", from = ["message", "msg", "@message"] },
- *   ]
+ *   {
+ *     // Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.
+ *     default_field: "message",
  *
- *   # Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.
- *   default_field = "message"
+ *     // Columns shown in the log list. The first \`from\` key with a non-empty
+ *     // value wins per logical column.
+ *     fields: [
+ *       { name: "time", from: ["@timestamp", "ts", "time"] },
+ *       { name: "level", from: ["level", "severity"] },
+ *       { name: "message", from: ["message", "msg", "@message"] },
+ *     ],
+ *   }
  */
 export interface FieldConfig {
   /** Display name (column header). */
@@ -56,7 +60,7 @@ export class ConfigError extends Error {
 export function configPath(env: NodeJS.ProcessEnv = process.env): string {
   if (env.LOG_VIEWER_CONFIG) return env.LOG_VIEWER_CONFIG;
   const base = env.SKAGEDAL_TOOLS_HOME || join(homedir(), ".skagedal-tools");
-  return join(base, "log-viewer", "config.toml");
+  return join(base, "log-viewer", "config.json5");
 }
 
 export function loadConfig(path: string = configPath()): Config {
@@ -65,13 +69,18 @@ export function loadConfig(path: string = configPath()): Config {
   return parseConfig(raw);
 }
 
-export function parseConfig(toml: string): Config {
+export function parseConfig(source: string): Config {
   let doc: Record<string, unknown>;
   try {
-    doc = parseToml(toml) as Record<string, unknown>;
+    const parsed = JSON5.parse(source);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new ConfigError("config.json5 must be a JSON5 object at the top level");
+    }
+    doc = parsed as Record<string, unknown>;
   } catch (err) {
+    if (err instanceof ConfigError) throw err;
     const message = err instanceof Error ? err.message : String(err);
-    throw new ConfigError(`failed to parse config.toml: ${message}`);
+    throw new ConfigError(`failed to parse config.json5: ${message}`);
   }
 
   const fields = parseFields(doc.fields) ?? DEFAULT_CONFIG.fields;
@@ -122,37 +131,33 @@ function parseFields(value: unknown): FieldConfig[] | null {
   return out.length > 0 ? out : null;
 }
 
-const TEMPLATE = `# log-viewer config
-#
-# Each entry in \`fields\` is a column shown in the log list. \`from\` lists
-# candidate keys to read from each JSON entry; the first one with a non-empty
-# value wins.
+const TEMPLATE = `// log-viewer config (JSON5: comments, trailing commas, unquoted keys ok)
+{
+  // Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.
+  default_field: "message",
 
-default_field = "message"
+  // Each entry is a column shown in the log list. \`from\` lists candidate keys
+  // to read from each JSON entry; the first one with a non-empty value wins.
+  fields: [
+    { name: "time",    from: ["@timestamp", "timestamp", "time", "ts"] },
+    { name: "level",   from: ["level", "severity", "lvl"] },
+    { name: "message", from: ["message", "msg", "@message"] },
+  ],
 
-[[fields]]
-name = "time"
-from = ["@timestamp", "timestamp", "time", "ts"]
-
-[[fields]]
-name = "level"
-from = ["level", "severity", "lvl"]
-
-[[fields]]
-name = "message"
-from = ["message", "msg", "@message"]
-
-# Triggers run a shell command the first time a field takes on a new value.
-# Useful for noticing new pods, hosts, jobs, etc. in a streaming feed.
-# {value} and {field} are substituted (shell-quoted) into \`action\`.
-# \`startup_delay_ms\` suppresses the trigger for that long after startup so
-# values that already exist when log-viewer attaches don't fire it.
-#
-# [[triggers]]
-# name = "pod-deployed"
-# on_new_value = "podname"
-# action = "say new pod {value} deployed"
-# startup_delay_ms = 2000
+  // Triggers run a shell command the first time a field takes on a new value.
+  // Useful for noticing new pods, hosts, jobs, etc. in a streaming feed.
+  // {value} and {field} are substituted (shell-quoted) into \`action\`.
+  // \`startup_delay_ms\` suppresses the trigger for that long after startup so
+  // values that already exist when log-viewer attaches don't fire it.
+  triggers: [
+    // {
+    //   name: "pod-deployed",
+    //   on_new_value: "podname",
+    //   action: "say new pod {value} deployed",
+    //   startup_delay_ms: 2000,
+    // },
+  ],
+}
 `;
 
 export function ensureConfigFile(path: string = configPath()): boolean {

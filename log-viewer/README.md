@@ -87,10 +87,11 @@ If no input flag and no positional argument are given but stdin is piped,
 
 ## Configuration
 
-The config file lives at:
+The config file is JSON5 (comments, trailing commas, and unquoted keys
+are fine) and lives at:
 
 ```
-~/.skagedal-tools/log-viewer/config.toml
+~/.skagedal-tools/log-viewer/config.json5
 ```
 
 Override the base directory with `SKAGEDAL_TOOLS_HOME`, or set
@@ -99,23 +100,19 @@ Override the base directory with `SKAGEDAL_TOOLS_HOME`, or set
 `log-viewer edit-config` creates the file with sensible defaults if it
 doesn't exist yet, then opens it in `$EDITOR` (or `$VISUAL`).
 
-```toml
-# Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.
-default_field = "message"
+```json5
+{
+  // Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.
+  default_field: "message",
 
-# Each [[fields]] block is a column shown in the log list. The first key
-# in `from` that resolves to a non-empty value on a given entry wins.
-[[fields]]
-name = "time"
-from = ["@timestamp", "timestamp", "time", "ts"]
-
-[[fields]]
-name = "level"
-from = ["level", "severity", "lvl"]
-
-[[fields]]
-name = "message"
-from = ["message", "msg", "@message"]
+  // Each entry is a column shown in the log list. `from` lists candidate keys
+  // to read from each JSON entry; the first one with a non-empty value wins.
+  fields: [
+    { name: "time",    from: ["@timestamp", "timestamp", "time", "ts"] },
+    { name: "level",   from: ["level", "severity", "lvl"] },
+    { name: "message", from: ["message", "msg", "@message"] },
+  ],
+}
 ```
 
 ## Triggers
@@ -124,12 +121,17 @@ A trigger runs a shell command the first time a configured field takes
 on a value `log-viewer` hasn't seen before. The motivating use case is
 "make a sound when a new pod is deployed":
 
-```toml
-[[triggers]]
-name = "pod-deployed"
-on_new_value = "podname"
-action = "say new pod {value} deployed"
-startup_delay_ms = 2000
+```json5
+{
+  triggers: [
+    {
+      name: "pod-deployed",
+      on_new_value: "podname",
+      action: "say new pod {value} deployed",
+      startup_delay_ms: 2000,
+    },
+  ],
+}
 ```
 
 - `on_new_value` is the field to watch (a string, or a list of
