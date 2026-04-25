@@ -17,7 +17,7 @@ install-node() {
 install-rust() {
     local dir="$1"
     echo "==> Installing $dir"
-    (cd "$SCRIPT_DIR/$dir" && cargo install --path .)
+    (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
 }
 
 install-node linear-notifications

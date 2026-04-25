@@ -51,3 +51,16 @@ agents that want to consume comment data programmatically.
 
 Marks the PR for the current branch as ready for review (i.e. takes it out of
 draft state).
+
+## Testing
+
+```bash
+cargo test
+```
+
+The integration tests in `tests/integration.rs` exercise the tool end-to-end
+by putting a small mock `gh` (`src/bin/mock-gh.rs`) onto `PATH`. The mock
+covers just the `gh` surface this tool uses; its behavior is configured via
+`MOCK_GH_*` environment variables (see the doc comment at the top of
+`mock-gh.rs`). The mock is excluded from `cargo install`, which only installs
+the `pr` binary.
