@@ -1,5 +1,5 @@
 {
-  "name": "typescript-cli-arguments",
+  "name": "comparison-typescript-cli-arguments",
   "version": "1.0.0",
   "description": "Comparison of CLI argument parsing libraries for Node.js/TypeScript",
   "type": "module",
