@@ -2,8 +2,8 @@
 # Periodically emit fake log lines on stdout. Mostly JSONL, with the
 # occasional plain-text line so you can see how log-viewer handles those.
 #
-#   log-viewer -c ./examples/streaming-logs
-#   log-viewer -b -c ./examples/streaming-logs
+#   log-viewer --exec ./examples/streaming-logs
+#   log-viewer -b --exec ./examples/streaming-logs
 set -euo pipefail
 
 interval="${INTERVAL:-0.4}"

@@ -37,12 +37,13 @@ log-viewer app.jsonl
 # TUI from stdin (-f -)
 some-command | log-viewer -f -
 
-# TUI from a streaming command
-log-viewer --command "kubectl logs -f my-pod"
+# TUI from a streaming command — every argv after the command is passed through
+log-viewer --exec kubectl logs -f my-pod
 
 # Browser mode — prints a localhost URL
 log-viewer --browser app.jsonl
-log-viewer -b -c "kubectl logs -f my-pod" --port 5174 --open
+log-viewer -b --exec kubectl logs -f my-pod --port 5174    # ⚠ flags AFTER --exec go to kubectl, not log-viewer
+log-viewer -b --port 5174 --exec kubectl logs -f my-pod    # put log-viewer flags BEFORE --exec
 ```
 
 ## Examples
@@ -60,8 +61,8 @@ The [`examples/`](examples/) folder ships ready-to-go input:
 # From the log-viewer/ directory:
 log-viewer examples/sample.jsonl                  # TUI, file
 log-viewer -b examples/sample.jsonl               # browser, file
-log-viewer -c ./examples/streaming-logs           # TUI, live stream
-log-viewer -b -c ./examples/streaming-logs        # browser, live stream
+log-viewer --exec ./examples/streaming-logs       # TUI, live stream
+log-viewer -b --exec ./examples/streaming-logs    # browser, live stream
 ```
 
 ### Flags
@@ -69,7 +70,7 @@ log-viewer -b -c ./examples/streaming-logs        # browser, live stream
 | Flag | Description |
 |------|-------------|
 | `-f`, `--file <path>` | Read JSONL from a file. Use `-` for stdin. |
-| `-c`, `--command "<cmd>"` | Run an executable; its stdout is parsed as JSONL. |
+| `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. **Every argv after the command is forwarded to it**, so `--exec kubectl logs -f my-pod` runs `kubectl logs -f my-pod`. Put log-viewer's own flags before `--exec`. |
 | `-b`, `--browser` | Start the browser app instead of the TUI. |
 | `-p`, `--port <n>` | Port for the browser server (default `5173`). |
 | `--host <h>` | Host for the browser server (default `127.0.0.1`). |
