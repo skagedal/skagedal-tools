@@ -294,6 +294,7 @@ In the detail view:
 |-----|--------|
 | `j` / `↓` | Move down (entry header → first field → next field, …) |
 | `k` / `↑` | Move up |
+| `n` / `p` | Next / previous entry (stay in detail) |
 | `c` | Copy the selected field's value, or the full JSON when the entry header is selected |
 | `t` | Toggle visibility of the selected field in the main list |
 | `v` | Open the fields menu |
@@ -307,7 +308,7 @@ In the fields menu:
 
 | Key | Action |
 |-----|--------|
-| `j` / `↓`, `k` / `↑` | Move the cursor |
+| `j` / `↓`, `k` / `↑` / `u` | Move the cursor |
 | `space` / `t` | Toggle the highlighted field's visibility |
 | `J` / `K` | Move the highlighted field down / up in the column order |
 | `v` / `q` / `Esc` | Close the menu |

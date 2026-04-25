@@ -39,6 +39,19 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   const [fields, setFields] = useState<ManagedField[]>(() =>
     config.fields.map((f) => ({ name: f.name, from: [...f.from], visible: true })),
   );
+  const [size, setSize] = useState<{ rows: number; cols: number }>(() => ({
+    rows: stdout?.rows ?? 24,
+    cols: stdout?.columns ?? 100,
+  }));
+
+  useEffect(() => {
+    if (!stdout) return;
+    const onResize = () => setSize({ rows: stdout.rows, cols: stdout.columns });
+    stdout.on("resize", onResize);
+    return () => {
+      stdout.off("resize", onResize);
+    };
+  }, [stdout]);
 
   useEffect(() => {
     source.onEntry((entry) => {
@@ -65,7 +78,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     setDetailCursor(0);
   }, [view, cursor]);
 
-  const totalRows = stdout?.rows ?? 24;
+  const totalRows = size.rows;
   const visible = Math.max(1, totalRows - 4);
   const activeFields = useMemo(() => visibleFieldConfigs(fields), [fields]);
 
@@ -79,7 +92,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         setMenuCursor((c) => Math.min(fields.length - 1, c + 1));
         return;
       }
-      if (input === "k" || key.upArrow) {
+      if (input === "k" || key.upArrow || input === "u") {
         setMenuCursor((c) => Math.max(0, c - 1));
         return;
       }
@@ -114,6 +127,14 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
       }
       if (input === "k" || key.upArrow) {
         setDetailCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (input === "n") {
+        setCursor((c) => Math.min(entries.length - 1, c + 1));
+        return;
+      }
+      if (input === "p") {
+        setCursor((c) => Math.max(0, c - 1));
         return;
       }
       if (input === "v") {
@@ -191,8 +212,8 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   });
 
   const widths = useMemo(
-    () => columnWidths(activeFields, entries, stdout?.columns ?? 100),
-    [activeFields, entries.length, stdout?.columns],
+    () => columnWidths(activeFields, entries, size.cols),
+    [activeFields, entries.length, size.cols],
   );
   const start = Math.max(0, Math.min(cursor - Math.floor(visible / 2), entries.length - visible));
   const window = entries.slice(start, start + visible);
@@ -216,13 +237,13 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         fields={fields}
         cursor={detailCursor}
         flash={flash}
-        width={stdout?.columns ?? 100}
+        width={size.cols}
       />
     );
   }
 
   return (
-    <Box flexDirection="column" height={totalRows} width={stdout?.columns}>
+    <Box flexDirection="column" height={totalRows} width={size.cols}>
       <Header
         fields={activeFields}
         widths={widths}
@@ -369,7 +390,7 @@ const Detail: React.FC<{
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          j/k field · u/esc back · t toggle visibility · c copy · v fields menu
+          j/k field · n/p next/prev entry · u/esc back · t toggle visibility · c copy · v fields menu
           {flash ? `  ·  ${flash}` : ""}
         </Text>
       </Box>
@@ -442,7 +463,7 @@ const FieldsMenu: React.FC<{
       </Box>
       <Box marginTop={1}>
         <Text dimColor>
-          j/k move · space/t toggle · J/K reorder · v/q/esc back
+          j/k (or u) move · space/t toggle · J/K reorder · v/q/esc back
           {flash ? `  ·  ${flash}` : ""}
         </Text>
       </Box>
