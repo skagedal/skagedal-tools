@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/shared.sh"
 
 INSTALL_NODE_TOOLS=(linear-notifications cloudwatch-insights log-viewer)
-INSTALL_RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr x-java-home)
+INSTALL_RUST_TOOLS=(git-dirty-checker log-jsonify gh-pr sync-brewfile x-java-home)
 
 usage() {
     echo "Usage: $0 [--no-check] [tool ...]" >&2

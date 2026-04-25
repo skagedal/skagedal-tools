@@ -12,6 +12,8 @@ RUST_TOOLS=(
     gh-pr
     git-dirty-checker
     log-jsonify
+    protobuf-text-to-json
+    sync-brewfile
     x-java-home
 )
 
