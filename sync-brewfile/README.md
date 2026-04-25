@@ -3,17 +3,27 @@
 Reconcile locally installed Homebrew packages against a Brewfile.
 
 For every formula installed on request (`brew leaves --installed-on-request`)
-and every cask (`brew list --cask`) that is not declared in your Brewfile, you
-are prompted with three options:
+and every cask (`brew list --cask`) that is not declared in your Brewfile, the
+package's name (linked to its homepage) and description are shown along with
+an interactive menu:
 
-1. **Add to Brewfile** — append a `brew "name"` or `cask "name"` line.
-2. **Uninstall** — run `brew uninstall [--cask] <name>`.
-3. **Keep evaluating** — do nothing and move on.
+- **Add to Brewfile** — append a `brew "name"` or `cask "name"` line.
+- **Uninstall** — run `brew uninstall [--cask] <name>`.
+- **Skip** — do nothing and move on.
+- **Quit** — exit `sync-brewfile`.
+
+### Keys
+
+- `j` / `k` (or arrow keys) — move the highlight up/down.
+- `Enter` — confirm the highlighted option.
+- `a` / `d` / `s` / `q` — pick Add / unInstall (Delete) / Skip / Quit directly.
+- `Esc` / `Ctrl+C` — also quit.
 
 ## Usage
 
 ```sh
-sync-brewfile ~/code/dotfiles/Brewfile
+sync-brewfile path/to/Brewfile          # interactive mode
+sync-brewfile --list path/to/Brewfile   # just print the extras and exit
 ```
 
 ## Notes
