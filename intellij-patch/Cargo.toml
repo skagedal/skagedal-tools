@@ -1,0 +1,19 @@
+[package]
+name = "intellij-patch"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "intellij-patch"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+xmltree = { version = "0.12", features = ["attribute-order"] }
+shellexpand = "3"
+
+[dev-dependencies]
+tempfile = "3"

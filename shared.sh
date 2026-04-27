@@ -11,6 +11,7 @@ NODE_TOOLS=(
 RUST_TOOLS=(
     gh-pr
     git-dirty-checker
+    intellij-patch
     log-jsonify
     protobuf-text-to-json
     sync-brewfile
