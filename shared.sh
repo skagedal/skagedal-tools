@@ -5,7 +5,6 @@ INSTALLED_NODE_TOOLS=(
     cloudwatch-insights
     linear-notifications
     log-viewer
-    package-json-merge
 )
 
 NOT_INSTALLED_NODE_TOOLS=(
@@ -22,6 +21,7 @@ INSTALLED_RUST_TOOLS=(
     git-dirty-checker
     intellij-patch
     log-jsonify
+    package-json-merge
     sync-brewfile
     x-java-home
 )

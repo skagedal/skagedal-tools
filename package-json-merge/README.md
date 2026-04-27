@@ -112,8 +112,9 @@ To compare against the fallback behavior, run `package-json-merge uninstall` in
 
 ## Limitations
 
-- Only operates on files matched by `package.json` in `.gitattributes`. If you
-  use `package.json5` or another manifest format, you can add it manually.
+- Operates on standard JSON `package.json` only. `package.json5` isn't
+  supported because round-tripping while preserving comments and unquoted keys
+  isn't something the available JSON5 parsers do.
 - Doesn't try to merge inside `scripts`, `engines`, or other non-dep objects
   beyond a basic 3-way comparison.
 - "Higher minVersion wins" is a heuristic. It can pull in a major bump that one
