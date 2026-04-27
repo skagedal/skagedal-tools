@@ -5,9 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=shared.sh
 source "$SCRIPT_DIR/shared.sh"
 
-INSTALL_NODE_TOOLS=(linear-notifications cloudwatch-insights log-viewer)
-INSTALL_RUST_TOOLS=(git-dirty-checker intellij-patch log-jsonify gh-pr sync-brewfile x-java-home)
-
 usage() {
     echo "Usage: $0 [--no-check] [tool ...]" >&2
 }
@@ -34,13 +31,13 @@ parse-args() {
 
 tool-kind() {
     local tool="$1"
-    for t in "${INSTALL_NODE_TOOLS[@]}"; do
+    for t in "${INSTALLED_NODE_TOOLS[@]}"; do
         if [[ "$t" == "$tool" ]]; then
             echo "node"
             return 0
         fi
     done
-    for t in "${INSTALL_RUST_TOOLS[@]}"; do
+    for t in "${INSTALLED_RUST_TOOLS[@]}"; do
         if [[ "$t" == "$tool" ]]; then
             echo "rust"
             return 0
@@ -53,15 +50,15 @@ select-tools() {
     SELECTED_NODE_TOOLS=()
     SELECTED_RUST_TOOLS=()
     if [[ ${#REQUESTED_TOOLS[@]} -eq 0 ]]; then
-        SELECTED_NODE_TOOLS=("${INSTALL_NODE_TOOLS[@]}")
-        SELECTED_RUST_TOOLS=("${INSTALL_RUST_TOOLS[@]}")
+        SELECTED_NODE_TOOLS=("${INSTALLED_NODE_TOOLS[@]}")
+        SELECTED_RUST_TOOLS=("${INSTALLED_RUST_TOOLS[@]}")
         return
     fi
     for tool in "${REQUESTED_TOOLS[@]}"; do
         local kind
         kind="$(tool-kind "$tool")" || {
             echo "Unknown tool: $tool" >&2
-            echo "Available tools: ${INSTALL_NODE_TOOLS[*]} ${INSTALL_RUST_TOOLS[*]}" >&2
+            echo "Available tools: ${INSTALLED_NODE_TOOLS[*]} ${INSTALLED_RUST_TOOLS[*]}" >&2
             exit 1
         }
         case "$kind" in

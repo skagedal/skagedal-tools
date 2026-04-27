@@ -1,21 +1,38 @@
 # shellcheck shell=bash
 # Sourced by install and update. Expects SCRIPT_DIR to be set.
 
-NODE_TOOLS=(
+INSTALLED_NODE_TOOLS=(
     cloudwatch-insights
-    comparison-typescript-cli-arguments
     linear-notifications
     log-viewer
+    package-json-merge
 )
 
-RUST_TOOLS=(
+NOT_INSTALLED_NODE_TOOLS=(
+    comparison-typescript-cli-arguments
+)
+
+NODE_TOOLS=(
+    "${INSTALLED_NODE_TOOLS[@]}"
+    "${NOT_INSTALLED_NODE_TOOLS[@]}"
+)
+
+INSTALLED_RUST_TOOLS=(
     gh-pr
     git-dirty-checker
     intellij-patch
     log-jsonify
-    protobuf-text-to-json
     sync-brewfile
     x-java-home
+)
+
+NOT_INSTALLED_RUST_TOOLS=(
+    protobuf-text-to-json
+)
+
+RUST_TOOLS=(
+    "${INSTALLED_RUST_TOOLS[@]}"
+    "${NOT_INSTALLED_RUST_TOOLS[@]}"
 )
 
 MAVEN_TOOLS=(
