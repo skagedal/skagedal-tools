@@ -33,5 +33,5 @@ sync-brewfile --list path/to/Brewfile   # just print the extras and exit
 - Brewfile parsing is line-based and recognises `brew "..."` and `cask "..."`
   with optional trailing options (`brew "git", restart_service: :changed`).
   Other directives (`tap`, `mas`, `vscode`, …) are left alone.
-- New entries are appended to the end of the Brewfile. Re-organise by hand if
-  you want them grouped.
+- The tool tries to place entries in a sensible location. Brews among brews
+  and casks among casks, alphabetically sorted.
