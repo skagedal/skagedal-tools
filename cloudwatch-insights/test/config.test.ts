@@ -6,11 +6,11 @@ import { join } from "path";
 import { spawnSync } from "child_process";
 
 import {
-  applyEnvironment,
   ConfigError,
   configPath,
   defaultQuery,
   ensureConfigFile,
+  expandTemplate,
   findGitRoot,
   isValidEnvironmentName,
   loadSettings,
@@ -175,23 +175,37 @@ test("parseSettings: filters non-string entries from flatten-fields", () => {
   assert.deepEqual(settings.defaults.flattenFields, ["@message", "context"]);
 });
 
-test("applyEnvironment: substitutes {env} and passes through otherwise", () => {
-  assert.equal(applyEnvironment("/prod/team", undefined), "/prod/team");
-  assert.equal(applyEnvironment("/{env}/team", "systest"), "/systest/team");
-  assert.equal(applyEnvironment("/{env}/team/{env}", "uat"), "/uat/team/uat");
+test("expandTemplate: substitutes {{ name }} placeholders with whitespace tolerance", () => {
+  assert.equal(expandTemplate("/prod/team", { env: "x" }), "/prod/team");
+  assert.equal(
+    expandTemplate("/{{ env }}/team", { env: "systest" }),
+    "/systest/team",
+  );
+  assert.equal(
+    expandTemplate("/{{env}}/{{  env  }}", { env: "uat" }),
+    "/uat/uat",
+  );
+  assert.equal(
+    expandTemplate("/{{ env }}/{{ app }}", { env: "prod", app: "svc" }),
+    "/prod/svc",
+  );
 });
 
-test("applyEnvironment: errors when template uses {env} but env is missing", () => {
-  assert.throws(() => applyEnvironment("/{env}/team", undefined), ConfigError);
+test("expandTemplate: errors when a referenced placeholder has no value", () => {
+  assert.throws(() => expandTemplate("/{{ env }}/team", {}), ConfigError);
+  assert.throws(
+    () => expandTemplate("filter app = '{{ app }}'", { env: "prod" }),
+    ConfigError,
+  );
 });
 
-test("defaultQuery: substitutes {app} placeholder", () => {
+test("defaultQuery: keeps {{ app }} placeholder unexpanded when app is configured", () => {
   assert.equal(
     defaultQuery("my-service"),
     [
       "fields @timestamp, @message",
       "| sort @timestamp desc",
-      "| filter app = 'my-service'",
+      "| filter app = '{{ app }}'",
       "| filter level in ['WARN', 'ERROR']",
       "| limit 200",
     ].join("\n"),

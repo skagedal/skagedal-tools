@@ -20,8 +20,7 @@
     "@aws-sdk/client-cloudwatch-logs": "latest",
     "chrono-node": "latest",
     "gunshi": "latest",
-    "smol-toml": "latest",
-    "yaml": "latest"
+    "smol-toml": "latest"
   },
   devDependencies: {
     "@types/node": "latest",

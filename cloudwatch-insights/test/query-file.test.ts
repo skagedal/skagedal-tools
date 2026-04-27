@@ -22,12 +22,11 @@ test("parseQueryFile: no front-matter — whole file is body", () => {
   assert.equal(body, "fields @timestamp, @message | sort @timestamp desc");
 });
 
-test("parseQueryFile: YAML front-matter with time and logGroup", () => {
+test("parseQueryFile: TOML front-matter with time and log-group", () => {
   const { frontMatter, body } = parseQueryFile(
     [
-      "---",
-      "time: 5h",
-      "logGroup: /prod/team",
+      'time = "5h"',
+      'log-group = "/prod/team"',
       "---",
       "fields @timestamp, @message",
       "| sort @timestamp desc",
@@ -36,42 +35,43 @@ test("parseQueryFile: YAML front-matter with time and logGroup", () => {
   );
   assert.deepEqual(frontMatter, {
     time: "5h",
-    logGroup: "/prod/team",
+    "log-group": "/prod/team",
   });
   assert.equal(body, "fields @timestamp, @message\n| sort @timestamp desc");
 });
 
-test("parseQueryFile: front-matter logGroup can be an array", () => {
+test("parseQueryFile: front-matter log-group can be an array", () => {
   const { frontMatter } = parseQueryFile(
-    "---\nlogGroup:\n  - /a\n  - /b\n---\nfields @timestamp",
+    'log-group = ["/a", "/b"]\n---\nfields @timestamp',
   );
-  assert.deepEqual(frontMatter.logGroup, ["/a", "/b"]);
+  assert.deepEqual(frontMatter["log-group"], ["/a", "/b"]);
 });
 
-test("parseQueryFile: unterminated front-matter treated as body", () => {
-  const raw = "---\ntime: 5h\nfields @timestamp, @message";
+test("parseQueryFile: missing separator treated as body", () => {
+  const raw = 'time = "5h"\nfields @timestamp, @message';
   const { frontMatter, body } = parseQueryFile(raw);
   assert.deepEqual(frontMatter, {});
   assert.equal(body, raw);
 });
 
-test("parseQueryFile: empty front-matter block is valid (no keys)", () => {
-  const { frontMatter, body } = parseQueryFile("---\n---\nfields @timestamp");
+test("parseQueryFile: empty front-matter is valid (no keys)", () => {
+  const { frontMatter, body } = parseQueryFile("---\nfields @timestamp");
   assert.deepEqual(frontMatter, {});
   assert.equal(body, "fields @timestamp");
 });
 
-test("ensureCurrentInsights: seeds with the new default template + app filter", () => {
+test("ensureCurrentInsights: seeds with the default template, leaving {{ app }} unexpanded", () => {
   const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-"));
   try {
     const path = join(tmp, "current.insights");
     const created = ensureCurrentInsights(path, { app: "my-service" });
     assert.equal(created, true);
     const parsed = loadQueryFile(path);
-    assert.match(parsed.body, /filter app = 'my-service'/);
+    assert.match(parsed.body, /filter app = '\{\{ app \}\}'/);
+    assert.doesNotMatch(parsed.body, /filter app = 'my-service'/);
     assert.match(parsed.body, /filter level in \['WARN', 'ERROR'\]/);
     assert.match(parsed.body, /limit 200/);
-    assert.match(readFileSync(path, "utf8"), /^---\n/);
+    assert.match(readFileSync(path, "utf8"), /(^|\n)---\n/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -96,28 +96,29 @@ test("ensureCurrentInsights: pre-fills front-matter with provided values", () =>
     const path = join(tmp, "current.insights");
     ensureCurrentInsights(path, {
       app: "svc",
-      frontMatter: { time: "5h", environment: "prod", logGroup: "/{env}/logs" },
+      frontMatter: { time: "5h", env: "prod", app: "svc", "log-group": "/{{ env }}/logs" },
     });
     const parsed = loadQueryFile(path);
     assert.deepEqual(parsed.frontMatter, {
       time: "5h",
-      environment: "prod",
-      logGroup: "/{env}/logs",
+      env: "prod",
+      app: "svc",
+      "log-group": "/{{ env }}/logs",
     });
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
 });
 
-test("ensureCurrentInsights: pre-filled logGroup may be an array", () => {
+test("ensureCurrentInsights: pre-filled log-group may be an array", () => {
   const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-prefill-arr-"));
   try {
     const path = join(tmp, "current.insights");
     ensureCurrentInsights(path, {
-      frontMatter: { logGroup: ["/a", "/b"] },
+      frontMatter: { "log-group": ["/a", "/b"] },
     });
     const parsed = loadQueryFile(path);
-    assert.deepEqual(parsed.frontMatter.logGroup, ["/a", "/b"]);
+    assert.deepEqual(parsed.frontMatter["log-group"], ["/a", "/b"]);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -140,7 +141,7 @@ test("ensureCurrentInsights: returns false when file already exists (idempotent)
   const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-exist-"));
   try {
     const path = join(tmp, "current.insights");
-    writeFileSync(path, "---\ntime: 1h\n---\nfields @timestamp\n", "utf8");
+    writeFileSync(path, 'time = "1h"\n---\nfields @timestamp\n', "utf8");
     const before = readFileSync(path, "utf8");
     const created = ensureCurrentInsights(path, { app: "other-app" });
     assert.equal(created, false);
@@ -154,11 +155,11 @@ test("resetCurrentInsights: overwrites an existing file with the default templat
   const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-reset-"));
   try {
     const path = join(tmp, "current.insights");
-    writeFileSync(path, "---\n---\nuser-modified query", "utf8");
+    writeFileSync(path, "---\nuser-modified query", "utf8");
     resetCurrentInsights(path, { app: "my-service" });
     const parsed = loadQueryFile(path);
     assert.doesNotMatch(parsed.body, /user-modified/);
-    assert.match(parsed.body, /filter app = 'my-service'/);
+    assert.match(parsed.body, /filter app = '\{\{ app \}\}'/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

@@ -16,7 +16,7 @@ export interface EnvConfig {
  * fully replace defaults values (arrays are not merged).
  */
 export interface RepoConfig {
-  /** Log group template, may contain "{env}" placeholder. */
+  /** Log group template, may contain "{{ env }}" / "{{ app }}" placeholders. */
   group?: string;
   /** App name — used to build a default Insights query. */
   app?: string;
@@ -220,35 +220,47 @@ export function resolveEnvConfig(
   };
 }
 
-/** Substitute "{env}" in a template. Throws if the template uses {env} but none was supplied. */
-export function applyEnvironment(template: string, env: string | undefined): string {
-  if (!template.includes("{env}")) return template;
-  if (!env) {
-    throw new ConfigError(
-      `log group template "${template}" uses {env} — pass --environment <name>`,
-    );
-  }
-  return template.replaceAll("{env}", env);
+const PLACEHOLDER_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
+
+/**
+ * Substitute Jinja-style `{{ name }}` placeholders (whitespace inside the
+ * braces is allowed). Throws ConfigError if the template references a name
+ * whose value is undefined in `vars`.
+ */
+export function expandTemplate(
+  template: string,
+  vars: Record<string, string | undefined>,
+): string {
+  return template.replace(PLACEHOLDER_RE, (_, name: string) => {
+    const value = vars[name];
+    if (value === undefined) {
+      throw new ConfigError(
+        `template "${template}" uses {{ ${name} }} but no ${name} was supplied`,
+      );
+    }
+    return value;
+  });
 }
 
 /**
- * Template used to seed a fresh `current.insights`. The placeholder
- * `{app}` is substituted with the configured app when available; when no
- * app is configured, the `filter app = ...` line is omitted.
+ * Template used to seed a fresh `current.insights`. The seeded body keeps
+ * `{{ app }}` / `{{ env }}` placeholders intact — they're expanded at query
+ * execution time. When no app is configured, the `filter app = ...` line is
+ * omitted from the seed.
  */
 export const DEFAULT_QUERY_TEMPLATE = `fields @timestamp, @message
 | sort @timestamp desc
-| filter app = '{app}'
+| filter app = '{{ app }}'
 | filter level in ['WARN', 'ERROR']
 | limit 200`;
 
 export function defaultQuery(app?: string): string {
   if (app === undefined) {
     return DEFAULT_QUERY_TEMPLATE.split("\n")
-      .filter((line) => !line.includes("{app}"))
+      .filter((line) => !/\{\{\s*app\s*\}\}/.test(line))
       .join("\n");
   }
-  return DEFAULT_QUERY_TEMPLATE.replace("{app}", app);
+  return DEFAULT_QUERY_TEMPLATE;
 }
 
 const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
@@ -258,7 +270,7 @@ const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
 # (arrays are not merged).
 #
 # Supported fields (in either [defaults] or [repo.<name>]):
-#   group           = "/{env}/logs"   # log group template; {env} replaced by --environment
+#   group           = "/{{ env }}/logs"  # log group template; {{ env }}, {{ app }} expanded at query time
 #   app             = "my-service"        # default app filter for the seeded query
 #   flatten-fields  = ["@message"]        # JSON-decode these fields and merge their keys into the row
 #
@@ -283,7 +295,7 @@ const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
 #   region      = "us-east-1"
 #
 #   [repo.example-service]
-#   group = "/{env}/logs"
+#   group = "/{{ env }}/logs"
 #   app   = "example-service"
 #
 #   [repo.example-service.env.prod]
@@ -350,7 +362,7 @@ function placeholderSection(repoName: string): string {
     `# ${repoName}: uncomment and fill in the values you want as defaults\n` +
     `# when running cloudwatch-insights from this repository.\n` +
     `# [repo.${repoName}]\n` +
-    `# group = "/{env}/logs"\n` +
+    `# group = "/{{ env }}/logs"\n` +
     `# app   = "${repoName}"\n`
   );
 }

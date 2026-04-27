@@ -10,10 +10,10 @@ import { parseTimeRange, TimeRangeParseError } from "./time-range.js";
 import { runInsightsQuery } from "./insights.js";
 import { flattenRow } from "./flatten.js";
 import {
-  applyEnvironment,
   ConfigError,
   configPath,
   ensureConfigFile,
+  expandTemplate,
   isValidEnvironmentName,
   loadSettings,
   RepoConfig,
@@ -74,7 +74,7 @@ const queryCmd = define({
     environment: {
       type: "string",
       short: "e",
-      description: "environment name (lower kebab-case); substituted for {env} in the log group template",
+      description: "environment name (lower kebab-case); substituted for {{ env }} in the query and log group template",
     },
     limit: {
       type: "number",
@@ -90,7 +90,7 @@ const queryCmd = define({
       type: "string",
       description: "AWS profile (sets AWS_PROFILE)",
     },
-    clear: {
+    new: {
       type: "boolean",
       default: false,
       description: "reset current.insights to the default template before opening the editor",
@@ -115,7 +115,7 @@ interface QueryValues {
   limit?: number;
   region?: string;
   profile?: string;
-  clear: boolean;
+  new: boolean;
   quiet: boolean;
 }
 
@@ -134,7 +134,7 @@ async function runQuery(values: QueryValues): Promise<void> {
   const { queryBody, frontMatter } = await resolveQuerySource(values, defaults, cliEnvironment);
 
   const environment =
-    cliEnvironment ?? validateEnvironmentArg(frontMatter.environment, "front-matter `environment`");
+    cliEnvironment ?? validateEnvironmentArg(frontMatter.env, "front-matter `env`");
   const timeExpr = values.time ?? frontMatter.time ?? "1h";
   const limit = values.limit;
 
@@ -146,13 +146,26 @@ async function runQuery(values: QueryValues): Promise<void> {
     throw err;
   }
 
+  const templateVars: Record<string, string | undefined> = {
+    env: environment,
+    app: frontMatter.app ?? defaults.app,
+  };
+
   const logGroups = resolveLogGroups({
     cliLogGroups: flatten((values["log-group"] ?? []).map((s) => s.split(","))),
-    frontMatterLogGroup: frontMatter.logGroup,
+    frontMatterLogGroup: frontMatter["log-group"],
     configGroupTemplate: defaults.group,
-    environment,
+    templateVars,
     sectionName,
   });
+
+  let expandedQuery: string;
+  try {
+    expandedQuery = expandTemplate(queryBody, templateVars);
+  } catch (err) {
+    if (err instanceof ConfigError) fail(err.message, 2);
+    throw err;
+  }
 
   const envConfig = environment ? resolveEnvConfig(settings, sectionName, environment) : {};
   const profile = values.profile ?? envConfig.awsProfile;
@@ -183,7 +196,7 @@ async function runQuery(values: QueryValues): Promise<void> {
   const result = await runInsightsQuery({
     client,
     logGroups,
-    queryString: queryBody,
+    queryString: expandedQuery,
     startTime: range.startTime,
     endTime: range.endTime,
     limit,
@@ -243,7 +256,7 @@ async function resolveQuerySource(
     frontMatter: buildSeedFrontMatter(values, defaults, cliEnvironment),
   };
   const path = currentInsightsPath();
-  if (values.clear) {
+  if (values.new) {
     resetCurrentInsights(path, seedOptions);
     if (!values.quiet) process.stderr.write(`Reset ${path} to default template\n`);
   } else {
@@ -276,8 +289,9 @@ function buildSeedFrontMatter(
 
   return {
     time: values.time ?? "1h",
-    environment: cliEnvironment,
-    logGroup,
+    env: cliEnvironment,
+    app: defaults.app,
+    "log-group": logGroup,
   };
 }
 
@@ -285,37 +299,28 @@ interface ResolveLogGroupsArgs {
   cliLogGroups: string[];
   frontMatterLogGroup: string | string[] | undefined;
   configGroupTemplate: string | undefined;
-  environment: string | undefined;
+  templateVars: Record<string, string | undefined>;
   sectionName: string | null;
 }
 
 function resolveLogGroups(args: ResolveLogGroupsArgs): string[] {
+  const expand = (templates: string[]): string[] => {
+    try {
+      return templates.map((t) => expandTemplate(t, args.templateVars));
+    } catch (err) {
+      if (err instanceof ConfigError) fail(err.message, 2);
+      throw err;
+    }
+  };
+
   const fromCli = args.cliLogGroups.map((s) => s.trim()).filter(Boolean);
-  if (fromCli.length > 0) {
-    try {
-      return fromCli.map((g) => applyEnvironment(g, args.environment));
-    } catch (err) {
-      if (err instanceof ConfigError) fail(err.message, 2);
-      throw err;
-    }
-  }
+  if (fromCli.length > 0) return expand(fromCli);
+
   const fromFm = toArray(args.frontMatterLogGroup);
-  if (fromFm.length > 0) {
-    try {
-      return fromFm.map((g) => applyEnvironment(g, args.environment));
-    } catch (err) {
-      if (err instanceof ConfigError) fail(err.message, 2);
-      throw err;
-    }
-  }
-  if (args.configGroupTemplate) {
-    try {
-      return [applyEnvironment(args.configGroupTemplate, args.environment)];
-    } catch (err) {
-      if (err instanceof ConfigError) fail(err.message, 2);
-      throw err;
-    }
-  }
+  if (fromFm.length > 0) return expand(fromFm);
+
+  if (args.configGroupTemplate) return expand([args.configGroupTemplate]);
+
   fail(
     args.sectionName
       ? `no log group given, and config section [${args.sectionName}] has no "group". Set it with \`cloudwatch-insights edit-config\` or pass --log-group.`
@@ -438,8 +443,16 @@ const main = define({
   },
 });
 
+function rewriteEnvAlias(argv: string[]): string[] {
+  return argv.map((a) => {
+    if (a === "--env") return "--environment";
+    if (a.startsWith("--env=")) return "--environment=" + a.slice("--env=".length);
+    return a;
+  });
+}
+
 try {
-  await cli(process.argv.slice(2), main, {
+  await cli(rewriteEnvAlias(process.argv.slice(2)), main, {
     name: "cloudwatch-insights",
     version: "1.0.0",
     description: DESCRIPTION,

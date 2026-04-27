@@ -79,17 +79,16 @@ Opens `~/.skagedal-tools/cloudwatch-insights/settings.toml` in `$EDITOR`, creati
 
 ## The `.insights` file format
 
-`current.insights` has an optional YAML **front-matter** block (fenced by `---` lines) followed by the query body:
+`current.insights` has an optional TOML **front-matter** block followed by a `---` separator and then the query body:
 
 ```
----
-time: 5h
-environment: systest
-logGroup: /my/group
+time = "5h"
+env = "systest"
+log-group = "/my/group"
 ---
 fields @timestamp, @message
 | sort @timestamp desc
-| filter app = 'my-service'
+| filter app = '{{ app }}'
 | filter level in ['WARN', 'ERROR']
 | limit 200
 ```
@@ -99,14 +98,17 @@ Front-matter fields:
 | Field         | Purpose                                                             |
 |---------------|---------------------------------------------------------------------|
 | `time`        | time range (same syntax as `--time`)                                |
-| `environment` | substituted for `{env}` in log group templates                       |
-| `logGroup`    | a log group, or an array of log groups                               |
+| `env`         | substituted for `{{ env }}` in the query and log group templates    |
+| `app`         | substituted for `{{ app }}` in the query and log group templates (overrides the configured `app`) |
+| `log-group`   | a log group, or an array of log groups                              |
 
 CLI flags always win over front-matter, and front-matter wins over the repo defaults in `settings.toml`. The result `limit` belongs in the query body itself (`| limit 200`), not the front-matter.
 
-When seeding a fresh `current.insights` (first run, or with `--clear`), the front-matter is **pre-filled** with the values that would currently be used — `--time` (or `1h`), `--environment`, and the CLI `--log-group` or the configured `group` template — so you can see and tweak exactly what will run. Existing files are never rewritten.
+The query body and log group templates may contain Jinja-style placeholders `{{ env }}` and `{{ app }}` (whitespace inside the braces is allowed). They're expanded at query-execution time — the file you edit always shows the unexpanded source. `{{ env }}` resolves from `--environment` or the front-matter `env`; `{{ app }}` resolves from the front-matter `app` or the configured `app` for the repo. Referencing a placeholder with no corresponding value is an error.
 
-Pass `--clear` to `query` to overwrite the current file with a fresh default template before opening the editor.
+When seeding a fresh `current.insights` (first run, or with `--new`), the front-matter is **pre-filled** with the values that would currently be used — `--time` (or `1h`), `--environment`, the configured `app`, and the CLI `--log-group` or the configured `group` template — so you can see and tweak exactly what will run. Existing files are never rewritten.
+
+Pass `--new` to `query` to overwrite the current file with a fresh default template before opening the editor.
 
 ## Time-range syntax
 
@@ -151,7 +153,7 @@ aws-profile = "company-systest"
 region      = "eu-west-1"
 
 [repo.my-service]
-group = "/{env}/logs"
+group = "/{{ env }}/logs"
 app   = "my-service"
 
 [repo.another-repo]
@@ -166,7 +168,7 @@ aws-profile = "special-prod"
 
 Fields legal in both `[defaults]` and `[repo.<name>]`:
 
-- `group` — log group used when no `--log-group` / front-matter `logGroup` is given. `{env}` is substituted with `--environment`.
+- `group` — log group used when no `--log-group` / front-matter `log-group` is given. `{{ env }}` and `{{ app }}` are expanded at query time.
 - `app` — used only when seeding a fresh `current.insights`: the seeded query body will filter on `app = "<app>"`.
 - `flatten-fields` — array of field names whose value is a JSON-encoded object. After each query, those fields are JSON-decoded and their keys merged into the row (the original field is removed). If a value isn't valid JSON or isn't a plain object, the field is left untouched. Useful for log-line fields like `@message` that wrap structured payloads.
 
@@ -177,15 +179,16 @@ Fields legal in both `[defaults]` and `[repo.<name>]`:
 
 A repo can override individual keys via `[repo.<repo>.env.<env>]`. Inside an env block the merge is **per-key**: only the fields you mention are overridden; the rest fall through to the top-level entry. Resolution order at query time: `--profile` / `--region` > `[repo.X.env.Y]` > `[env.Y]` > `AWS_PROFILE` / `AWS_REGION` env vars > SDK default chain.
 
-Using `--environment <name>` for an env name that has no `[env.<name>]` section is fine — `{env}` substitution still works; `aws-profile` and `region` simply aren't auto-set.
+Using `--environment <name>` for an env name that has no `[env.<name>]` section is fine — `{{ env }}` substitution still works; `aws-profile` and `region` simply aren't auto-set.
 
 ## `--environment`
 
 ```
 -e, --environment <name>     any lower kebab-case env name (e.g. prod, systest, us-east-1)
+        --env <name>         alias for --environment
 ```
 
-Substituted into `{env}` in the log group template (from CLI, front-matter, or config) and used to look up `[env.<name>]` for `aws-profile` / `region`. Required whenever the template contains `{env}`. Unknown env names are accepted — they simply don't auto-set a profile or region.
+Substituted into `{{ env }}` in the query and log group template (from CLI, front-matter, or config) and used to look up `[env.<name>]` for `aws-profile` / `region`. Required whenever the template references `{{ env }}`. Unknown env names are accepted — they simply don't auto-set a profile or region.
 
 ## Directory layout
 

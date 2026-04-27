@@ -6,7 +6,7 @@
  *   latest-run.jsonl                     symlink → most recently written results file
  *   queries/
  *     <slot>/
- *       current.insights                 YAML front-matter + query body
+ *       current.insights                 TOML front-matter + query body
  *       results/
  *         run-<timestamp>.jsonl          one row per line
  *
@@ -16,14 +16,15 @@
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync, lstatSync, unlinkSync, symlinkSync } from "fs";
 import { basename, dirname, join } from "path";
-import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 
 import { configPath, defaultQuery, findGitRoot } from "./config.js";
 
 export interface FrontMatter {
   time?: string;
-  environment?: string;
-  logGroup?: string | string[];
+  env?: string;
+  app?: string;
+  "log-group"?: string | string[];
 }
 
 export interface QueryFile {
@@ -60,8 +61,9 @@ export function latestRunPath(): string {
  */
 export interface SeedFrontMatter {
   time?: string;
-  environment?: string;
-  logGroup?: string | string[];
+  env?: string;
+  app?: string;
+  "log-group"?: string | string[];
 }
 
 export interface SeedOptions {
@@ -72,7 +74,7 @@ export interface SeedOptions {
 /**
  * Ensure a current.insights file exists for the current slot, seeding it
  * with a template that uses `app` for the default filter when provided and
- * pre-fills the YAML front-matter with the supplied values. Returns whether
+ * pre-fills the TOML front-matter with the supplied values. Returns whether
  * a new file was written.
  */
 export function ensureCurrentInsights(path: string, options: SeedOptions = {}): boolean {
@@ -84,7 +86,7 @@ export function ensureCurrentInsights(path: string, options: SeedOptions = {}): 
 
 /**
  * Unconditionally reset current.insights to the default template (used
- * by `query --clear`). Returns the path that was written.
+ * by `query --new`). Returns the path that was written.
  */
 export function resetCurrentInsights(path: string, options: SeedOptions = {}): string {
   mkdirSync(dirname(path), { recursive: true });
@@ -98,34 +100,21 @@ export function loadQueryFile(path: string): QueryFile {
 }
 
 /**
- * Parse a .insights file: optional YAML front-matter fenced by "---"
- * lines, followed by the query body. If there is no front-matter, the
- * entire file is treated as the body.
+ * Parse a .insights file: optional TOML front-matter followed by a single
+ * "---" separator line and then the query body. If there is no separator,
+ * the entire file is treated as the body.
  */
 export function parseQueryFile(contents: string): QueryFile {
   const stripped = contents.replace(/^﻿/, "");
   const lines = stripped.split(/\r?\n/);
-  if (lines.length === 0 || lines[0].trim() !== "---") {
+  const sepIdx = lines.findIndex((l) => l.trim() === "---");
+  if (sepIdx === -1) {
     return { frontMatter: {}, body: stripped.trim() };
   }
-  let endIdx = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === "---") {
-      endIdx = i;
-      break;
-    }
-  }
-  if (endIdx === -1) {
-    return { frontMatter: {}, body: stripped.trim() };
-  }
-  const yamlText = lines.slice(1, endIdx).join("\n");
-  const body = lines.slice(endIdx + 1).join("\n").trim();
-  const parsed = parseYaml(yamlText);
-  const frontMatter =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as FrontMatter)
-      : {};
-  return { frontMatter, body };
+  const tomlText = lines.slice(0, sepIdx).join("\n");
+  const body = lines.slice(sepIdx + 1).join("\n").trim();
+  const parsed = parseToml(tomlText);
+  return { frontMatter: parsed as FrontMatter, body };
 }
 
 /** Build a filesystem-safe ISO-ish timestamp (no colons): 2026-04-23T14-30-45Z. */
@@ -171,9 +160,7 @@ export function updateLatestSymlink(target: string): string {
 }
 
 function seedContent({ app, frontMatter = {} }: SeedOptions): string {
-  return `---
-# Front-matter (YAML). CLI/config values are pre-filled below — edit as needed.
-${renderFrontMatter(frontMatter)}---
+  return `${renderFrontMatter(frontMatter)}---
 ${defaultQuery(app)}
 `;
 }
@@ -181,8 +168,9 @@ ${defaultQuery(app)}
 function renderFrontMatter(fm: SeedFrontMatter): string {
   const obj: Record<string, unknown> = {};
   if (fm.time !== undefined) obj.time = fm.time;
-  if (fm.environment !== undefined) obj.environment = fm.environment;
-  if (fm.logGroup !== undefined) obj.logGroup = fm.logGroup;
+  if (fm.env !== undefined) obj.env = fm.env;
+  if (fm.app !== undefined) obj.app = fm.app;
+  if (fm["log-group"] !== undefined) obj["log-group"] = fm["log-group"];
   if (Object.keys(obj).length === 0) return "";
-  return stringifyYaml(obj);
+  return stringifyToml(obj) + "\n";
 }
