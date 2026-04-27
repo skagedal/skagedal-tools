@@ -83,7 +83,11 @@ fn default_prints_pr_url_when_pr_exists() {
         String::from_utf8_lossy(&out.stdout).trim(),
         "https://github.com/me/repo/pull/42"
     );
-    assert!(out.stderr.is_empty(), "stderr: {:?}", out.stderr);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("gh pr view --json url --jq .url"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]

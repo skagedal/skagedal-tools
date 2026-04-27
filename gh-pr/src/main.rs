@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use std::io::IsTerminal;
 use std::process::{Command, Stdio, exit};
 
 /// Manage GitHub pull requests for the current branch.
@@ -82,8 +83,10 @@ fn create_pr(toward: Option<&str>) -> String {
 
     push_current_branch();
 
+    let create_args = ["pr", "create", "--draft", "--fill", "--base", &base];
+    echo_gh(&create_args);
     let output = Command::new("gh")
-        .args(["pr", "create", "--draft", "--fill", "--base", &base])
+        .args(create_args)
         .output()
         .unwrap_or_else(|e| {
             eprintln!("Failed to run gh: {}", e);
@@ -153,8 +156,10 @@ fn comments_command() {
     };
 
     let path = format!("repos/{{owner}}/{{repo}}/issues/{}/comments", number);
+    let api_args = ["api", path.as_str()];
+    echo_gh(&api_args);
     let status = Command::new("gh")
-        .args(["api", &path])
+        .args(api_args)
         .status()
         .unwrap_or_else(|e| {
             eprintln!("Failed to run gh: {}", e);
@@ -174,8 +179,10 @@ fn find_pr_number() -> Option<u64> {
 }
 
 fn mark_ready_command() {
+    let ready_args = ["pr", "ready"];
+    echo_gh(&ready_args);
     let status = Command::new("gh")
-        .args(["pr", "ready"])
+        .args(ready_args)
         .status()
         .unwrap_or_else(|e| {
             eprintln!("Failed to run gh: {}", e);
@@ -187,6 +194,7 @@ fn mark_ready_command() {
 }
 
 fn run_gh(args: &[&str], silence_stderr: bool) -> Option<std::process::Output> {
+    echo_gh(args);
     let mut cmd = Command::new("gh");
     cmd.args(args);
     if silence_stderr {
@@ -198,5 +206,14 @@ fn run_gh(args: &[&str], silence_stderr: bool) -> Option<std::process::Output> {
             eprintln!("Failed to run gh: {}", e);
             exit(1);
         }
+    }
+}
+
+fn echo_gh(args: &[&str]) {
+    let line = format!("gh {}", args.join(" "));
+    if std::io::stderr().is_terminal() {
+        eprintln!("\x1b[32m{}\x1b[0m", line);
+    } else {
+        eprintln!("{}", line);
     }
 }
