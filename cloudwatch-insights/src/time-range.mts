@@ -84,6 +84,22 @@ export function parseTimeRange(input: string, now: Date = new Date()): TimeRange
   throw new TimeRangeParseError(`could not parse time range: ${JSON.stringify(input)}`);
 }
 
+/**
+ * If `input` is a relative-duration shorthand ("5h", "30m", ...) that is
+ * a whole number of seconds, return that number of seconds; otherwise null.
+ * Used by the `link` subcommand to emit the Console's RELATIVE time form
+ * when the user typed a duration and otherwise fall back to ABSOLUTE.
+ */
+export function tryParseRelativeDurationSeconds(input: string): number | null {
+  const match = DURATION_RE.exec(input.trim());
+  if (!match) return null;
+  const amount = parseFloat(match[1]);
+  const unit = match[2];
+  const ms = amount * MS_PER_UNIT[unit];
+  if (ms % 1000 !== 0) return null;
+  return ms / 1000;
+}
+
 function tryParseDuration(input: string, now: Date): TimeRange | null {
   const match = DURATION_RE.exec(input);
   if (!match) return null;

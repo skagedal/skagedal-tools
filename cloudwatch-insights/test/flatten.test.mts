@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 
-import { flattenRow } from "../src/flatten.js";
+import { flattenRow } from "../src/flatten.mjs";
 
 test("flattenRow: flattens a JSON-encoded field into the row", () => {
   const row = {

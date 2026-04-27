@@ -8,6 +8,8 @@ import { parse as parseToml } from "smol-toml";
 export interface EnvConfig {
   awsProfile?: string;
   region?: string;
+  /** AWS account ID — used to build log-group ARNs for shareable console links. */
+  accountId?: string;
 }
 
 /**
@@ -142,6 +144,7 @@ function parseEnvConfig(section: Record<string, unknown>): EnvConfig {
   const config: EnvConfig = {};
   if (typeof section["aws-profile"] === "string") config.awsProfile = section["aws-profile"];
   if (typeof section.region === "string") config.region = section.region;
+  if (typeof section["account-id"] === "string") config.accountId = section["account-id"];
   return config;
 }
 
@@ -214,10 +217,14 @@ export function resolveEnvConfig(
   const base = settings.environments[envName] ?? {};
   const override = repoName ? settings.repos[repoName]?.envOverrides?.[envName] : undefined;
   if (!override) return { ...base };
-  return {
-    awsProfile: override.awsProfile ?? base.awsProfile,
-    region: override.region ?? base.region,
-  };
+  const merged: EnvConfig = {};
+  const awsProfile = override.awsProfile ?? base.awsProfile;
+  const region = override.region ?? base.region;
+  const accountId = override.accountId ?? base.accountId;
+  if (awsProfile !== undefined) merged.awsProfile = awsProfile;
+  if (region !== undefined) merged.region = region;
+  if (accountId !== undefined) merged.accountId = accountId;
+  return merged;
 }
 
 const PLACEHOLDER_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
@@ -278,6 +285,7 @@ const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
 # set:
 #   aws-profile = "..."   # exported as AWS_PROFILE for the run
 #   region      = "..."   # AWS region used for the run
+#   account-id  = "..."   # AWS account ID; only needed for \`link\` (else looked up via STS)
 #
 # A repo can override individual env keys via [repo.<repo>.env.<env>] — only
 # keys you mention are overridden; the rest fall through to the top-level entry.

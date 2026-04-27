@@ -1,4 +1,4 @@
-import { QueryRow } from "./insights.js";
+import { QueryRow } from "./insights.mjs";
 
 /**
  * For each field listed in `fieldsToFlatten`, parse its value as a JSON

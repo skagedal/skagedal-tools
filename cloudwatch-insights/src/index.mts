@@ -6,9 +6,9 @@ import { pipeline } from "stream/promises";
 import { cli, define } from "gunshi";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 
-import { parseTimeRange, TimeRangeParseError } from "./time-range.js";
-import { runInsightsQuery } from "./insights.js";
-import { flattenRow } from "./flatten.js";
+import { parseTimeRange, TimeRangeParseError } from "./time-range.mjs";
+import { runInsightsQuery } from "./insights.mjs";
+import { flattenRow } from "./flatten.mjs";
 import {
   ConfigError,
   configPath,
@@ -19,7 +19,7 @@ import {
   RepoConfig,
   resolveEnvConfig,
   resolveRepoDefaults,
-} from "./config.js";
+} from "./config.mjs";
 import {
   currentInsightsPath,
   ensureCurrentInsights,
@@ -32,7 +32,8 @@ import {
   SeedFrontMatter,
   updateLatestSymlink,
   writeResults,
-} from "./query-file.js";
+} from "./query-file.mjs";
+import { LinkValues, runLink } from "./link.mjs";
 
 const DESCRIPTION = "Download logs from AWS CloudWatch Logs Insights.";
 
@@ -330,6 +331,73 @@ function resolveLogGroups(args: ResolveLogGroupsArgs): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// link subcommand
+// ---------------------------------------------------------------------------
+
+const linkCmd = define({
+  name: "link",
+  description:
+    "Print a shareable AWS Console URL for the query (no editor, no execution)",
+  args: {
+    "log-group": {
+      type: "string",
+      short: "g",
+      multiple: true,
+      description: "log group name (repeat or comma-separate; overrides config)",
+    },
+    time: {
+      type: "string",
+      short: "t",
+      description: TIME_DESCRIPTION,
+    },
+    query: {
+      type: "string",
+      short: "q",
+      description: "CloudWatch Insights query string (skips current.insights)",
+    },
+    "query-file": {
+      type: "string",
+      short: "f",
+      description: "read query from file (use '-' for stdin; skips current.insights)",
+    },
+    environment: {
+      type: "string",
+      short: "e",
+      description:
+        "environment name (lower kebab-case); substituted for {{ env }} in the query and log group template",
+    },
+    region: {
+      type: "string",
+      short: "r",
+      description: "AWS region (overrides AWS_REGION)",
+    },
+    profile: {
+      type: "string",
+      description: "AWS profile (sets AWS_PROFILE; only used for the STS lookup)",
+    },
+    "account-id": {
+      type: "string",
+      description:
+        "AWS account ID for the log-group ARN (overrides config; falls back to STS GetCallerIdentity)",
+    },
+    "preserve-time-window": {
+      type: "boolean",
+      default: false,
+      description:
+        "always emit absolute start/end timestamps in the URL, even when -t is a relative duration like 1h",
+    },
+    quiet: {
+      type: "boolean",
+      default: false,
+      description: "suppress diagnostic output on stderr",
+    },
+  },
+  run: async (ctx) => {
+    await runLink(ctx.values as unknown as LinkValues);
+  },
+});
+
+// ---------------------------------------------------------------------------
 // show subcommand
 // ---------------------------------------------------------------------------
 
@@ -436,7 +504,7 @@ const main = define({
   args: {},
   run: () => {
     process.stderr.write(
-      "Usage: cloudwatch-insights <query|show|edit-config>\n" +
+      "Usage: cloudwatch-insights <query|link|show|edit-config>\n" +
         "Run `cloudwatch-insights --help` for details.\n",
     );
     process.exit(2);
@@ -459,6 +527,7 @@ try {
     renderHeader: null,
     subCommands: {
       query: queryCmd,
+      link: linkCmd,
       show: showCmd,
       "edit-config": editConfigCmd,
     },

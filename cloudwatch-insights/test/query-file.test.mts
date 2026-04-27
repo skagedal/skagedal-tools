@@ -12,7 +12,7 @@ import {
   runTimestamp,
   updateLatestSymlink,
   writeResults,
-} from "../src/query-file.js";
+} from "../src/query-file.mjs";
 
 test("parseQueryFile: no front-matter — whole file is body", () => {
   const { frontMatter, body } = parseQueryFile(

@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 
-import { parseTimeRange, TimeRangeParseError } from "../src/time-range.js";
+import {
+  parseTimeRange,
+  TimeRangeParseError,
+  tryParseRelativeDurationSeconds,
+} from "../src/time-range.mjs";
 
 // Fixed "now" — 2026-04-22 at 15:30:00 local time.
 const NOW = new Date(2026, 3, 22, 15, 30, 0);
@@ -121,4 +125,19 @@ test("empty input is rejected", () => {
 
 test("garbage input is rejected", () => {
   assert.throws(() => parseTimeRange("not a time", NOW), TimeRangeParseError);
+});
+
+test("tryParseRelativeDurationSeconds: whole-second durations", () => {
+  assert.equal(tryParseRelativeDurationSeconds("1h"), 3600);
+  assert.equal(tryParseRelativeDurationSeconds("30m"), 1800);
+  assert.equal(tryParseRelativeDurationSeconds("45s"), 45);
+  assert.equal(tryParseRelativeDurationSeconds("2d"), 172800);
+  assert.equal(tryParseRelativeDurationSeconds(" 5h "), 18000);
+});
+
+test("tryParseRelativeDurationSeconds: rejects sub-second and non-duration input", () => {
+  assert.equal(tryParseRelativeDurationSeconds("500ms"), null);
+  assert.equal(tryParseRelativeDurationSeconds("yesterday 17-18"), null);
+  assert.equal(tryParseRelativeDurationSeconds("13.00-13.01"), null);
+  assert.equal(tryParseRelativeDurationSeconds(""), null);
 });

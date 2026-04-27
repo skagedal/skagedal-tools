@@ -17,7 +17,7 @@ import {
   parseSettings,
   resolveEnvConfig,
   resolveRepoDefaults,
-} from "../src/config.js";
+} from "../src/config.mjs";
 
 test("parseSettings: extracts defaults and per-repo configs", () => {
   const settings = parseSettings(

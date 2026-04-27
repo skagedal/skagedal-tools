@@ -18,7 +18,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, lstatSync, unlinkSy
 import { basename, dirname, join } from "path";
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 
-import { configPath, defaultQuery, findGitRoot } from "./config.js";
+import { configPath, defaultQuery, findGitRoot } from "./config.mjs";
 
 export interface FrontMatter {
   time?: string;
