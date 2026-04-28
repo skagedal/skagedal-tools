@@ -70,15 +70,20 @@ export function parseLinkToState(url: string): ParsedLinkState {
   if (!Array.isArray(source) || source.length === 0) {
     throw new Error("queryDetail.source is missing or empty");
   }
-  const logGroups = source.map((arn, i) => {
-    if (typeof arn !== "string") {
+  const logGroups = source.map((entry, i) => {
+    if (typeof entry !== "string") {
       throw new Error(`queryDetail.source[${i}] is not a string`);
     }
-    const parsed = parseLogGroupArn(arn);
-    if (!parsed) {
-      throw new Error(`queryDetail.source[${i}] is not a log-group ARN: ${arn}`);
+    // The Console emits either full log-group ARNs (when queryBy=logGroupArn)
+    // or bare log-group names (when queryBy=logGroupName). Accept both.
+    if (entry.startsWith("arn:")) {
+      const parsed = parseLogGroupArn(entry);
+      if (!parsed) {
+        throw new Error(`queryDetail.source[${i}] is not a log-group ARN: ${entry}`);
+      }
+      return parsed.logGroupName;
     }
-    return parsed.logGroupName;
+    return entry;
   });
 
   return {

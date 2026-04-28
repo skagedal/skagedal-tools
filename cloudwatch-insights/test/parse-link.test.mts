@@ -77,6 +77,21 @@ test("parseLinkToState: absolute time emits ISO range with '/' separator", () =>
   );
 });
 
+test("parseLinkToState: accepts bare log-group names in source (queryBy=logGroupName)", () => {
+  // Real Console URLs emit bare names rather than ARNs when the user is
+  // querying by log-group name; reproduce the structure here.
+  const detail = buildQueryDetail({
+    query: "fields @timestamp",
+    logGroupArns: [], // placeholder; we'll override below
+    time: { kind: "relative", secondsBack: 60 },
+  });
+  detail.source = ["/eks/systest/team-icc"];
+  const url = buildConsoleLink({ region: "eu-north-1", queryDetail: detail });
+  const state = parseLinkToState(url);
+  assert.deepEqual(state.logGroups, ["/eks/systest/team-icc"]);
+  assert.equal(state.region, "eu-north-1");
+});
+
 test("parseLinkToState: rejects URL with no log groups", () => {
   // Build a URL by hand and strip the source key
   const detail = buildQueryDetail({
