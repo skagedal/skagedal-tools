@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
-import clipboard from "clipboardy";
 import type { Config, FieldConfig } from "../config.js";
 import type { LogEntry } from "../entry.js";
 import { renderField, renderValueDetailed, stringify } from "../entry.js";
@@ -751,8 +750,13 @@ function isKeyVisible(fields: ManagedField[], key: string): boolean {
   return f ? f.visible : false;
 }
 
-function copyToClipboard(text: string, label: string, setFlash: (v: string | null) => void): void {
+async function copyToClipboard(
+  text: string,
+  label: string,
+  setFlash: (v: string | null) => void,
+): Promise<void> {
   try {
+    const { default: clipboard } = await import("clipboardy");
     clipboard.writeSync(text);
     flashFor(setFlash, `copied ${label} (${text.length} bytes)`);
   } catch (err) {
