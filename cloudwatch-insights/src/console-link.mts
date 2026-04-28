@@ -156,3 +156,182 @@ export function logGroupArn(opts: {
 }): string {
   return `arn:aws:logs:${opts.region}:${opts.accountId}:log-group:${opts.logGroupName}`;
 }
+
+/**
+ * Inverse of {@link encodeAwsString}. Replaces `*XX` (hex byte) escapes with
+ * the corresponding bytes, then UTF-8 decodes the result. Plain ASCII bytes
+ * are kept as-is.
+ */
+export function decodeAwsString(encoded: string): string {
+  const bytes: number[] = [];
+  for (let i = 0; i < encoded.length; i++) {
+    const c = encoded[i];
+    if (c === "*") {
+      const hex = encoded.slice(i + 1, i + 3);
+      if (!/^[0-9a-fA-F]{2}$/.test(hex)) {
+        throw new Error(`invalid *XX escape at position ${i}: *${hex}`);
+      }
+      bytes.push(parseInt(hex, 16));
+      i += 2;
+    } else {
+      bytes.push(c.charCodeAt(0));
+    }
+  }
+  return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+}
+
+/**
+ * Inverse of {@link encodeRison}. Parses AWS's Rison variant into a
+ * RisonValue tree. Throws on malformed input.
+ */
+export function decodeRison(input: string): RisonValue {
+  const parser = new RisonParser(input);
+  const value = parser.parseValue();
+  if (parser.pos !== input.length) {
+    throw new Error(
+      `unexpected trailing characters at position ${parser.pos}: ${input.slice(parser.pos)}`,
+    );
+  }
+  return value;
+}
+
+class RisonParser {
+  pos = 0;
+  constructor(public src: string) {}
+
+  parseValue(): RisonValue {
+    const c = this.src[this.pos];
+    if (c === "(") {
+      this.pos++;
+      if (this.src[this.pos] === "~") {
+        return this.parseArrayBody();
+      }
+      return this.parseObjectBody();
+    }
+    if (c === "'") {
+      this.pos++;
+      return decodeAwsString(this.readUntilDelimiter());
+    }
+    return this.parseNumber();
+  }
+
+  parseArrayBody(): RisonValue[] {
+    const out: RisonValue[] = [];
+    while (this.src[this.pos] === "~") {
+      this.pos++;
+      if (this.src[this.pos] === ")") break;
+      out.push(this.parseValue());
+    }
+    if (this.src[this.pos] !== ")") {
+      throw new Error(`expected ')' at position ${this.pos}`);
+    }
+    this.pos++;
+    return out;
+  }
+
+  parseObjectBody(): { [k: string]: RisonValue } {
+    const out: { [k: string]: RisonValue } = {};
+    if (this.src[this.pos] === ")") {
+      this.pos++;
+      return out;
+    }
+    while (true) {
+      const key = decodeAwsString(this.readUntilDelimiter());
+      if (this.src[this.pos] !== "~") {
+        throw new Error(`expected '~' after key '${key}' at position ${this.pos}`);
+      }
+      this.pos++;
+      out[key] = this.parseValue();
+      const c = this.src[this.pos];
+      if (c === "~") {
+        this.pos++;
+        continue;
+      }
+      if (c === ")") {
+        this.pos++;
+        return out;
+      }
+      throw new Error(`expected '~' or ')' at position ${this.pos}`);
+    }
+  }
+
+  readUntilDelimiter(): string {
+    const start = this.pos;
+    while (this.pos < this.src.length) {
+      const c = this.src[this.pos];
+      if (c === "~" || c === ")") break;
+      this.pos++;
+    }
+    return this.src.slice(start, this.pos);
+  }
+
+  parseNumber(): number {
+    const raw = this.readUntilDelimiter();
+    const n = Number(raw);
+    if (raw.length === 0 || !Number.isFinite(n)) {
+      throw new Error(`invalid number '${raw}' at position ${this.pos - raw.length}`);
+    }
+    return n;
+  }
+}
+
+/**
+ * Parse a log-group ARN of the form
+ * `arn:aws:logs:<region>:<account>:log-group:<name>` (with an optional
+ * trailing `:*` selector). Returns null if the input doesn't match.
+ */
+export function parseLogGroupArn(arn: string): {
+  region: string;
+  accountId: string;
+  logGroupName: string;
+} | null {
+  const m = /^arn:aws:logs:([^:]+):([^:]+):log-group:([^:]+)(?::\*)?$/.exec(arn);
+  if (!m) return null;
+  return { region: m[1], accountId: m[2], logGroupName: m[3] };
+}
+
+export interface ParsedConsoleLink {
+  region: string;
+  queryDetail: Record<string, RisonValue>;
+}
+
+/**
+ * Inverse of {@link buildConsoleLink}. Extracts the region from the URL and
+ * decodes the queryDetail object from the fragment. Accepts URLs whose
+ * fragment uses either AWS's `$3F`/`$3D` encoding or standard `%3F`/`%3D`.
+ */
+export function parseConsoleLink(url: string): ParsedConsoleLink {
+  const trimmed = url.trim();
+  const hashIdx = trimmed.indexOf("#");
+  if (hashIdx < 0) throw new Error("URL has no fragment (no '#')");
+  const queryStr = trimmed.slice(0, hashIdx);
+  const fragment = trimmed.slice(hashIdx + 1);
+
+  const regionMatch = /[?&]region=([^&]+)/.exec(queryStr);
+  if (!regionMatch) throw new Error("URL is missing the ?region=... query parameter");
+  const region = decodeURIComponent(regionMatch[1]);
+
+  // Browsers often percent-encode parts of the fragment when copying the
+  // URL from the address bar (e.g. `'` → `%27`). Decode standard
+  // percent-escapes first; the AWS-specific `*XX` escapes use `*`, not `%`,
+  // so they're untouched. Then turn `$3F` / `$3D` into `?` / `=` so we can
+  // locate `queryDetail=...` reliably.
+  let normalized: string;
+  try {
+    normalized = decodeURIComponent(fragment);
+  } catch {
+    normalized = fragment;
+  }
+  normalized = normalized.replace(/\$3F/g, "?").replace(/\$3D/g, "=");
+  const m = /(?:^|[?&])queryDetail=~?(.+)$/.exec(normalized);
+  if (!m) throw new Error("fragment is missing queryDetail=...");
+  const detail = decodeRison(m[1]);
+  if (!isPlainObject(detail)) {
+    throw new Error("queryDetail is not a Rison object");
+  }
+  return { region, queryDetail: detail };
+}
+
+function isPlainObject(v: RisonValue): v is { [k: string]: RisonValue } {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}

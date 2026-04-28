@@ -34,6 +34,7 @@ import {
   writeResults,
 } from "./query-file.mjs";
 import { LinkValues, runLink } from "./link.mjs";
+import { ParseLinkValues, runParseLink } from "./parse-link.mjs";
 import { RawValues, runRaw } from "./raw.mjs";
 
 const DESCRIPTION = "Download logs from AWS CloudWatch Logs Insights.";
@@ -411,6 +412,45 @@ const linkCmd = define({
 });
 
 // ---------------------------------------------------------------------------
+// parse-link subcommand
+// ---------------------------------------------------------------------------
+
+const parseLinkCmd = define({
+  name: "parse-link",
+  description:
+    "Decode an AWS Console Insights URL and recreate the query state (or print a `raw` shell command with --as-raw)",
+  args: {
+    url: {
+      type: "string",
+      description: "the URL to decode (alternatively pass it as a positional, or pipe it on stdin)",
+    },
+    "as-raw": {
+      type: "boolean",
+      default: false,
+      description:
+        "print a self-contained `cloudwatch-insights raw` shell command instead of writing current.insights",
+    },
+    output: {
+      type: "string",
+      short: "o",
+      description:
+        "write the .insights file to this path instead of the current slot's current.insights",
+    },
+    quiet: {
+      type: "boolean",
+      default: false,
+      description: "suppress diagnostic output on stderr",
+    },
+  },
+  run: async (ctx) => {
+    // gunshi includes the subcommand name as the first positional; drop it
+    // so the user-supplied URL (if any) is at index 0.
+    const positionals = ((ctx.positionals ?? []) as string[]).slice(1);
+    await runParseLink(ctx.values as unknown as ParseLinkValues, positionals);
+  },
+});
+
+// ---------------------------------------------------------------------------
 // raw subcommand
 // ---------------------------------------------------------------------------
 
@@ -573,7 +613,7 @@ const main = define({
   args: {},
   run: () => {
     process.stderr.write(
-      "Usage: cloudwatch-insights <query|raw|link|show|edit-config>\n" +
+      "Usage: cloudwatch-insights <query|raw|link|parse-link|show|edit-config>\n" +
         "Run `cloudwatch-insights --help` for details.\n",
     );
     process.exit(2);
@@ -598,6 +638,7 @@ try {
       query: queryCmd,
       raw: rawCmd,
       link: linkCmd,
+      "parse-link": parseLinkCmd,
       show: showCmd,
       "edit-config": editConfigCmd,
     },

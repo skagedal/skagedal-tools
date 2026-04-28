@@ -23,6 +23,7 @@ This builds the TypeScript source and installs the `cloudwatch-insights` command
 cloudwatch-insights query [options]       run a query
 cloudwatch-insights raw [options]         run a query verbatim from a file (no templating, no config)
 cloudwatch-insights link [options]        print a shareable AWS Console URL
+cloudwatch-insights parse-link <url>      decode a Console URL into current.insights (or a `raw` command)
 cloudwatch-insights show                  stream the latest run to stdout
 cloudwatch-insights edit-config           edit the per-repo config
 ```
@@ -82,6 +83,20 @@ cloudwatch-insights link --preserve-time-window
 ```
 
 Prints a shareable AWS Console URL for the query that `cloudwatch-insights query` would otherwise run. When stdout is a TTY, the URL is also rendered as an [OSC 8 clickable hyperlink](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) above the raw URL — terminals that understand the escape sequence (iTerm2, recent VS Code, GNOME Terminal, WezTerm, …) make it click-to-open. Pass `--open` to additionally open the URL in your default browser.
+
+### `parse-link`
+
+```sh
+cloudwatch-insights parse-link 'https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1#logsV2:logs-insights$3FqueryDetail$3D~(...)'
+pbpaste | cloudwatch-insights parse-link                # read URL from stdin
+cloudwatch-insights parse-link --as-raw <url>           # print a `raw` shell command instead
+```
+
+The inverse of `link`. Decodes the AWS Console Insights URL and recreates the query state by writing a fresh `current.insights` for the current slot (with `time`, `log-group`, and the query body filled in from the URL) — running `cloudwatch-insights query` afterwards re-runs the same query.
+
+`--as-raw` instead prints a self-contained `cloudwatch-insights raw …` shell command (a quoted heredoc piping the query body into stdin) and does not touch any state. Useful for sharing a one-shot invocation that someone else can paste into a terminal.
+
+The URL can be passed as a positional argument, via `--url`, or piped on stdin. `-o`/`--output` writes the `.insights` file to a custom path instead of the current slot's `current.insights`.
 
 ### `show`
 
