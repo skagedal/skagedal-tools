@@ -21,6 +21,9 @@ This builds the TypeScript source and installs the `cloudwatch-insights` command
 
 ```
 cloudwatch-insights query [options]       run a query
+cloudwatch-insights raw [options]         run a query verbatim from a file (no templating, no config)
+cloudwatch-insights link [options]        print a shareable AWS Console URL
+cloudwatch-insights parse-link <url>      decode a Console URL into current.insights (or a `raw` command)
 cloudwatch-insights show                  stream the latest run to stdout
 cloudwatch-insights edit-config           edit the per-repo config
 ```
@@ -58,6 +61,42 @@ jq . < "$last"
 ```
 
 After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file.
+
+### `raw`
+
+```sh
+cloudwatch-insights raw -f query.txt -g /aws/lambda/my-func -t 5h
+cloudwatch-insights raw -f query.txt -g /a -g /b -t "yesterday 17-18" -o results.jsonl
+cat query.txt | cloudwatch-insights raw -f - -g /my/group
+```
+
+Runs a query verbatim from `--query-file`/`-f` (use `-` for stdin). No front-matter parsing, no `{{ env }} / {{ app }}` substitution, no flatten-fields, no config lookup, no editor, no `latest-run.jsonl` symlink — the contents of the file are sent to CloudWatch as-is.
+
+Results are written to stdout as JSONL, or to `--output`/`-o` if given. Required: `--query-file` and at least one `--log-group`.
+
+### `link`
+
+```sh
+cloudwatch-insights link
+cloudwatch-insights link --open                  # also open in default browser
+cloudwatch-insights link --preserve-time-window
+```
+
+Prints a shareable AWS Console URL for the query that `cloudwatch-insights query` would otherwise run. When stdout is a TTY, the URL is also rendered as an [OSC 8 clickable hyperlink](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) above the raw URL — terminals that understand the escape sequence (iTerm2, recent VS Code, GNOME Terminal, WezTerm, …) make it click-to-open. Pass `--open` to additionally open the URL in your default browser.
+
+### `parse-link`
+
+```sh
+cloudwatch-insights parse-link 'https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1#logsV2:logs-insights$3FqueryDetail$3D~(...)'
+pbpaste | cloudwatch-insights parse-link                # read URL from stdin
+cloudwatch-insights parse-link --as-raw <url>           # print a `raw` shell command instead
+```
+
+The inverse of `link`. Decodes the AWS Console Insights URL and recreates the query state by writing a fresh `current.insights` for the current slot (with `time`, `log-group`, and the query body filled in from the URL) — running `cloudwatch-insights query` afterwards re-runs the same query.
+
+`--as-raw` instead prints a self-contained `cloudwatch-insights raw …` shell command (a quoted heredoc piping the query body into stdin) and does not touch any state. Useful for sharing a one-shot invocation that someone else can paste into a terminal.
+
+The URL can be passed as a positional argument, via `--url`, or piped on stdin. `-o`/`--output` writes the `.insights` file to a custom path instead of the current slot's `current.insights`.
 
 ### `show`
 
@@ -170,6 +209,7 @@ Fields legal in both `[defaults]` and `[repo.<name>]`:
 
 - `group` — log group used when no `--log-group` / front-matter `log-group` is given. `{{ env }}` and `{{ app }}` are expanded at query time.
 - `app` — used only when seeding a fresh `current.insights`: the seeded query body will filter on `app = "<app>"`.
+- `region` — AWS region fallback used when no `[env.<name>].region` applies (and `--region` / `AWS_REGION` aren't set).
 - `flatten-fields` — array of field names whose value is a JSON-encoded object. After each query, those fields are JSON-decoded and their keys merged into the row (the original field is removed). If a value isn't valid JSON or isn't a plain object, the field is left untouched. Useful for log-line fields like `@message` that wrap structured payloads.
 
 `[env.<name>]` declares an environment (any lower kebab-case name — e.g. `prod`, `systest`, `us-east-1`). Supported keys:
@@ -177,7 +217,7 @@ Fields legal in both `[defaults]` and `[repo.<name>]`:
 - `aws-profile` — exported as `AWS_PROFILE` for the run unless `--profile` overrides it.
 - `region` — passed to the AWS SDK unless `--region` / `AWS_REGION` overrides it.
 
-A repo can override individual keys via `[repo.<repo>.env.<env>]`. Inside an env block the merge is **per-key**: only the fields you mention are overridden; the rest fall through to the top-level entry. Resolution order at query time: `--profile` / `--region` > `[repo.X.env.Y]` > `[env.Y]` > `AWS_PROFILE` / `AWS_REGION` env vars > SDK default chain.
+A repo can override individual keys via `[repo.<repo>.env.<env>]`. Inside an env block the merge is **per-key**: only the fields you mention are overridden; the rest fall through to the top-level entry. Resolution order at query time: `--profile` / `--region` > `[repo.X.env.Y]` > `[env.Y]` > `[repo.X].region` / `[defaults].region` (region only) > `AWS_PROFILE` / `AWS_REGION` env vars > SDK default chain.
 
 Using `--environment <name>` for an env name that has no `[env.<name>]` section is fine — `{{ env }}` substitution still works; `aws-profile` and `region` simply aren't auto-set.
 

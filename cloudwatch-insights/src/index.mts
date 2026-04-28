@@ -34,6 +34,8 @@ import {
   writeResults,
 } from "./query-file.mjs";
 import { LinkValues, runLink } from "./link.mjs";
+import { ParseLinkValues, runParseLink } from "./parse-link.mjs";
+import { RawValues, runRaw } from "./raw.mjs";
 
 const DESCRIPTION = "Download logs from AWS CloudWatch Logs Insights.";
 
@@ -170,7 +172,8 @@ async function runQuery(values: QueryValues): Promise<void> {
 
   const envConfig = environment ? resolveEnvConfig(settings, sectionName, environment) : {};
   const profile = values.profile ?? envConfig.awsProfile;
-  const region = values.region ?? envConfig.region ?? process.env.AWS_REGION;
+  const region =
+    values.region ?? envConfig.region ?? defaults.region ?? process.env.AWS_REGION;
   if (profile) {
     process.env.AWS_PROFILE = profile;
   }
@@ -180,8 +183,14 @@ async function runQuery(values: QueryValues): Promise<void> {
     if (profile && !values.profile) {
       process.stderr.write(`  AWS_PROFILE: ${profile} (from [env.${environment}])\n`);
     }
-    if (envConfig.region && !values.region) {
-      process.stderr.write(`  AWS region:  ${envConfig.region} (from [env.${environment}])\n`);
+    if (!values.region) {
+      if (envConfig.region) {
+        process.stderr.write(`  AWS region:  ${envConfig.region} (from [env.${environment}])\n`);
+      } else if (defaults.region) {
+        process.stderr.write(
+          `  AWS region:  ${defaults.region} (from ${sectionName ? `[repo.${sectionName}] or [defaults]` : "[defaults]"})\n`,
+        );
+      }
     }
   }
 
@@ -386,6 +395,11 @@ const linkCmd = define({
       description:
         "always emit absolute start/end timestamps in the URL, even when -t is a relative duration like 1h",
     },
+    open: {
+      type: "boolean",
+      default: false,
+      description: "open the URL in the default browser",
+    },
     quiet: {
       type: "boolean",
       default: false,
@@ -394,6 +408,101 @@ const linkCmd = define({
   },
   run: async (ctx) => {
     await runLink(ctx.values as unknown as LinkValues);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// parse-link subcommand
+// ---------------------------------------------------------------------------
+
+const parseLinkCmd = define({
+  name: "parse-link",
+  description:
+    "Decode an AWS Console Insights URL and recreate the query state (or print a `raw` shell command with --as-raw)",
+  args: {
+    url: {
+      type: "string",
+      description: "the URL to decode (alternatively pass it as a positional, or pipe it on stdin)",
+    },
+    "as-raw": {
+      type: "boolean",
+      default: false,
+      description:
+        "print a self-contained `cloudwatch-insights raw` shell command instead of writing current.insights",
+    },
+    output: {
+      type: "string",
+      short: "o",
+      description:
+        "write the .insights file to this path instead of the current slot's current.insights",
+    },
+    quiet: {
+      type: "boolean",
+      default: false,
+      description: "suppress diagnostic output on stderr",
+    },
+  },
+  run: async (ctx) => {
+    // gunshi includes the subcommand name as the first positional; drop it
+    // so the user-supplied URL (if any) is at index 0.
+    const positionals = ((ctx.positionals ?? []) as string[]).slice(1);
+    await runParseLink(ctx.values as unknown as ParseLinkValues, positionals);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// raw subcommand
+// ---------------------------------------------------------------------------
+
+const rawCmd = define({
+  name: "raw",
+  description:
+    "Run a query verbatim from a file (no templating, no front-matter, no config); write JSONL to stdout or --output",
+  args: {
+    "log-group": {
+      type: "string",
+      short: "g",
+      multiple: true,
+      description: "log group name (repeat or comma-separate; required)",
+    },
+    "query-file": {
+      type: "string",
+      short: "f",
+      description: "read query from file (use '-' for stdin; required)",
+    },
+    time: {
+      type: "string",
+      short: "t",
+      description:
+        "time range (same syntax as `query --time`). Defaults to 1h.",
+    },
+    limit: {
+      type: "number",
+      short: "l",
+      description: "maximum number of rows to return",
+    },
+    region: {
+      type: "string",
+      short: "r",
+      description: "AWS region (overrides AWS_REGION)",
+    },
+    profile: {
+      type: "string",
+      description: "AWS profile (sets AWS_PROFILE)",
+    },
+    output: {
+      type: "string",
+      short: "o",
+      description: "write JSONL results to this file instead of stdout",
+    },
+    quiet: {
+      type: "boolean",
+      default: false,
+      description: "suppress progress output on stderr",
+    },
+  },
+  run: async (ctx) => {
+    await runRaw(ctx.values as unknown as RawValues);
   },
 });
 
@@ -504,7 +613,7 @@ const main = define({
   args: {},
   run: () => {
     process.stderr.write(
-      "Usage: cloudwatch-insights <query|link|show|edit-config>\n" +
+      "Usage: cloudwatch-insights <query|raw|link|parse-link|show|edit-config>\n" +
         "Run `cloudwatch-insights --help` for details.\n",
     );
     process.exit(2);
@@ -527,7 +636,9 @@ try {
     renderHeader: null,
     subCommands: {
       query: queryCmd,
+      raw: rawCmd,
       link: linkCmd,
+      "parse-link": parseLinkCmd,
       show: showCmd,
       "edit-config": editConfigCmd,
     },

@@ -4,9 +4,13 @@ import assert from "node:assert/strict";
 import {
   buildConsoleLink,
   buildQueryDetail,
+  decodeAwsString,
+  decodeRison,
   encodeAwsString,
   encodeRison,
   logGroupArn,
+  parseConsoleLink,
+  parseLogGroupArn,
   type RisonValue,
 } from "../src/console-link.mjs";
 
@@ -166,5 +170,167 @@ test("encodeRison round-trips arrays of strings with special chars", () => {
   assert.equal(
     encodeRison(["a:b", "c/d"]),
     "(~'a*3ab~'c*2fd)",
+  );
+});
+
+test("decodeAwsString: inverse of encodeAwsString", () => {
+  for (const s of [
+    "abc",
+    " ",
+    "@",
+    "@timestamp",
+    "fields @timestamp, @message\n| sort @timestamp desc",
+    "é",
+    "✓",
+    "*~()",
+  ]) {
+    assert.equal(decodeAwsString(encodeAwsString(s)), s, `round-trip: ${JSON.stringify(s)}`);
+  }
+});
+
+test("decodeAwsString: rejects malformed *XX escapes", () => {
+  assert.throws(() => decodeAwsString("*"), /invalid \*XX/);
+  assert.throws(() => decodeAwsString("*g0"), /invalid \*XX/);
+});
+
+test("decodeRison: inverse of encodeRison for primitives, arrays, objects", () => {
+  const cases: RisonValue[] = [
+    0,
+    -3600,
+    "UTC",
+    "fields @timestamp, @message\n| limit 200",
+    [],
+    ["a", "b"],
+    { end: 0, start: -3600, tz: "UTC" },
+    {
+      end: 0,
+      start: -3600,
+      timeType: "RELATIVE",
+      tz: "UTC",
+      unit: "seconds",
+      editorString: "fields @timestamp",
+      source: ["arn:aws:logs:eu-north-1:1:log-group:/x"],
+      lang: "CWLI",
+    },
+  ];
+  for (const v of cases) {
+    assert.deepEqual(decodeRison(encodeRison(v)), v);
+  }
+});
+
+test("decodeRison: round-trips the full Console-format example", () => {
+  const original: Record<string, RisonValue> = {
+    end: 0,
+    start: -3600,
+    timeType: "RELATIVE",
+    tz: "UTC",
+    unit: "seconds",
+    editorString:
+      "fields @timestamp, @message\n" +
+      "| sort @timestamp desc\n" +
+      "| filter app = 'installer-notification'\n" +
+      "| limit 200",
+    queryId: "dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb",
+    source: ["arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc"],
+    lang: "CWLI",
+    logClass: "STANDARD",
+    queryBy: "logGroupName",
+  };
+  assert.deepEqual(decodeRison(encodeRison(original)), original);
+});
+
+test("decodeRison: parses ABSOLUTE timeType with epoch-ms numbers", () => {
+  const encoded = encodeRison({
+    end: 1700003600000,
+    start: 1700000000000,
+    timeType: "ABSOLUTE",
+    unit: "milliseconds",
+  });
+  assert.deepEqual(decodeRison(encoded), {
+    end: 1700003600000,
+    start: 1700000000000,
+    timeType: "ABSOLUTE",
+    unit: "milliseconds",
+  });
+});
+
+test("decodeRison: rejects trailing garbage", () => {
+  assert.throws(() => decodeRison("(a~1)x"), /trailing/);
+});
+
+test("parseLogGroupArn: extracts region/account/name", () => {
+  assert.deepEqual(
+    parseLogGroupArn("arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc"),
+    {
+      region: "eu-north-1",
+      accountId: "361629632765",
+      logGroupName: "/eks/uat/team-icc",
+    },
+  );
+  assert.equal(parseLogGroupArn("not-an-arn"), null);
+  assert.equal(
+    parseLogGroupArn("arn:aws:s3:::my-bucket"),
+    null,
+    "non-logs ARN rejected",
+  );
+});
+
+test("parseLogGroupArn: tolerates trailing :* selector", () => {
+  assert.deepEqual(
+    parseLogGroupArn("arn:aws:logs:eu-north-1:1:log-group:/x:*"),
+    { region: "eu-north-1", accountId: "1", logGroupName: "/x" },
+  );
+});
+
+test("parseConsoleLink: round-trips a Console-generated URL", () => {
+  const queryDetail: Record<string, RisonValue> = {
+    end: 0,
+    start: -3600,
+    timeType: "RELATIVE",
+    tz: "UTC",
+    unit: "seconds",
+    editorString:
+      "fields @timestamp, @message\n" +
+      "| sort @timestamp desc\n" +
+      "| filter app = 'installer-notification'\n" +
+      "| limit 200",
+    queryId: "dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb",
+    source: ["arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc"],
+    lang: "CWLI",
+    logClass: "STANDARD",
+    queryBy: "logGroupName",
+  };
+  const url = buildConsoleLink({ region: "eu-north-1", queryDetail });
+  const parsed = parseConsoleLink(url);
+  assert.equal(parsed.region, "eu-north-1");
+  assert.deepEqual(parsed.queryDetail, queryDetail);
+});
+
+test("parseConsoleLink: tolerates percent-encoded $3F/$3D", () => {
+  const queryDetail: Record<string, RisonValue> = {
+    end: 0,
+    start: -60,
+    timeType: "RELATIVE",
+    tz: "UTC",
+    unit: "seconds",
+    editorString: "fields @timestamp",
+    source: ["arn:aws:logs:eu-north-1:1:log-group:/x"],
+    lang: "CWLI",
+    logClass: "STANDARD",
+    queryBy: "logGroupName",
+  };
+  const original = buildConsoleLink({ region: "eu-north-1", queryDetail });
+  const percentEncoded = original
+    .replace("$3F", "%3F")
+    .replace("$3D", "%3D");
+  const parsed = parseConsoleLink(percentEncoded);
+  assert.equal(parsed.region, "eu-north-1");
+  assert.deepEqual(parsed.queryDetail, queryDetail);
+});
+
+test("parseConsoleLink: rejects URLs without queryDetail", () => {
+  assert.throws(
+    () => parseConsoleLink("https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1#logsV2:logs-insights"),
+    /queryDetail/,
   );
 });

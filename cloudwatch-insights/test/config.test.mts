@@ -165,6 +165,67 @@ test("resolveEnvConfig: returns empty when no top-level [env.<env>] and no overr
   assert.deepEqual(resolveEnvConfig(settings, "foo", "prod"), {});
 });
 
+test("parseSettings: parses region in [defaults] and [repo.<name>]", () => {
+  const settings = parseSettings(
+    [
+      "[defaults]",
+      'region = "eu-north-1"',
+      "",
+      "[repo.foo]",
+      'region = "us-east-1"',
+    ].join("\n"),
+  );
+  assert.equal(settings.defaults.region, "eu-north-1");
+  assert.equal(settings.repos["foo"].region, "us-east-1");
+});
+
+test("resolveRepoDefaults: per-repo region overrides defaults region", () => {
+  const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "cwi-region-")));
+  try {
+    const repoRoot = join(tmpRoot, "my-service");
+    mkdirSync(repoRoot);
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+    );
+
+    const settings = loadSettings(writeSettings(tmpRoot, [
+      "[defaults]",
+      'region = "eu-north-1"',
+      "",
+      "[repo.my-service]",
+      'region = "us-east-1"',
+    ].join("\n")));
+
+    const { defaults } = resolveRepoDefaults(settings, repoRoot);
+    assert.equal(defaults.region, "us-east-1");
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("resolveRepoDefaults: defaults region inherited when no per-repo override", () => {
+  const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), "cwi-region-inherit-")));
+  try {
+    const repoRoot = join(tmpRoot, "other-service");
+    mkdirSync(repoRoot);
+    assert.equal(
+      spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repoRoot }).status,
+      0,
+    );
+
+    const settings = loadSettings(writeSettings(tmpRoot, [
+      "[defaults]",
+      'region = "eu-north-1"',
+    ].join("\n")));
+
+    const { defaults } = resolveRepoDefaults(settings, repoRoot);
+    assert.equal(defaults.region, "eu-north-1");
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+});
+
 test("parseSettings: filters non-string entries from flatten-fields", () => {
   const settings = parseSettings(
     [

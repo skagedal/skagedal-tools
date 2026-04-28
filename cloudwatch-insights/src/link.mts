@@ -9,6 +9,7 @@
  */
 
 import { existsSync, readFileSync } from "fs";
+import { spawn } from "child_process";
 
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
@@ -34,6 +35,7 @@ import {
   TimeRangeParseError,
   tryParseRelativeDurationSeconds,
 } from "./time-range.mjs";
+import { hyperlink, openUrlCommand } from "./terminal.mjs";
 import {
   FrontMatter,
   currentInsightsPath,
@@ -51,6 +53,7 @@ export interface LinkValues {
   profile?: string;
   "preserve-time-window": boolean;
   "account-id"?: string;
+  open: boolean;
   quiet: boolean;
 }
 
@@ -103,7 +106,7 @@ export async function runLink(values: LinkValues): Promise<void> {
     environment ? resolveEnvConfig(settings, sectionName, environment) : {};
   const profile = values.profile ?? envConfig.awsProfile;
   const region =
-    values.region ?? envConfig.region ?? process.env.AWS_REGION;
+    values.region ?? envConfig.region ?? defaults.region ?? process.env.AWS_REGION;
 
   if (!region) {
     fail(
@@ -134,8 +137,14 @@ export async function runLink(values: LinkValues): Promise<void> {
     if (profile && !values.profile) {
       process.stderr.write(`  AWS_PROFILE: ${profile} (from [env.${environment}])\n`);
     }
-    if (envConfig.region && !values.region) {
-      process.stderr.write(`  AWS region:  ${envConfig.region} (from [env.${environment}])\n`);
+    if (!values.region) {
+      if (envConfig.region) {
+        process.stderr.write(`  AWS region:  ${envConfig.region} (from [env.${environment}])\n`);
+      } else if (defaults.region) {
+        process.stderr.write(
+          `  AWS region:  ${defaults.region} (from ${sectionName ? `[repo.${sectionName}] or [defaults]` : "[defaults]"})\n`,
+        );
+      }
     }
     process.stderr.write(`  account ID:  ${accountId}\n`);
     process.stderr.write(`  log groups:  ${logGroups.join(", ")}\n`);
@@ -150,7 +159,26 @@ export async function runLink(values: LinkValues): Promise<void> {
     time,
   });
   const url = buildConsoleLink({ region, queryDetail });
+
+  if (process.stdout.isTTY) {
+    process.stdout.write(
+      hyperlink(url, "Open in CloudWatch Logs Insights") + "\n",
+    );
+  }
   process.stdout.write(url + "\n");
+
+  if (values.open) {
+    openInBrowser(url);
+  }
+}
+
+function openInBrowser(url: string): void {
+  const { cmd, args } = openUrlCommand(url);
+  const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+  child.on("error", (err) => {
+    process.stderr.write(`error: failed to open browser (${cmd}): ${err.message}\n`);
+  });
+  child.unref();
 }
 
 function chooseTimeSpec(
