@@ -25,6 +25,11 @@ export interface RepoConfig {
   /** Field names whose value is a JSON object to be flattened into the row. */
   flattenFields?: string[];
   /**
+   * Default AWS region for runs from this repo (or globally, when set in
+   * [defaults]). Used as a fallback when no `[env.<name>].region` applies.
+   */
+  region?: string;
+  /**
    * Per-environment overrides scoped to this repo, parsed from
    * [repo.<repo>.env.<env>] sections. Each entry is merged on top of the
    * top-level [env.<env>] config on a per-key basis.
@@ -119,6 +124,7 @@ function parseRepoConfig(section: Record<string, unknown>): RepoConfig {
   const config: RepoConfig = {};
   if (typeof section.group === "string") config.group = section.group;
   if (typeof section.app === "string") config.app = section.app;
+  if (typeof section.region === "string") config.region = section.region;
   if (Array.isArray(section["flatten-fields"])) {
     const fields = section["flatten-fields"].filter((f): f is string => typeof f === "string");
     config.flattenFields = fields;
@@ -200,6 +206,7 @@ function mergeRepoConfig(base: RepoConfig, override: RepoConfig | undefined): Re
     group: override.group ?? base.group,
     app: override.app ?? base.app,
     flattenFields: override.flattenFields ?? base.flattenFields,
+    region: override.region ?? base.region,
     envOverrides: override.envOverrides ?? base.envOverrides,
   };
 }
@@ -279,6 +286,7 @@ const DEFAULT_SETTINGS_TEMPLATE = `# cloudwatch-insights settings
 # Supported fields (in either [defaults] or [repo.<name>]):
 #   group           = "/{{ env }}/logs"  # log group template; {{ env }}, {{ app }} expanded at query time
 #   app             = "my-service"        # default app filter for the seeded query
+#   region          = "eu-north-1"        # AWS region fallback when no [env.<name>].region applies
 #   flatten-fields  = ["@message"]        # JSON-decode these fields and merge their keys into the row
 #
 # Environments are declared as [env.<name>] (any lower kebab-case name) and may
