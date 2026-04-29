@@ -113,11 +113,6 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
             ),
         )
     })?;
-    if let Some(p) = &profile {
-        unsafe {
-            std::env::set_var("AWS_PROFILE", p);
-        }
-    }
 
     // The diagnostic preamble is noise when --raw is set — the caller asked
     // for nothing but the URL.
@@ -127,6 +122,7 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
         args.account_id.as_deref(),
         &env_config,
         &region,
+        profile.as_deref(),
         !show_diagnostics,
         environment.as_deref(),
     )
@@ -248,6 +244,7 @@ async fn resolve_account_id(
     cli_account_id: Option<&str>,
     env_config: &EnvConfig,
     region: &str,
+    profile: Option<&str>,
     quiet: bool,
     environment_label: Option<&str>,
 ) -> Result<String> {
@@ -265,6 +262,9 @@ async fn resolve_account_id(
     }
     let mut loader = aws_config::defaults(BehaviorVersion::latest());
     loader = loader.region(aws_config::Region::new(region.to_string()));
+    if let Some(p) = profile {
+        loader = loader.profile_name(p.to_string());
+    }
     let config = loader.load().await;
     let sts = aws_sdk_sts::Client::new(&config);
     match sts.get_caller_identity().send().await {
@@ -321,8 +321,8 @@ async fn resolve_query_source_read_only(args: &CopyLinkArgs) -> Result<(String, 
 }
 
 fn resolve_log_groups(
-    cli: &[String],
-    fm_log_group: Option<&LogGroupValue>,
+    cli_log_group: &[String],
+    front_matter_log_group: Option<&LogGroupValue>,
     config_group_template: Option<&str>,
     template_vars: &BTreeMap<&str, Option<&str>>,
     section_name: Option<&str>,
@@ -335,11 +335,15 @@ fn resolve_log_groups(
         }
         Ok(out)
     };
-    let cli: Vec<String> = cli.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-    if !cli.is_empty() {
-        return expand(cli);
+    let from_cli: Vec<String> = cli_log_group
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if !from_cli.is_empty() {
+        return expand(from_cli);
     }
-    if let Some(lg) = fm_log_group {
+    if let Some(lg) = front_matter_log_group {
         let v = lg.to_vec();
         if !v.is_empty() {
             return expand(v);

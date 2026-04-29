@@ -37,15 +37,10 @@ pub async fn run(args: RawArgs) -> Result<()> {
     let range = parse_time_range(time_expr, Local::now())
         .map_err(|e: TimeRangeParseError| fail(2, e.to_string()))?;
 
-    if let Some(profile) = &args.profile {
-        // SAFETY: process-wide env mutation; this CLI is single-threaded for
-        // its setup phase and the SDK reads it once we configure it below.
-        unsafe {
-            std::env::set_var("AWS_PROFILE", profile);
-        }
-    }
-
     let mut loader = aws_config::defaults(BehaviorVersion::latest());
+    if let Some(profile) = &args.profile {
+        loader = loader.profile_name(profile.clone());
+    }
     if let Some(region) = &args.region {
         loader = loader.region(aws_config::Region::new(region.clone()));
     }

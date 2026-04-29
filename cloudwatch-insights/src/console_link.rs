@@ -511,8 +511,8 @@ mod tests {
     #[test]
     fn log_group_arn_basic() {
         assert_eq!(
-            log_group_arn("eu-north-1", "361629632765", "/eks/uat/team-icc"),
-            "arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc"
+            log_group_arn("eu-north-1", "123456789012", "/my/service/logs"),
+            "arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs"
         );
     }
 
@@ -523,10 +523,10 @@ mod tests {
             "#logsV2:logs-insights$3FqueryDetail$3D~(end~0~start~-3600~timeType~'RELATIVE",
             "~tz~'UTC~unit~'seconds~editorString~'fields*20*40timestamp*2c*20*40message",
             "*0a*7c*20sort*20*40timestamp*20desc*0a*7c*20filter*20app*20*3d*20",
-            "*27installer-notification*27*0a*7c*20limit*20200",
+            "*27my-service*27*0a*7c*20limit*20200",
             "~queryId~'dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb",
-            "~source~(~'arn*3aaws*3alogs*3aeu-north-1*3a361629632765*3alog-group",
-            "*3a*2feks*2fuat*2fteam-icc)",
+            "~source~(~'arn*3aaws*3alogs*3aeu-north-1*3a123456789012*3alog-group",
+            "*3a*2fmy*2fservice*2flogs)",
             "~lang~'CWLI~logClass~'STANDARD~queryBy~'logGroupName)"
         );
 
@@ -538,7 +538,7 @@ mod tests {
         detail.insert("unit".into(), s("seconds"));
         detail.insert(
             "editorString".into(),
-            s("fields @timestamp, @message\n| sort @timestamp desc\n| filter app = 'installer-notification'\n| limit 200"),
+            s("fields @timestamp, @message\n| sort @timestamp desc\n| filter app = 'my-service'\n| limit 200"),
         );
         detail.insert(
             "queryId".into(),
@@ -546,7 +546,7 @@ mod tests {
         );
         detail.insert(
             "source".into(),
-            RisonValue::Array(vec![s("arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc")]),
+            RisonValue::Array(vec![s("arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs")]),
         );
         detail.insert("lang".into(), s("CWLI"));
         detail.insert("logClass".into(), s("STANDARD"));
@@ -678,11 +678,11 @@ mod tests {
     #[test]
     fn parse_log_group_arn_basic() {
         let parsed =
-            parse_log_group_arn("arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc")
+            parse_log_group_arn("arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs")
                 .unwrap();
         assert_eq!(parsed.0, "eu-north-1");
-        assert_eq!(parsed.1, "361629632765");
-        assert_eq!(parsed.2, "/eks/uat/team-icc");
+        assert_eq!(parsed.1, "123456789012");
+        assert_eq!(parsed.2, "/my/service/logs");
         assert!(parse_log_group_arn("not-an-arn").is_none());
         assert!(parse_log_group_arn("arn:aws:s3:::my-bucket").is_none());
     }
@@ -702,12 +702,12 @@ mod tests {
         detail.insert("unit".into(), s("seconds"));
         detail.insert(
             "editorString".into(),
-            s("fields @timestamp, @message\n| sort @timestamp desc\n| filter app = 'installer-notification'\n| limit 200"),
+            s("fields @timestamp, @message\n| sort @timestamp desc\n| filter app = 'my-service'\n| limit 200"),
         );
         detail.insert("queryId".into(), s("dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb"));
         detail.insert(
             "source".into(),
-            RisonValue::Array(vec![s("arn:aws:logs:eu-north-1:361629632765:log-group:/eks/uat/team-icc")]),
+            RisonValue::Array(vec![s("arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs")]),
         );
         detail.insert("lang".into(), s("CWLI"));
         detail.insert("logClass".into(), s("STANDARD"));

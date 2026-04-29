@@ -308,14 +308,14 @@ mod tests {
     fn parse_link_relative_single_log_group() {
         let url = build_link(
             "eu-north-1",
-            "361629632765",
-            &["/eks/uat/team-icc"],
+            "123456789012",
+            &["/my/service/logs"],
             "fields @timestamp, @message\n| limit 200",
             TimeSpec::Relative { seconds_back: 3600 },
         );
         let state = parse_link_to_state(&url).unwrap();
         assert_eq!(state.region, "eu-north-1");
-        assert_eq!(state.log_groups, vec!["/eks/uat/team-icc".to_string()]);
+        assert_eq!(state.log_groups, vec!["/my/service/logs".to_string()]);
         assert_eq!(state.time, "1h");
         assert_eq!(state.query, "fields @timestamp, @message\n| limit 200");
     }
@@ -351,14 +351,14 @@ mod tests {
         });
         detail.insert(
             "source".into(),
-            RisonValue::Array(vec![RisonValue::String("/eks/systest/team-icc".into())]),
+            RisonValue::Array(vec![RisonValue::String("/my/service/logs".into())]),
         );
         let url = build_console_link(&ConsoleLinkInput {
             region: "eu-north-1",
             query_detail: &detail,
         });
         let state = parse_link_to_state(&url).unwrap();
-        assert_eq!(state.log_groups, vec!["/eks/systest/team-icc".to_string()]);
+        assert_eq!(state.log_groups, vec!["/my/service/logs".to_string()]);
         assert_eq!(state.region, "eu-north-1");
     }
 
@@ -385,13 +385,13 @@ mod tests {
     fn raw_command_basic() {
         let cmd = build_raw_command(&ParsedLinkState {
             region: "eu-north-1".into(),
-            log_groups: vec!["/eks/uat/team-icc".into()],
+            log_groups: vec!["/my/service/logs".into()],
             time: "1h".into(),
             query: "fields @timestamp\n| limit 200".into(),
         });
         assert_eq!(
             cmd,
-            "cloudwatch-insights raw -r eu-north-1 -g /eks/uat/team-icc -t 1h -f - <<'EOF'\n\
+            "cloudwatch-insights raw -r eu-north-1 -g /my/service/logs -t 1h -f - <<'EOF'\n\
              fields @timestamp\n| limit 200\nEOF"
         );
     }

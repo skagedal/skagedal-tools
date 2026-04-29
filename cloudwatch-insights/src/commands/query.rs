@@ -93,13 +93,10 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         .or_else(|| defaults.region.clone())
         .or_else(|| std::env::var("AWS_REGION").ok());
 
-    if let Some(p) = &profile {
-        unsafe {
-            std::env::set_var("AWS_PROFILE", p);
-        }
-    }
-
     let mut loader = aws_config::defaults(BehaviorVersion::latest());
+    if let Some(p) = &profile {
+        loader = loader.profile_name(p.clone());
+    }
     if let Some(r) = &region {
         loader = loader.region(aws_config::Region::new(r.clone()));
     }
@@ -302,8 +299,8 @@ fn validate_environment_arg(raw: Option<&str>, source: &str) -> Result<Option<St
 }
 
 fn resolve_log_groups(
-    cli: &[String],
-    fm_log_group: Option<&LogGroupValue>,
+    cli_log_group: &[String],
+    front_matter_log_group: Option<&LogGroupValue>,
     config_group_template: Option<&str>,
     template_vars: &BTreeMap<&str, Option<&str>>,
     section_name: Option<&str>,
@@ -317,11 +314,15 @@ fn resolve_log_groups(
         Ok(out)
     };
 
-    let cli: Vec<String> = cli.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-    if !cli.is_empty() {
-        return expand(cli);
+    let from_cli: Vec<String> = cli_log_group
+        .iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if !from_cli.is_empty() {
+        return expand(from_cli);
     }
-    if let Some(lg) = fm_log_group {
+    if let Some(lg) = front_matter_log_group {
         let v = lg.to_vec();
         if !v.is_empty() {
             return expand(v);

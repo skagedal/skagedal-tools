@@ -385,18 +385,18 @@ mod tests {
             "[defaults]\n\
              flatten-fields = [\"@message\"]\n\
              \n\
-             [repo.installer-notification]\n\
-             group = \"/{env}/team-icc\"\n\
-             app = \"installer-notification\"\n\
+             [repo.my-service]\n\
+             group = \"/{env}/team-x\"\n\
+             app = \"my-service\"\n\
              \n\
              [repo.another-service]\n\
              group = \"/prod/another\"\n",
         )
         .unwrap();
         assert_eq!(s.defaults.flatten_fields.as_deref(), Some(&["@message".to_string()][..]));
-        let r = &s.repos["installer-notification"];
-        assert_eq!(r.group.as_deref(), Some("/{env}/team-icc"));
-        assert_eq!(r.app.as_deref(), Some("installer-notification"));
+        let r = &s.repos["my-service"];
+        assert_eq!(r.group.as_deref(), Some("/{env}/team-x"));
+        assert_eq!(r.app.as_deref(), Some("my-service"));
         assert_eq!(s.repos["another-service"].group.as_deref(), Some("/prod/another"));
     }
 
@@ -536,20 +536,20 @@ mod tests {
     fn resolve_repo_defaults_overrides() {
         let tmp = tempdir().unwrap();
         let root = std::fs::canonicalize(tmp.path()).unwrap();
-        let repo = init_repo(&root, "installer-notification");
+        let repo = init_repo(&root, "my-service");
         let s = parse_settings(
             "[defaults]\n\
              flatten-fields = [\"@message\"]\n\
              \n\
-             [repo.installer-notification]\n\
-             group = \"/{env}/team-icc\"\n\
-             app = \"installer-notification\"\n",
+             [repo.my-service]\n\
+             group = \"/{env}/team-x\"\n\
+             app = \"my-service\"\n",
         )
         .unwrap();
         let (name, defaults) = resolve_repo_defaults(&s, &repo);
-        assert_eq!(name.as_deref(), Some("installer-notification"));
-        assert_eq!(defaults.group.as_deref(), Some("/{env}/team-icc"));
-        assert_eq!(defaults.app.as_deref(), Some("installer-notification"));
+        assert_eq!(name.as_deref(), Some("my-service"));
+        assert_eq!(defaults.group.as_deref(), Some("/{env}/team-x"));
+        assert_eq!(defaults.app.as_deref(), Some("my-service"));
         assert_eq!(defaults.flatten_fields.as_deref(), Some(&["@message".to_string()][..]));
     }
 
