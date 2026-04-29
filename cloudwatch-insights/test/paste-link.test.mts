@@ -8,7 +8,7 @@ import {
   buildRawCommand,
   formatRelativeDuration,
   parseLinkToState,
-} from "../src/parse-link.mjs";
+} from "../src/paste-link.mjs";
 import {
   buildConsoleLink,
   buildQueryDetail,
@@ -140,7 +140,7 @@ test("buildRawCommand: escapes single-quotes inside values", () => {
   assert.match(cmd, /-g '\/it'\\''s'/);
 });
 
-test("end-to-end: link → parse-link → recreated current.insights", () => {
+test("end-to-end: copy-link → paste-link → recreated current.insights", () => {
   const url = buildLink({
     region: "eu-north-1",
     accountId: "361629632765",
@@ -150,7 +150,7 @@ test("end-to-end: link → parse-link → recreated current.insights", () => {
   });
   const state = parseLinkToState(url);
 
-  const tmp = mkdtempSync(join(tmpdir(), "cwi-parse-link-"));
+  const tmp = mkdtempSync(join(tmpdir(), "cwi-paste-link-"));
   try {
     const path = join(tmp, "current.insights");
     // Mirror what runParseLink writes (front-matter + body), so we test the

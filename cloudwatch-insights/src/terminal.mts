@@ -11,9 +11,53 @@
  */
 const ESC = "\x1b";
 const ST = `${ESC}\\`;
+const RESET = `${ESC}[0m`;
 
 export function hyperlink(url: string, text: string): string {
   return `${ESC}]8;;${url}${ST}${text}${ESC}]8;;${ST}`;
+}
+
+export type Color =
+  | "blue"
+  | "cyan"
+  | "green"
+  | "yellow"
+  | "red"
+  | "magenta"
+  | "gray";
+
+const COLOR_CODES: Record<Color, string> = {
+  blue: "34",
+  cyan: "36",
+  green: "32",
+  yellow: "33",
+  red: "31",
+  magenta: "35",
+  gray: "90",
+};
+
+export interface ColorOptions {
+  color?: Color;
+  bold?: boolean;
+  underline?: boolean;
+}
+
+export function colorize(text: string, opts: ColorOptions): string {
+  const codes: string[] = [];
+  if (opts.bold) codes.push("1");
+  if (opts.underline) codes.push("4");
+  if (opts.color) codes.push(COLOR_CODES[opts.color]);
+  if (codes.length === 0) return text;
+  return `${ESC}[${codes.join(";")}m${text}${RESET}`;
+}
+
+/**
+ * Format a clickable, styled link: an OSC 8 hyperlink whose visible text is
+ * wrapped in a "link-like" SGR style (bright blue + underline by default).
+ * Terminals without OSC 8 support still see the styled text.
+ */
+export function styledLink(url: string, text: string, opts: ColorOptions = { color: "cyan", underline: true }): string {
+  return hyperlink(url, colorize(text, opts));
 }
 
 /**

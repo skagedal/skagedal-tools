@@ -1,9 +1,13 @@
 /**
- * `cloudwatch-insights parse-link` — inverse of the `link` subcommand.
+ * `cloudwatch-insights paste-link` — inverse of the `copy-link` subcommand.
  *
- * Default behavior: write the query body, log groups, time and (optional)
- * region into `current.insights` for the current slot, so a subsequent
+ * Default behavior: read a CloudWatch Console URL from the system pasteboard
+ * and write the query body, log groups, time and (optional) region into
+ * `current.insights` for the current slot, so a subsequent
  * `cloudwatch-insights query` would re-run the same query.
+ *
+ * A positional argument overrides the pasteboard read; -p/--prompt asks for
+ * the URL on stdin instead.
  *
  * With `--as-raw`: print a self-contained `cloudwatch-insights raw …`
  * shell command (a heredoc piping the query body into stdin) and do not
@@ -12,6 +16,7 @@
 
 import { mkdirSync, writeFileSync } from "fs";
 import { dirname } from "path";
+import { createInterface } from "readline";
 import { stringify as stringifyToml } from "smol-toml";
 
 import {
@@ -20,11 +25,12 @@ import {
   RisonValue,
 } from "./console-link.mjs";
 import { currentInsightsPath } from "./query-file.mjs";
+import { readFromPasteboard, PasteboardError } from "./pasteboard.mjs";
 
-export interface ParseLinkValues {
-  url?: string;
+export interface PasteLinkValues {
   "as-raw": boolean;
   output?: string;
+  prompt: boolean;
   quiet: boolean;
 }
 
@@ -35,8 +41,8 @@ export interface ParsedLinkState {
   query: string;
 }
 
-export async function runParseLink(
-  values: ParseLinkValues,
+export async function runPasteLink(
+  values: PasteLinkValues,
   positionals: string[],
 ): Promise<void> {
   const url = await resolveUrl(values, positionals);
@@ -177,35 +183,49 @@ function shellQuote(s: string): string {
 }
 
 async function resolveUrl(
-  values: ParseLinkValues,
+  values: PasteLinkValues,
   positionals: string[],
 ): Promise<string> {
-  if (values.url && positionals.length > 0) {
-    fail("pass either --url or a positional URL, not both", 2);
+  if (positionals.length > 1) {
+    fail("paste-link takes at most one positional URL", 2);
   }
-  let url = values.url ?? positionals[0];
-  if (!url) {
-    // Read from stdin as a fallback so users can pipe pbpaste / xclip into us.
-    if (!process.stdin.isTTY) {
-      url = await readAllStdin();
+
+  if (positionals.length === 1) {
+    if (values.prompt) {
+      fail("--prompt cannot be combined with a positional URL", 2);
     }
+    return positionals[0].trim();
   }
+
+  if (values.prompt) {
+    return await promptForUrl();
+  }
+
+  let url: string;
+  try {
+    url = await readFromPasteboard();
+  } catch (err) {
+    if (err instanceof PasteboardError) {
+      fail(`${err.message}\n  hint: pass the URL as a positional argument, or use --prompt`, 1);
+    }
+    throw err;
+  }
+  url = url.trim();
   if (!url) {
-    fail("no URL given — pass it as the first argument, --url, or via stdin", 2);
+    fail("pasteboard is empty — pass the URL as a positional argument, or use --prompt", 2);
   }
-  return url.trim();
+  return url;
 }
 
-async function readAllStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => {
-      data += chunk;
+async function promptForUrl(): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return await new Promise<string>((resolve) => {
+      rl.question("URL: ", (answer) => resolve(answer.trim()));
     });
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", reject);
-  });
+  } finally {
+    rl.close();
+  }
 }
 
 function fail(message: string, code = 1): never {
