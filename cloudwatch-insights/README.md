@@ -4,18 +4,18 @@ Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/Am
 
 ## Requirements
 
-- [Node.js](https://nodejs.org) (v20+, required by [gunshi](https://github.com/kazupon/gunshi))
+- A recent Rust toolchain (1.85+ — uses edition 2024)
 - AWS credentials available through the standard SDK chain (env vars, `~/.aws/credentials`, SSO, IMDS, …)
 
 ## Installation
 
-Install globally using pnpm:
+Install with cargo:
 
 ```sh
-pnpm link --global
+cargo install --path . --bin cloudwatch-insights
 ```
 
-This builds the TypeScript source and installs the `cloudwatch-insights` command on your `PATH`. The `install` script at the repo root does the same for every tool in the repo.
+This compiles a single binary and installs `cloudwatch-insights` into `~/.cargo/bin`. The `install` script at the repo root does the same for every tool in the repo.
 
 ## Subcommands
 
@@ -160,9 +160,8 @@ The `-t / --time` flag (and the front-matter `time:` key) accepts, in order of p
 | Bare day keyword | `today`, `yesterday` | Entire day (local time) |
 | Time-only range | `13.00-13.01`, `13:00-13:01`, `09.15.30.000-09.15.30.500` | Range on today (local time). Wraps past midnight. |
 | Explicit ISO range | `2026-04-22T13:00:00Z/2026-04-22T14:00:00Z` | Separator `/`, `..`, or ` to ` |
-| Natural language | `"last Monday 9am to 5pm"` | Parsed by [chrono-node](https://github.com/wanasit/chrono) as a fallback |
 
-Times use `.` or `:` as the sub-separator. Milliseconds are introduced with a `.` after the seconds (e.g. `09:15:00.500`).
+Times use `.` or `:` as the sub-separator. Milliseconds are introduced with a `.` after the seconds (e.g. `09:15:00.500`). These five forms are the complete set — natural-language input (e.g. "last Monday 9am to 5pm") is not supported. Anything that doesn't match one of the forms above is rejected with an error listing the supported forms.
 
 Default: **1h** (last hour) if neither CLI nor front-matter specifies one.
 
@@ -257,8 +256,8 @@ Standard AWS SDK resolution applies:
 ## Development
 
 ```sh
-pnpm install
-pnpm build                                   # compile TypeScript to dist/
-pnpm dev -- query -g /my/group -t 5h         # run directly from src/ via tsx
-pnpm test                                    # time-range, config, query-file tests
+cargo build                                  # compile to target/debug/
+cargo run -- query -g /my/group -t 5h        # run directly from src/
+cargo test                                   # time-range, config, query-file tests
+cargo clippy --all-targets -- -D warnings    # lint
 ```

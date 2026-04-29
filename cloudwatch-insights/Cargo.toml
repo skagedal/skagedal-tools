@@ -1,0 +1,27 @@
+[package]
+name = "cloudwatch-insights"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+
+[[bin]]
+name = "cloudwatch-insights"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatchlogs = "1"
+aws-sdk-sts = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+indexmap = { version = "2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "io-util", "io-std", "time"] }
+toml = { version = "0.8", features = ["preserve_order"] }
+
+[dev-dependencies]
+tempfile = "3"
