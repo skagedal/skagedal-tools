@@ -27,6 +27,9 @@ pub struct FrontMatter {
         skip_serializing_if = "Option::is_none"
     )]
     pub log_group: Option<LogGroupValue>,
+    /// When true, `query` skips AWS execution after the editor closes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dry: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,6 +217,12 @@ mod tests {
         let qf = parse_query_file(raw).unwrap();
         assert!(qf.front_matter.time.is_none());
         assert_eq!(qf.body, raw);
+    }
+
+    #[test]
+    fn parse_query_file_preserves_dry_true() {
+        let qf = parse_query_file("time = \"1h\"\ndry = true\n---\nfields @timestamp").unwrap();
+        assert_eq!(qf.front_matter.dry, Some(true));
     }
 
     #[test]

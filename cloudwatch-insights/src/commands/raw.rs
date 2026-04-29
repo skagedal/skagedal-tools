@@ -9,7 +9,7 @@ use tokio::io::AsyncReadExt;
 
 use crate::cli::RawArgs;
 use crate::commands::fail;
-use crate::insights::{run_insights_query, RunQueryOptions, StatusCallback};
+use crate::insights::{run_insights_query, ProgressCallback, QueryProgress, RunQueryOptions};
 use crate::output::write_results_strings;
 use crate::time_range::{parse_time_range, TimeRangeParseError};
 
@@ -64,15 +64,15 @@ pub async fn run(args: RawArgs) -> Result<()> {
 
     let mut last_status = String::new();
     let quiet = args.quiet;
-    let on_status: Option<StatusCallback> = if quiet {
+    let on_progress: Option<ProgressCallback> = if quiet {
         None
     } else {
-        Some(Box::new(move |status: &str| {
-            if status == last_status {
+        Some(Box::new(move |progress: &QueryProgress| {
+            if progress.status == last_status {
                 return;
             }
-            last_status = status.to_string();
-            eprintln!("  status: {status}");
+            last_status = progress.status.clone();
+            eprintln!("  status: {}", progress.status);
         }))
     };
 
@@ -84,7 +84,7 @@ pub async fn run(args: RawArgs) -> Result<()> {
         end_time: range.end,
         limit: args.limit,
         poll_interval: Duration::from_secs(1),
-        on_status,
+        on_progress,
     })
     .await?;
 

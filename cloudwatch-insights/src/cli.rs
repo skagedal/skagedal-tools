@@ -23,11 +23,12 @@ pub enum Subcommand {
     Query(QueryArgs),
     /// Run a query verbatim from a file (no templating, no front-matter, no config)
     Raw(RawArgs),
-    /// Print a shareable AWS Console URL for the query (no editor, no execution)
-    Link(LinkArgs),
-    /// Decode an AWS Console Insights URL and recreate the query state
-    #[command(name = "parse-link")]
-    ParseLink(ParseLinkArgs),
+    /// Copy a shareable AWS Console URL for the query to the system pasteboard
+    #[command(name = "copy-link")]
+    CopyLink(CopyLinkArgs),
+    /// Decode an AWS Console Insights URL (default: from the pasteboard) and recreate the query state
+    #[command(name = "paste-link")]
+    PasteLink(PasteLinkArgs),
     /// Stream the contents of latest-run.jsonl to stdout
     Show(ShowArgs),
     /// Open settings.toml in $EDITOR, creating it (and a placeholder section for the current repo) if needed
@@ -114,7 +115,7 @@ pub struct RawArgs {
 }
 
 #[derive(Debug, Args, Clone)]
-pub struct LinkArgs {
+pub struct CopyLinkArgs {
     /// Log group name (repeat or comma-separate; overrides config)
     #[arg(long = "log-group", short = 'g', value_delimiter = ',')]
     pub log_group: Vec<String>,
@@ -151,6 +152,10 @@ pub struct LinkArgs {
     #[arg(long = "preserve-time-window", default_value_t = false)]
     pub preserve_time_window: bool,
 
+    /// Print the URL to stdout and skip the pasteboard copy
+    #[arg(long, default_value_t = false)]
+    pub raw: bool,
+
     /// Open the URL in the default browser
     #[arg(long, default_value_t = false)]
     pub open: bool,
@@ -161,11 +166,7 @@ pub struct LinkArgs {
 }
 
 #[derive(Debug, Args, Clone)]
-pub struct ParseLinkArgs {
-    /// The URL to decode (alternatively pass it as a positional, or pipe it on stdin)
-    #[arg(long)]
-    pub url: Option<String>,
-
+pub struct PasteLinkArgs {
     /// Print a self-contained `cloudwatch-insights raw` shell command instead of writing current.insights
     #[arg(long = "as-raw", default_value_t = false)]
     pub as_raw: bool,
@@ -174,11 +175,15 @@ pub struct ParseLinkArgs {
     #[arg(long, short = 'o')]
     pub output: Option<String>,
 
+    /// Prompt for the URL on stdin instead of reading the pasteboard
+    #[arg(long, short = 'p', default_value_t = false)]
+    pub prompt: bool,
+
     /// Suppress diagnostic output on stderr
     #[arg(long, default_value_t = false)]
     pub quiet: bool,
 
-    /// Positional URL argument (alternative to --url)
+    /// Positional URL argument (overrides the pasteboard read)
     #[arg(value_name = "URL")]
     pub positional_url: Option<String>,
 }

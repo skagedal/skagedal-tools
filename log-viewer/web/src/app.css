@@ -92,6 +92,23 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.filter-input {
+  font: inherit;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  width: 240px;
+}
+
+.filter-input::placeholder { color: var(--dim); }
+
+.filter-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .scroll {
   flex: 1;
   overflow: auto;

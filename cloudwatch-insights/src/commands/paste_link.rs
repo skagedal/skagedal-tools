@@ -2,15 +2,14 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use chrono::{TimeZone, Utc};
-use std::io::IsTerminal;
-use tokio::io::AsyncReadExt;
 
-use crate::cli::ParseLinkArgs;
+use crate::cli::PasteLinkArgs;
 use crate::commands::fail;
 use crate::console_link::{parse_console_link, parse_log_group_arn, RisonValue};
+use crate::pasteboard::{read_from_pasteboard, PasteboardError};
 use crate::paths;
 
-pub async fn run(args: ParseLinkArgs) -> Result<()> {
+pub async fn run(args: PasteLinkArgs) -> Result<()> {
     let url = resolve_url(&args).await?;
     let state = parse_link_to_state(&url)?;
 
@@ -214,23 +213,51 @@ fn shell_quote(s: &str) -> String {
     format!("'{escaped}'")
 }
 
-async fn resolve_url(args: &ParseLinkArgs) -> Result<String> {
-    if args.url.is_some() && args.positional_url.is_some() {
-        return Err(fail(2, "pass either --url or a positional URL, not both"));
+async fn resolve_url(args: &PasteLinkArgs) -> Result<String> {
+    if let Some(positional) = &args.positional_url {
+        if args.prompt {
+            return Err(fail(2, "--prompt cannot be combined with a positional URL"));
+        }
+        return Ok(positional.trim().to_string());
     }
-    let mut url = args.url.clone().or_else(|| args.positional_url.clone());
-    if url.is_none() && !std::io::stdin().is_terminal() {
-        let mut s = String::new();
-        tokio::io::stdin().read_to_string(&mut s).await?;
-        url = Some(s);
+
+    if args.prompt {
+        return prompt_for_url();
     }
-    let url = url.ok_or_else(|| {
-        fail(
+
+    let url = match read_from_pasteboard() {
+        Ok(s) => s,
+        Err(PasteboardError(msg)) => {
+            return Err(fail(
+                1,
+                format!("{msg}\n  hint: pass the URL as a positional argument, or use --prompt"),
+            ));
+        }
+    };
+    let url = url.trim().to_string();
+    if url.is_empty() {
+        return Err(fail(
             2,
-            "no URL given — pass it as the first argument, --url, or via stdin",
-        )
-    })?;
-    Ok(url.trim().to_string())
+            "pasteboard is empty — pass the URL as a positional argument, or use --prompt",
+        ));
+    }
+    Ok(url)
+}
+
+fn prompt_for_url() -> Result<String> {
+    use std::io::{BufRead, Write};
+    let mut stderr = std::io::stderr().lock();
+    write!(stderr, "URL: ").map_err(|e| anyhow::anyhow!(e))?;
+    stderr.flush().map_err(|e| anyhow::anyhow!(e))?;
+    drop(stderr);
+
+    let stdin = std::io::stdin();
+    let mut line = String::new();
+    stdin
+        .lock()
+        .read_line(&mut line)
+        .map_err(|e| anyhow::anyhow!(e))?;
+    Ok(line.trim().to_string())
 }
 
 #[cfg(test)]

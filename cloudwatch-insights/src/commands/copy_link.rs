@@ -1,11 +1,10 @@
 use std::collections::BTreeMap;
-use std::io::IsTerminal;
 
 use anyhow::Result;
 use aws_config::BehaviorVersion;
 use chrono::Local;
 
-use crate::cli::LinkArgs;
+use crate::cli::CopyLinkArgs;
 use crate::commands::fail;
 use crate::config::{
     is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults,
@@ -15,15 +14,16 @@ use crate::console_link::{
     build_console_link, build_query_detail, log_group_arn, ConsoleLinkInput, QueryDetailInput,
     TimeSpec,
 };
+use crate::pasteboard::{copy_to_pasteboard, PasteboardError};
 use crate::paths;
 use crate::query_file::{load_query_file, parse_query_file, FrontMatter, LogGroupValue};
 use crate::template::expand_template;
-use crate::terminal::{current_platform, hyperlink, open_url_command};
+use crate::terminal::{current_platform, default_link_style, open_url_command, styled_link};
 use crate::time_range::{
     parse_time_range, try_parse_relative_duration_seconds, TimeRange, TimeRangeParseError,
 };
 
-pub async fn run(args: LinkArgs) -> Result<()> {
+pub async fn run(args: CopyLinkArgs) -> Result<()> {
     if args.query.is_some() && args.query_file.is_some() {
         return Err(fail(2, "--query and --query-file are mutually exclusive"));
     }
@@ -119,11 +119,15 @@ pub async fn run(args: LinkArgs) -> Result<()> {
         }
     }
 
+    // The diagnostic preamble is noise when --raw is set — the caller asked
+    // for nothing but the URL.
+    let show_diagnostics = !args.quiet && !args.raw;
+
     let account_id = resolve_account_id(
         args.account_id.as_deref(),
         &env_config,
         &region,
-        args.quiet,
+        !show_diagnostics,
         environment.as_deref(),
     )
     .await?;
@@ -135,7 +139,7 @@ pub async fn run(args: LinkArgs) -> Result<()> {
 
     let time_spec = choose_time_spec(&time_expr, &range, args.preserve_time_window);
 
-    if !args.quiet {
+    if show_diagnostics {
         if let Some(p) = &profile {
             if args.profile.is_none() {
                 if let Some(env) = &environment {
@@ -184,13 +188,28 @@ pub async fn run(args: LinkArgs) -> Result<()> {
         query_detail: &detail,
     });
 
+    if args.raw {
+        println!("{url}");
+        if args.open {
+            open_in_browser(&url);
+        }
+        return Ok(());
+    }
+
+    if let Err(err) = copy_to_pasteboard(&url) {
+        let PasteboardError(msg) = err;
+        return Err(fail(1, msg));
+    }
+
+    use std::io::IsTerminal;
     if std::io::stdout().is_terminal() {
         println!(
-            "{}",
-            hyperlink(&url, "Open in CloudWatch Logs Insights")
+            "AWS Console link copied to pasteboard. {}",
+            styled_link(&url, "Open directly", default_link_style())
         );
+    } else {
+        println!("AWS Console link copied to pasteboard.");
     }
-    println!("{url}");
 
     if args.open {
         open_in_browser(&url);
@@ -263,7 +282,7 @@ async fn resolve_account_id(
     }
 }
 
-async fn resolve_query_source_read_only(args: &LinkArgs) -> Result<(String, FrontMatter)> {
+async fn resolve_query_source_read_only(args: &CopyLinkArgs) -> Result<(String, FrontMatter)> {
     if let Some(q) = &args.query {
         return Ok((q.clone(), FrontMatter::default()));
     }

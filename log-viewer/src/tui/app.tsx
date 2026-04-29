@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
-import clipboard from "clipboardy";
+import { copyToSystemClipboard } from "./clipboard.js";
 import type { Config, FieldConfig } from "../config.js";
 import type { LogEntry } from "../entry.js";
 import { renderField, renderValueDetailed, stringify } from "../entry.js";
 import type { SourceHandle } from "../source.js";
+import { entryHaystack, fuzzyMatch, killWordLeft, stripUnprintable } from "./filter.js";
 
 interface Props {
   config: Config;
@@ -43,6 +44,18 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     rows: stdout?.rows ?? 24,
     cols: stdout?.columns ?? 100,
   }));
+  // Filter state.
+  // - `filterMode` is true while the text field is open for editing.
+  // - `filterActive` means a filter is being applied to the visible list.
+  //   It can stay true after the text field closes (Enter), and only resets
+  //   when the user Escapes out of the text field.
+  // - `selectedId` tracks the entry id of the selected row, so we can
+  //   re-anchor the cursor when the filter changes.
+  const [filterText, setFilterText] = useState("");
+  const [filterCursor, setFilterCursor] = useState(0);
+  const [filterMode, setFilterMode] = useState(false);
+  const [filterActive, setFilterActive] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!stdout) return;
@@ -90,14 +103,53 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     return () => source.close();
   }, [source]);
 
-  // Keep cursor in bounds as entries arrive; in follow mode, ride the tail.
-  // Implemented as "adjust state during render" rather than a useEffect, since
-  // react-hooks/set-state-in-effect flags the equivalent effect.
-  const [prevTail, setPrevTail] = useState({ entriesLength: entries.length, follow });
-  if (entries.length !== prevTail.entriesLength || follow !== prevTail.follow) {
-    setPrevTail({ entriesLength: entries.length, follow });
-    if (entries.length > 0 && (follow || cursor >= entries.length)) {
-      setCursor(entries.length - 1);
+  const totalRows = size.rows;
+  const visible = Math.max(1, totalRows - 4);
+  const activeFields = useMemo(() => visibleFieldConfigs(fields), [fields]);
+
+  // Displayed entries: the (possibly filtered) list the user actually sees
+  // and navigates. When the filter is inactive or empty this is just `entries`.
+  const displayed = useMemo(() => {
+    if (!filterActive || filterText.length === 0) return entries;
+    return entries.filter((e) => fuzzyMatch(filterText, entryHaystack(e, activeFields)));
+  }, [entries, filterActive, filterText, activeFields]);
+
+  // Keep cursor anchored to the same entry across filter changes / arrivals.
+  // We track `selectedId`; whenever `displayed` changes shape we re-derive
+  // `cursor` from it. In follow mode we ride the tail of `displayed`.
+  const [prevTail, setPrevTail] = useState({
+    displayed,
+    follow,
+    entriesLength: entries.length,
+  });
+  if (
+    prevTail.displayed !== displayed ||
+    prevTail.follow !== follow ||
+    prevTail.entriesLength !== entries.length
+  ) {
+    setPrevTail({ displayed, follow, entriesLength: entries.length });
+    if (follow && displayed.length > 0) {
+      const tailIdx = displayed.length - 1;
+      if (cursor !== tailIdx) setCursor(tailIdx);
+      const tailId = displayed[tailIdx]!.id;
+      if (selectedId !== tailId) setSelectedId(tailId);
+    } else if (selectedId != null) {
+      const idx = displayed.findIndex((e) => e.id === selectedId);
+      if (idx >= 0) {
+        if (cursor !== idx) setCursor(idx);
+      } else if (displayed.length > 0) {
+        const clamped = Math.max(0, Math.min(cursor, displayed.length - 1));
+        if (cursor !== clamped) setCursor(clamped);
+        setSelectedId(displayed[clamped]!.id);
+      } else {
+        setSelectedId(null);
+        if (cursor !== 0) setCursor(0);
+      }
+    } else if (displayed[cursor]) {
+      setSelectedId(displayed[cursor]!.id);
+    } else if (displayed.length > 0) {
+      setCursor(0);
+      setSelectedId(displayed[0]!.id);
     }
   }
 
@@ -109,11 +161,84 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     setDetailCursor(0);
   }
 
-  const totalRows = size.rows;
-  const visible = Math.max(1, totalRows - 4);
-  const activeFields = useMemo(() => visibleFieldConfigs(fields), [fields]);
+  // Helper used by all list-mode navigation: move cursor and pin the
+  // selectedId so it survives subsequent filter changes / new entries.
+  const moveCursorTo = (idx: number) => {
+    if (displayed.length === 0) {
+      setCursor(0);
+      setSelectedId(null);
+      return;
+    }
+    const clamped = Math.max(0, Math.min(idx, displayed.length - 1));
+    setCursor(clamped);
+    setSelectedId(displayed[clamped]!.id);
+  };
 
   useInput((input, key) => {
+    // Filter editing takes precedence over everything else: while the text
+    // field is open it owns every keypress except Enter/Escape (which close
+    // it). Typing updates the filter live so the list re-narrows as you go.
+    if (filterMode) {
+      if (key.return) {
+        setFilterMode(false);
+        return;
+      }
+      if (key.escape) {
+        setFilterMode(false);
+        setFilterActive(false);
+        return;
+      }
+      if (key.leftArrow || (key.ctrl && input === "b")) {
+        setFilterCursor((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.rightArrow || (key.ctrl && input === "f")) {
+        setFilterCursor((c) => Math.min(filterText.length, c + 1));
+        return;
+      }
+      if (key.home || (key.ctrl && input === "a")) {
+        setFilterCursor(0);
+        return;
+      }
+      if (key.end || (key.ctrl && input === "e")) {
+        setFilterCursor(filterText.length);
+        return;
+      }
+      if (key.backspace) {
+        if (filterCursor > 0) {
+          setFilterText(filterText.slice(0, filterCursor - 1) + filterText.slice(filterCursor));
+          setFilterCursor(filterCursor - 1);
+        }
+        return;
+      }
+      if (key.delete || (key.ctrl && input === "d")) {
+        if (filterCursor < filterText.length) {
+          setFilterText(filterText.slice(0, filterCursor) + filterText.slice(filterCursor + 1));
+        }
+        return;
+      }
+      if (key.ctrl && input === "k") {
+        setFilterText(filterText.slice(0, filterCursor));
+        return;
+      }
+      if (key.ctrl && input === "w") {
+        const cut = killWordLeft(filterText, filterCursor);
+        setFilterText(cut.text);
+        setFilterCursor(cut.cursor);
+        return;
+      }
+      // Other ctrl combos are swallowed so they don't sneak into the buffer.
+      if (key.ctrl) return;
+      // Insert printable input. Multi-char input from paste lands here too.
+      if (input && input.length > 0) {
+        const printable = stripUnprintable(input);
+        if (printable.length === 0) return;
+        setFilterText(filterText.slice(0, filterCursor) + printable + filterText.slice(filterCursor));
+        setFilterCursor(filterCursor + printable.length);
+      }
+      return;
+    }
+
     if (view === "fieldsMenu") {
       if (input === "q" || key.escape || input === "v") {
         setView("list");
@@ -149,7 +274,7 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         setView("list");
         return;
       }
-      const entry = entries[cursor];
+      const entry = displayed[cursor];
       const keys = entry ? Object.keys(entry.data) : [];
       // detailCursor 0 = entry header (whole entry); 1..keys.length = fields
       if (input === "j" || key.downArrow) {
@@ -161,11 +286,11 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         return;
       }
       if (input === "n") {
-        setCursor((c) => Math.min(entries.length - 1, c + 1));
+        moveCursorTo(cursor + 1);
         return;
       }
       if (input === "p") {
-        setCursor((c) => Math.max(0, c - 1));
+        moveCursorTo(cursor - 1);
         return;
       }
       if (input === "v") {
@@ -199,6 +324,13 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
       exit();
       return;
     }
+    if (input === "/") {
+      setFilterMode(true);
+      setFilterActive(true);
+      setFilterCursor(filterText.length);
+      setFollow(false);
+      return;
+    }
     if (input === "v") {
       setMenuCursor(0);
       setView("fieldsMenu");
@@ -210,21 +342,31 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     }
     if (input === "j" || key.downArrow) {
       setFollow(false);
-      setCursor((c) => Math.min(entries.length - 1, c + 1));
+      moveCursorTo(cursor + 1);
       return;
     }
     if (input === "k" || key.upArrow) {
       setFollow(false);
-      setCursor((c) => Math.max(0, c - 1));
+      moveCursorTo(cursor - 1);
       return;
     }
     if (input === "u") {
       setFollow(false);
-      setCursor((c) => Math.max(0, c - 1));
+      moveCursorTo(cursor - 1);
+      return;
+    }
+    if (key.pageDown) {
+      setFollow(false);
+      moveCursorTo(cursor + visible);
+      return;
+    }
+    if (key.pageUp) {
+      setFollow(false);
+      moveCursorTo(cursor - visible);
       return;
     }
     if (input === "o" || key.return) {
-      if (entries.length > 0) {
+      if (displayed.length > 0) {
         setFollow(false);
         setView("detail");
       }
@@ -232,12 +374,12 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     }
     if (input === "g") {
       setFollow(false);
-      setCursor(0);
+      moveCursorTo(0);
       return;
     }
     if (input === "G") {
       setFollow(false);
-      setCursor(Math.max(0, entries.length - 1));
+      moveCursorTo(displayed.length - 1);
       return;
     }
   });
@@ -246,8 +388,8 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     () => columnWidths(activeFields, entries, size.cols),
     [activeFields, entries, size.cols],
   );
-  const start = Math.max(0, Math.min(cursor - Math.floor(visible / 2), entries.length - visible));
-  const window = entries.slice(start, start + visible);
+  const start = Math.max(0, Math.min(cursor - Math.floor(visible / 2), displayed.length - visible));
+  const window = displayed.slice(start, start + visible);
 
   if (view === "fieldsMenu") {
     return (
@@ -259,12 +401,12 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
     );
   }
 
-  if (view === "detail" && entries[cursor]) {
+  if (view === "detail" && displayed[cursor]) {
     return (
       <Detail
-        entry={entries[cursor]}
+        entry={displayed[cursor]}
         sourceLabel={sourceLabel}
-        position={{ index: cursor, total: entries.length }}
+        position={{ index: cursor, total: displayed.length }}
         fields={fields}
         cursor={detailCursor}
         flash={flash}
@@ -280,16 +422,21 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
         widths={widths}
         sourceLabel={sourceLabel}
         count={entries.length}
+        filteredCount={filterActive && filterText.length > 0 ? displayed.length : null}
         done={done}
       />
       <Box flexDirection="column" flexGrow={1}>
         {window.length === 0 ? (
-          <Text dimColor>(waiting for log lines…)</Text>
+          <Text dimColor>
+            {entries.length === 0
+              ? "(waiting for log lines…)"
+              : "(no entries match filter)"}
+          </Text>
         ) : (
           window.map((entry, i) => {
             const idx = start + i;
             const selected = !follow && idx === cursor;
-            const tail = follow && idx === entries.length - 1;
+            const tail = follow && idx === displayed.length - 1;
             return (
               <Row
                 key={entry.id}
@@ -303,23 +450,15 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
           })
         )}
       </Box>
-      <Box>
-        {follow ? (
-          <Text>
-            <Text color="green" bold inverse>{" FOLLOW "}</Text>
-            <Text dimColor>
-              {" "}
-              {entries.length === 0 ? 0 : cursor + 1}/{entries.length} · any nav key exits · j/k
-              move · u up · o open · v fields · g/G top/bottom · q quit
-            </Text>
-          </Text>
-        ) : (
-          <Text dimColor>
-            {entries.length === 0 ? 0 : cursor + 1}/{entries.length} · j/k move · u up · o open · f
-            follow · v fields · g/G top/bottom · q quit
-          </Text>
-        )}
-      </Box>
+      <StatusBar
+        follow={follow}
+        cursor={cursor}
+        total={displayed.length}
+        filterMode={filterMode}
+        filterActive={filterActive}
+        filterText={filterText}
+        filterCursor={filterCursor}
+      />
     </Box>
   );
 };
@@ -329,13 +468,15 @@ const Header: React.FC<{
   widths: number[];
   sourceLabel: string;
   count: number;
+  filteredCount: number | null;
   done: boolean;
-}> = ({ fields, widths, sourceLabel, count, done }) => (
+}> = ({ fields, widths, sourceLabel, count, filteredCount, done }) => (
   <Box flexDirection="column">
     <Text>
       <Text bold>log-viewer</Text>
       <Text dimColor>
         {" "}· {sourceLabel} · {count} entries{done ? " (eof)" : ""}
+        {filteredCount !== null ? ` · ${filteredCount} match` : ""}
       </Text>
     </Text>
     <Box>
@@ -502,6 +643,68 @@ const FieldsMenu: React.FC<{
   );
 };
 
+const StatusBar: React.FC<{
+  follow: boolean;
+  cursor: number;
+  total: number;
+  filterMode: boolean;
+  filterActive: boolean;
+  filterText: string;
+  filterCursor: number;
+}> = ({ follow, cursor, total, filterMode, filterActive, filterText, filterCursor }) => {
+  if (filterMode) {
+    return (
+      <Box>
+        <Text>/</Text>
+        <FilterField text={filterText} cursor={filterCursor} />
+        <Text dimColor>  enter: keep filter · esc: clear filter</Text>
+      </Box>
+    );
+  }
+  const pos = total === 0 ? 0 : cursor + 1;
+  const filterTag = filterActive && filterText.length > 0
+    ? <Text color="yellow"> [/{filterText}]</Text>
+    : null;
+  if (follow) {
+    return (
+      <Box>
+        <Text>
+          <Text color="green" bold inverse>{" FOLLOW "}</Text>
+          <Text dimColor>
+            {" "}{pos}/{total} · any nav key exits · j/k move · u up · o open · v fields ·
+            g/G top/bottom · / filter · q quit
+          </Text>
+          {filterTag}
+        </Text>
+      </Box>
+    );
+  }
+  return (
+    <Box>
+      <Text dimColor>
+        {pos}/{total} · j/k move · PgUp/PgDn page · u up · o open · f follow · v fields ·
+        g/G top/bottom · / filter · q quit
+      </Text>
+      {filterTag}
+    </Box>
+  );
+};
+
+const FilterField: React.FC<{ text: string; cursor: number }> = ({ text, cursor }) => {
+  // Render a fake block cursor by inverting the character under it. If the
+  // cursor is at end-of-text we draw an inverted space.
+  const before = text.slice(0, cursor);
+  const at = cursor < text.length ? text[cursor]! : " ";
+  const after = cursor < text.length ? text.slice(cursor + 1) : "";
+  return (
+    <Text>
+      <Text>{before}</Text>
+      <Text inverse>{at}</Text>
+      <Text>{after}</Text>
+    </Text>
+  );
+};
+
 function visibleFieldConfigs(fields: ManagedField[]): FieldConfig[] {
   return fields.filter((f) => f.visible).map((f) => ({ name: f.name, from: f.from }));
 }
@@ -548,9 +751,13 @@ function isKeyVisible(fields: ManagedField[], key: string): boolean {
   return f ? f.visible : false;
 }
 
-function copyToClipboard(text: string, label: string, setFlash: (v: string | null) => void): void {
+async function copyToClipboard(
+  text: string,
+  label: string,
+  setFlash: (v: string | null) => void,
+): Promise<void> {
   try {
-    clipboard.writeSync(text);
+    await copyToSystemClipboard(text);
     flashFor(setFlash, `copied ${label} (${text.length} bytes)`);
   } catch (err) {
     flashFor(setFlash, `copy failed: ${err instanceof Error ? err.message : String(err)}`);

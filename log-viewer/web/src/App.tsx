@@ -3,6 +3,7 @@ import { LogTable } from "./LogTable";
 import { FieldsPopover } from "./FieldsPopover";
 import { useLogStream } from "./useLogStream";
 import { copyText, stringifyValue } from "./util";
+import { entryHaystack, fuzzyMatch } from "./fuzzy";
 import type { ManagedField, MetaResponse } from "./types";
 
 export default function App() {
@@ -16,8 +17,11 @@ export default function App() {
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [flashMsg, setFlashMsg] = useState<string | null>(null);
   const flashTimer = useRef<number | null>(null);
+  const [filterText, setFilterText] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const fieldsBtnRef = useRef<HTMLButtonElement>(null);
+  const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Load static meta once.
   useEffect(() => {
@@ -80,15 +84,50 @@ export default function App() {
     });
   }, [entries]);
 
-  // When the very first entry arrives, snap cursor to 0. In follow mode, keep
-  // the cursor pinned to the latest row as new entries land. Implemented as
-  // "adjust state during render" rather than a useEffect — the equivalent
-  // effect would trip react-hooks/set-state-in-effect.
-  const [prevTail, setPrevTail] = useState({ entriesLength: entries.length, follow });
-  if (entries.length !== prevTail.entriesLength || follow !== prevTail.follow) {
-    setPrevTail({ entriesLength: entries.length, follow });
-    if (entries.length > 0 && (follow || cursor >= entries.length)) {
-      setCursor(entries.length - 1);
+  // The list the user actually sees and navigates. When `filterText` is empty
+  // this is just `entries`; otherwise it's filtered by a fuzzy subsequence
+  // match against the visible columns of each entry.
+  const displayed = useMemo(() => {
+    if (filterText.length === 0) return entries;
+    return entries.filter((e) => fuzzyMatch(filterText, entryHaystack(e, fields)));
+  }, [entries, filterText, fields]);
+
+  // Keep cursor anchored to the same entry across filter changes / arrivals.
+  // We track `selectedId`; whenever `displayed` changes shape we re-derive
+  // `cursor` from it. In follow mode we ride the tail of `displayed`.
+  const [prevTail, setPrevTail] = useState({
+    displayed,
+    follow,
+    entriesLength: entries.length,
+  });
+  if (
+    prevTail.displayed !== displayed ||
+    prevTail.follow !== follow ||
+    prevTail.entriesLength !== entries.length
+  ) {
+    setPrevTail({ displayed, follow, entriesLength: entries.length });
+    if (follow && displayed.length > 0) {
+      const tailIdx = displayed.length - 1;
+      if (cursor !== tailIdx) setCursor(tailIdx);
+      const tailId = displayed[tailIdx]!.id;
+      if (selectedId !== tailId) setSelectedId(tailId);
+    } else if (selectedId != null) {
+      const idx = displayed.findIndex((e) => e.id === selectedId);
+      if (idx >= 0) {
+        if (cursor !== idx) setCursor(idx);
+      } else if (displayed.length > 0) {
+        const clamped = Math.max(0, Math.min(cursor, displayed.length - 1));
+        if (cursor !== clamped) setCursor(clamped);
+        setSelectedId(displayed[clamped]!.id);
+      } else {
+        setSelectedId(null);
+        if (cursor !== 0) setCursor(0);
+      }
+    } else if (displayed[cursor]) {
+      setSelectedId(displayed[cursor]!.id);
+    } else if (displayed.length > 0) {
+      setCursor(0);
+      setSelectedId(displayed[0]!.id);
     }
   }
 
@@ -101,21 +140,25 @@ export default function App() {
   const moveCursor = useCallback(
     (next: number) => {
       setFollow(false);
-      setCursor((prev) => {
-        const max = entries.length - 1;
-        if (max < 0) return prev;
-        return Math.max(0, Math.min(max, next));
-      });
+      const max = displayed.length - 1;
+      if (max < 0) return;
+      const clamped = Math.max(0, Math.min(max, next));
+      setCursor(clamped);
+      setSelectedId(displayed[clamped]!.id);
       setDetailCursor(0);
     },
-    [entries.length],
+    [displayed],
   );
 
-  const setSelected = useCallback((next: number) => {
-    setFollow(false);
-    setCursor(next);
-    setDetailCursor(0);
-  }, []);
+  const setSelected = useCallback(
+    (next: number) => {
+      setFollow(false);
+      setCursor(next);
+      if (displayed[next]) setSelectedId(displayed[next]!.id);
+      setDetailCursor(0);
+    },
+    [displayed],
+  );
 
   const toggleExpand = useCallback((id: number) => {
     setExpanded((prev) => {
@@ -131,12 +174,14 @@ export default function App() {
     setFollow((f) => {
       const next = !f;
       if (next) {
-        setCursor(Math.max(0, entries.length - 1));
+        const tailIdx = Math.max(0, displayed.length - 1);
+        setCursor(tailIdx);
+        if (displayed[tailIdx]) setSelectedId(displayed[tailIdx]!.id);
         setDetailCursor(0);
       }
       return next;
     });
-  }, [entries.length]);
+  }, [displayed]);
 
   const toggleByKey = useCallback((key: string) => {
     setFields((prev) => {
@@ -186,9 +231,14 @@ export default function App() {
         }
         return;
       }
-      const entry = entries[cursor];
+      const entry = displayed[cursor];
       const isExpanded = !!entry && expanded.has(entry.id);
       switch (ev.key) {
+        case "/":
+          filterInputRef.current?.focus();
+          filterInputRef.current?.select();
+          ev.preventDefault();
+          break;
         case "j":
         case "ArrowDown":
           if (entry && isExpanded) {
@@ -240,7 +290,7 @@ export default function App() {
           ev.preventDefault();
           break;
         case "G":
-          moveCursor(entries.length - 1);
+          moveCursor(displayed.length - 1);
           ev.preventDefault();
           break;
         case "f":
@@ -284,7 +334,7 @@ export default function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [
-    entries,
+    displayed,
     cursor,
     detailCursor,
     expanded,
@@ -299,20 +349,26 @@ export default function App() {
   ]);
 
   const status = useMemo(() => {
-    const pos = entries.length === 0 ? 0 : cursor + 1;
+    const pos = displayed.length === 0 ? 0 : cursor + 1;
     const eof = done ? " (eof)" : "";
     const tag = follow ? " · FOLLOW" : "";
-    const base = `${pos}/${entries.length}${eof}${tag}`;
+    const filterTag =
+      filterText.length > 0 ? ` · ${displayed.length}/${entries.length} match` : "";
+    const base = `${pos}/${displayed.length}${eof}${tag}${filterTag}`;
     if (error) return `${base} · ${error}`;
     if (flashMsg) return `${base} · ${flashMsg}`;
     return base;
-  }, [entries.length, cursor, done, follow, error, flashMsg]);
+  }, [displayed.length, entries.length, cursor, done, follow, error, flashMsg, filterText]);
 
-  const onSelectDetailRow = useCallback((entryIdx: number, detailIdx: number) => {
-    setFollow(false);
-    setCursor(entryIdx);
-    setDetailCursor(detailIdx);
-  }, []);
+  const onSelectDetailRow = useCallback(
+    (entryIdx: number, detailIdx: number) => {
+      setFollow(false);
+      setCursor(entryIdx);
+      if (displayed[entryIdx]) setSelectedId(displayed[entryIdx]!.id);
+      setDetailCursor(detailIdx);
+    },
+    [displayed],
+  );
 
   return (
     <div id="app">
@@ -320,6 +376,25 @@ export default function App() {
         <strong>log-viewer</strong>
         <span id="meta">{sourceLabel ? `· ${sourceLabel}` : ""}</span>
         <span className="header-spacer" />
+        <input
+          ref={filterInputRef}
+          type="search"
+          className="filter-input"
+          placeholder="filter (fuzzy)"
+          aria-label="Fuzzy filter"
+          value={filterText}
+          onChange={(ev) => setFilterText(ev.target.value)}
+          onKeyDown={(ev) => {
+            if (ev.key === "Escape") {
+              setFilterText("");
+              ev.currentTarget.blur();
+              ev.preventDefault();
+            } else if (ev.key === "Enter") {
+              ev.currentTarget.blur();
+              ev.preventDefault();
+            }
+          }}
+        />
         <button
           ref={fieldsBtnRef}
           type="button"
@@ -331,7 +406,7 @@ export default function App() {
         </button>
       </header>
       <LogTable
-        entries={entries}
+        entries={displayed}
         fields={fields}
         cursor={cursor}
         follow={follow}
@@ -346,7 +421,7 @@ export default function App() {
       <footer>
         <span id="status">{status}</span>
         <span className="hint">
-          j/k move · u up · o open · f follow · v fields · g/G top/bottom · esc close
+          j/k move · u up · o open · f follow · v fields · g/G top/bottom · / filter · esc close
         </span>
       </footer>
       {fieldsOpen && (

@@ -6,7 +6,6 @@ import { applyProfile, configPath, ensureConfigFile, loadConfig } from "./config
 import { startSource, type SourceSpec } from "./source.js";
 import { createTriggerRuntime } from "./triggers.js";
 import { runTui } from "./tui/index.js";
-import { runBrowser } from "./browser/server.js";
 
 const DESCRIPTION = "View JSONL logs in a TUI or browser.";
 
@@ -124,6 +123,7 @@ const main = define({
     }
 
     if (values.browser) {
+      const { runBrowser } = await import("./browser/server.js");
       await runBrowser({
         config,
         source,

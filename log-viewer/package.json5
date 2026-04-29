@@ -21,7 +21,6 @@
     "@tanstack/react-table": "latest",
     "@tanstack/react-virtual": "latest",
     "@vitejs/plugin-react": "latest",
-    "clipboardy": "latest",
     "gunshi": "latest",
     "ink": "latest",
     "json5": "latest",

@@ -22,8 +22,8 @@ This compiles a single binary and installs `cloudwatch-insights` into `~/.cargo/
 ```
 cloudwatch-insights query [options]       run a query
 cloudwatch-insights raw [options]         run a query verbatim from a file (no templating, no config)
-cloudwatch-insights link [options]        print a shareable AWS Console URL
-cloudwatch-insights parse-link <url>      decode a Console URL into current.insights (or a `raw` command)
+cloudwatch-insights copy-link [options]   copy a shareable AWS Console URL to the pasteboard
+cloudwatch-insights paste-link [url]      decode a Console URL (default: from pasteboard) into current.insights
 cloudwatch-insights show                  stream the latest run to stdout
 cloudwatch-insights edit-config           edit the per-repo config
 ```
@@ -62,6 +62,12 @@ jq . < "$last"
 
 After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file.
 
+While the query runs, a single status line on stderr (`status: Running (scanned 1.2M records, 456 MiB)`) is rewritten in place from the polled `GetQueryResults` statistics. On a non-TTY stderr, status changes are appended one per line instead.
+
+After the query completes, an `Open in AWS Console` clickable hyperlink is printed to stderr (when stderr is a TTY), pointing at the same query in the CloudWatch Logs Insights Console. Off-TTY, the raw URL is printed instead.
+
+Set `dry = true` in the front-matter to skip the AWS round-trip — the query won't execute, but the resolved log groups, time range, and Console link are still printed. Useful for previewing a query before running it.
+
 ### `raw`
 
 ```sh
@@ -74,29 +80,31 @@ Runs a query verbatim from `--query-file`/`-f` (use `-` for stdin). No front-mat
 
 Results are written to stdout as JSONL, or to `--output`/`-o` if given. Required: `--query-file` and at least one `--log-group`.
 
-### `link`
+### `copy-link`
 
 ```sh
-cloudwatch-insights link
-cloudwatch-insights link --open                  # also open in default browser
-cloudwatch-insights link --preserve-time-window
+cloudwatch-insights copy-link                       # copies URL to the pasteboard
+cloudwatch-insights copy-link --raw                 # just print the URL, don't touch the pasteboard
+cloudwatch-insights copy-link --open                # also open in the default browser
+cloudwatch-insights copy-link --preserve-time-window
 ```
 
-Prints a shareable AWS Console URL for the query that `cloudwatch-insights query` would otherwise run. When stdout is a TTY, the URL is also rendered as an [OSC 8 clickable hyperlink](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) above the raw URL — terminals that understand the escape sequence (iTerm2, recent VS Code, GNOME Terminal, WezTerm, …) make it click-to-open. Pass `--open` to additionally open the URL in your default browser.
+Copies a shareable AWS Console URL for the query that `cloudwatch-insights query` would otherwise run to the system pasteboard (`pbcopy` on macOS, `clip` on Windows, `wl-copy` / `xclip` / `xsel` on Linux). Outputs `AWS Console link copied to pasteboard. Open directly` — and on a TTY `Open directly` is rendered as an [OSC 8 clickable hyperlink](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) so terminals that support the escape sequence (iTerm2, recent VS Code, GNOME Terminal, WezTerm, …) let you click straight through. Pass `--raw` to skip the pasteboard and print only the URL — handy for piping into other tools. `--open` additionally opens the URL in your default browser.
 
-### `parse-link`
+### `paste-link`
 
 ```sh
-cloudwatch-insights parse-link 'https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1#logsV2:logs-insights$3FqueryDetail$3D~(...)'
-pbpaste | cloudwatch-insights parse-link                # read URL from stdin
-cloudwatch-insights parse-link --as-raw <url>           # print a `raw` shell command instead
+cloudwatch-insights paste-link                                 # read URL from pasteboard
+cloudwatch-insights paste-link 'https://eu-north-1.console…'   # use a positional URL
+cloudwatch-insights paste-link --prompt                        # ask on stdin
+cloudwatch-insights paste-link --as-raw                        # print a `raw` shell command instead
 ```
 
-The inverse of `link`. Decodes the AWS Console Insights URL and recreates the query state by writing a fresh `current.insights` for the current slot (with `time`, `log-group`, and the query body filled in from the URL) — running `cloudwatch-insights query` afterwards re-runs the same query.
+The inverse of `copy-link`. By default reads the URL from the system pasteboard. A positional argument overrides that; `-p` / `--prompt` asks for the URL interactively. Decodes the AWS Console Insights URL and recreates the query state by writing a fresh `current.insights` for the current slot (with `time`, `log-group`, and the query body filled in from the URL) — running `cloudwatch-insights query` afterwards re-runs the same query.
 
 `--as-raw` instead prints a self-contained `cloudwatch-insights raw …` shell command (a quoted heredoc piping the query body into stdin) and does not touch any state. Useful for sharing a one-shot invocation that someone else can paste into a terminal.
 
-The URL can be passed as a positional argument, via `--url`, or piped on stdin. `-o`/`--output` writes the `.insights` file to a custom path instead of the current slot's `current.insights`.
+`-o`/`--output` writes the `.insights` file to a custom path instead of the current slot's `current.insights`.
 
 ### `show`
 
@@ -140,6 +148,7 @@ Front-matter fields:
 | `env`         | substituted for `{{ env }}` in the query and log group templates    |
 | `app`         | substituted for `{{ app }}` in the query and log group templates (overrides the configured `app`) |
 | `log-group`   | a log group, or an array of log groups                              |
+| `dry`         | when `true`, `query` skips the AWS round-trip after the editor closes (no execution, no results file) |
 
 CLI flags always win over front-matter, and front-matter wins over the repo defaults in `settings.toml`. The result `limit` belongs in the query body itself (`| limit 200`), not the front-matter.
 

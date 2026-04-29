@@ -14,7 +14,12 @@ use crate::config::{
 };
 use crate::editor::open_editor;
 use crate::flatten::flatten_row;
-use crate::insights::{run_insights_query, RunQueryOptions, StatusCallback};
+use crate::console_link::{
+    build_console_link, build_query_detail, ConsoleLinkInput, QueryDetailInput, TimeSpec,
+};
+use crate::insights::{run_insights_query, ProgressCallback, QueryProgress, RunQueryOptions};
+use crate::progress::ProgressReporter;
+use crate::terminal::{default_link_style, styled_link};
 use crate::output::{update_latest_symlink, write_results};
 use crate::paths;
 use crate::query_file::{
@@ -22,7 +27,7 @@ use crate::query_file::{
     run_timestamp, FrontMatter, LogGroupValue, SeedFrontMatter, SeedOptions,
 };
 use crate::template::expand_template;
-use crate::time_range::{parse_time_range, TimeRangeParseError};
+use crate::time_range::{parse_time_range, try_parse_relative_duration_seconds, TimeRange, TimeRangeParseError};
 
 pub async fn run(args: QueryArgs) -> Result<()> {
     if args.query.is_some() && args.query_file.is_some() {
@@ -125,6 +130,24 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         }
     }
 
+    let console_url = build_query_console_url(region.as_deref(), &log_groups, &expanded_query, &time_expr, &range);
+
+    if front_matter.dry == Some(true) {
+        if !args.quiet {
+            eprintln!("Dry run (front-matter `dry = true`); not contacting AWS.");
+            eprintln!("  log groups: {}", log_groups.join(", "));
+            eprintln!(
+                "  time:       {} → {}",
+                range.start.to_rfc3339(),
+                range.end.to_rfc3339()
+            );
+        }
+        if let Some(url) = &console_url {
+            emit_console_link(url);
+        }
+        return Ok(());
+    }
+
     if !args.quiet {
         eprintln!(
             "Querying {n} log group(s) from {start} to {end}",
@@ -136,16 +159,15 @@ pub async fn run(args: QueryArgs) -> Result<()> {
     }
 
     let quiet = args.quiet;
-    let mut last_status = String::new();
-    let on_status: Option<StatusCallback> = if quiet {
+    let reporter_outer = std::sync::Arc::new(std::sync::Mutex::new(ProgressReporter::new(quiet)));
+    let reporter_for_cb = reporter_outer.clone();
+    let on_progress: Option<ProgressCallback> = if quiet {
         None
     } else {
-        Some(Box::new(move |status: &str| {
-            if status == last_status {
-                return;
+        Some(Box::new(move |progress: &QueryProgress| {
+            if let Ok(mut r) = reporter_for_cb.lock() {
+                r.update(progress);
             }
-            last_status = status.to_string();
-            eprintln!("  status: {status}");
         }))
     };
 
@@ -157,9 +179,13 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         end_time: range.end,
         limit,
         poll_interval: Duration::from_secs(1),
-        on_status,
+        on_progress,
     })
     .await?;
+
+    if let Ok(mut r) = reporter_outer.lock() {
+        r.done();
+    }
 
     let flatten_fields = defaults.flatten_fields.clone().unwrap_or_default();
     let rows: Vec<_> = result
@@ -194,7 +220,59 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         );
         eprintln!("  {} → {}", link_path.display(), out_path.display());
     }
+
+    if let Some(url) = &console_url {
+        emit_console_link(url);
+    }
     Ok(())
+}
+
+/// Build a shareable AWS Console URL for the in-progress query, using bare
+/// log-group names (queryBy=logGroupName) so we don't have to look up an
+/// account ID. Returns None when no region is known.
+fn build_query_console_url(
+    region: Option<&str>,
+    log_groups: &[String],
+    query: &str,
+    time_expr: &str,
+    range: &TimeRange,
+) -> Option<String> {
+    let region = region?;
+    let time = pick_time_spec(time_expr, range);
+    let log_group_arns: Vec<String> = log_groups.to_vec();
+    let detail = build_query_detail(&QueryDetailInput {
+        query,
+        log_group_arns: &log_group_arns,
+        time,
+        query_id: None,
+        log_class: None,
+    });
+    Some(build_console_link(&ConsoleLinkInput {
+        region,
+        query_detail: &detail,
+    }))
+}
+
+fn pick_time_spec(time_expr: &str, range: &TimeRange) -> TimeSpec {
+    if let Some(seconds) = try_parse_relative_duration_seconds(time_expr) {
+        return TimeSpec::Relative { seconds_back: seconds };
+    }
+    TimeSpec::Absolute {
+        start_ms: range.start.timestamp_millis(),
+        end_ms: range.end.timestamp_millis(),
+    }
+}
+
+fn emit_console_link(url: &str) {
+    use std::io::IsTerminal;
+    if std::io::stderr().is_terminal() {
+        eprintln!(
+            "{}",
+            styled_link(url, "Open in AWS Console", default_link_style())
+        );
+    } else {
+        eprintln!("{url}");
+    }
 }
 
 fn cli_log_groups(raw: &[String]) -> Vec<String> {

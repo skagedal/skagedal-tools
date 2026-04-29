@@ -1,8 +1,8 @@
 use std::fmt;
 
+pub mod copy_link;
 pub mod edit_config;
-pub mod link;
-pub mod parse_link;
+pub mod paste_link;
 pub mod query;
 pub mod raw;
 pub mod show;

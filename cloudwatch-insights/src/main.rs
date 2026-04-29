@@ -11,7 +11,9 @@ mod flatten;
 mod git;
 mod insights;
 mod output;
+mod pasteboard;
 mod paths;
+mod progress;
 mod query_file;
 mod template;
 mod terminal;
@@ -39,8 +41,8 @@ async fn main() -> ExitCode {
     let result: anyhow::Result<()> = match cli.command {
         Subcommand::Query(args) => commands::query::run(args).await,
         Subcommand::Raw(args) => commands::raw::run(args).await,
-        Subcommand::Link(args) => commands::link::run(args).await,
-        Subcommand::ParseLink(args) => commands::parse_link::run(args).await,
+        Subcommand::CopyLink(args) => commands::copy_link::run(args).await,
+        Subcommand::PasteLink(args) => commands::paste_link::run(args).await,
         Subcommand::Show(args) => commands::show::run(args).await,
         Subcommand::EditConfig => commands::edit_config::run().await,
     };

@@ -9,15 +9,21 @@ use std::time::Duration;
 
 pub type QueryRow = IndexMap<String, String>;
 
-/// Streaming status callback used by [`run_insights_query`].
-pub type StatusCallback = Box<dyn FnMut(&str) + Send>;
-
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct QueryStatistics {
     pub records_matched: Option<f64>,
     pub records_scanned: Option<f64>,
     pub bytes_scanned: Option<f64>,
 }
+
+#[derive(Debug, Clone)]
+pub struct QueryProgress {
+    pub status: String,
+    pub statistics: QueryStatistics,
+}
+
+/// Streaming progress callback used by [`run_insights_query`].
+pub type ProgressCallback = Box<dyn FnMut(&QueryProgress) + Send>;
 
 #[derive(Debug)]
 pub struct QueryResult {
@@ -33,7 +39,7 @@ pub struct RunQueryOptions<'a> {
     pub end_time: DateTime<Utc>,
     pub limit: Option<i32>,
     pub poll_interval: Duration,
-    pub on_status: Option<StatusCallback>,
+    pub on_progress: Option<ProgressCallback>,
 }
 
 pub async fn run_insights_query(mut options: RunQueryOptions<'_>) -> Result<QueryResult> {
@@ -68,8 +74,16 @@ pub async fn run_insights_query(mut options: RunQueryOptions<'_>) -> Result<Quer
 
         let status = resp.status.clone().unwrap_or(QueryStatus::UnknownValue);
         let status_str = status_label(&status);
-        if let Some(cb) = options.on_status.as_mut() {
-            cb(status_str);
+        let statistics = resp.statistics.as_ref().map(|s| QueryStatistics {
+            records_matched: Some(s.records_matched),
+            records_scanned: Some(s.records_scanned),
+            bytes_scanned: Some(s.bytes_scanned),
+        });
+        if let Some(cb) = options.on_progress.as_mut() {
+            cb(&QueryProgress {
+                status: status_str.into(),
+                statistics: statistics.unwrap_or_default(),
+            });
         }
 
         if is_terminal(&status) {
@@ -82,11 +96,6 @@ pub async fn run_insights_query(mut options: RunQueryOptions<'_>) -> Result<Quer
                 .into_iter()
                 .map(result_fields_to_row)
                 .collect();
-            let statistics = resp.statistics.map(|s| QueryStatistics {
-                records_matched: Some(s.records_matched),
-                records_scanned: Some(s.records_scanned),
-                bytes_scanned: Some(s.bytes_scanned),
-            });
             return Ok(QueryResult { rows, statistics });
         }
 
