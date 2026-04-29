@@ -6,6 +6,17 @@ import {
   StartQueryCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 
+export interface QueryStatistics {
+  recordsMatched?: number;
+  recordsScanned?: number;
+  bytesScanned?: number;
+}
+
+export interface QueryProgress {
+  status: QueryStatus | string;
+  statistics: QueryStatistics;
+}
+
 export interface RunQueryOptions {
   client: CloudWatchLogsClient;
   logGroups: string[];
@@ -16,7 +27,7 @@ export interface RunQueryOptions {
   /** Polling interval in ms. Defaults to 1000. */
   pollIntervalMs?: number;
   /** Called after each poll so callers can surface progress. */
-  onStatus?: (status: QueryStatus | string) => void;
+  onProgress?: (progress: QueryProgress) => void;
 }
 
 export interface QueryRow {
@@ -25,11 +36,7 @@ export interface QueryRow {
 
 export interface QueryResult {
   rows: QueryRow[];
-  statistics?: {
-    recordsMatched?: number;
-    recordsScanned?: number;
-    bytesScanned?: number;
-  };
+  statistics?: QueryStatistics;
   status: QueryStatus | string;
 }
 
@@ -50,7 +57,7 @@ export async function runInsightsQuery(options: RunQueryOptions): Promise<QueryR
     endTime,
     limit,
     pollIntervalMs = 1_000,
-    onStatus,
+    onProgress,
   } = options;
 
   if (logGroups.length === 0) {
@@ -75,7 +82,14 @@ export async function runInsightsQuery(options: RunQueryOptions): Promise<QueryR
   while (true) {
     const response = await client.send(new GetQueryResultsCommand({ queryId }));
     const status = response.status ?? "Unknown";
-    onStatus?.(status);
+    const statistics: QueryStatistics = response.statistics
+      ? {
+          recordsMatched: response.statistics.recordsMatched,
+          recordsScanned: response.statistics.recordsScanned,
+          bytesScanned: response.statistics.bytesScanned,
+        }
+      : {};
+    onProgress?.({ status, statistics });
 
     if (TERMINAL_STATUSES.has(status)) {
       if (status !== QueryStatus.Complete) {
@@ -84,13 +98,7 @@ export async function runInsightsQuery(options: RunQueryOptions): Promise<QueryR
       return {
         status,
         rows: (response.results ?? []).map(resultFieldsToRow),
-        statistics: response.statistics
-          ? {
-              recordsMatched: response.statistics.recordsMatched,
-              recordsScanned: response.statistics.recordsScanned,
-              bytesScanned: response.statistics.bytesScanned,
-            }
-          : undefined,
+        statistics: response.statistics ? statistics : undefined,
       };
     }
 

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { hyperlink, openUrlCommand } from "../src/terminal.mjs";
+import { colorize, hyperlink, openUrlCommand, styledLink } from "../src/terminal.mjs";
 
 test("hyperlink: wraps text in OSC 8 escape sequence with ST terminator", () => {
   const url = "https://example.com/foo";
@@ -40,4 +40,26 @@ test("openUrlCommand: linux/other uses xdg-open", () => {
     cmd: "xdg-open",
     args: ["https://x"],
   });
+});
+
+test("colorize: prepends SGR codes and resets", () => {
+  assert.equal(
+    colorize("hi", { color: "cyan", underline: true }),
+    "\x1b[4;36mhi\x1b[0m",
+  );
+});
+
+test("colorize: with no styling returns the text unchanged", () => {
+  assert.equal(colorize("hi", {}), "hi");
+});
+
+test("styledLink: combines OSC 8 hyperlink with SGR styling", () => {
+  const url = "https://example.com/q";
+  const result = styledLink(url, "Open", { color: "cyan", underline: true });
+  // The visible text "Open" sits inside both the OSC 8 sequence and the SGR
+  // style; terminals that ignore OSC 8 still see the styled text.
+  assert.equal(
+    result,
+    `\x1b]8;;${url}\x1b\\\x1b[4;36mOpen\x1b[0m\x1b]8;;\x1b\\`,
+  );
 });

@@ -60,6 +60,13 @@ test("parseQueryFile: empty front-matter is valid (no keys)", () => {
   assert.equal(body, "fields @timestamp");
 });
 
+test("parseQueryFile: dry = true is preserved", () => {
+  const { frontMatter } = parseQueryFile(
+    'time = "1h"\ndry = true\n---\nfields @timestamp',
+  );
+  assert.equal(frontMatter.dry, true);
+});
+
 test("ensureCurrentInsights: seeds with the default template, leaving {{ app }} unexpanded", () => {
   const tmp = mkdtempSync(join(tmpdir(), "cwi-qf-"));
   try {

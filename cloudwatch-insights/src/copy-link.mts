@@ -1,10 +1,11 @@
 /**
- * `cloudwatch-insights link` — generate a shareable AWS Console URL for the
- * query that `cloudwatch-insights query` would otherwise run.
+ * `cloudwatch-insights copy-link` — copy a shareable AWS Console URL for the
+ * query that `cloudwatch-insights query` would otherwise run to the system
+ * pasteboard.
  *
  * Resolution mirrors the query subcommand: --query / --query-file / the
  * repo's current.insights, with front-matter and config defaults filling
- * in time, environment, log groups. We never open the editor here — link
+ * in time, environment, log groups. We never open the editor here — copy-link
  * is a read-only view over what was last edited.
  */
 
@@ -35,7 +36,8 @@ import {
   TimeRangeParseError,
   tryParseRelativeDurationSeconds,
 } from "./time-range.mjs";
-import { hyperlink, openUrlCommand } from "./terminal.mjs";
+import { openUrlCommand, styledLink } from "./terminal.mjs";
+import { copyToPasteboard, PasteboardError } from "./pasteboard.mjs";
 import {
   FrontMatter,
   currentInsightsPath,
@@ -43,7 +45,7 @@ import {
   parseQueryFile,
 } from "./query-file.mjs";
 
-export interface LinkValues {
+export interface CopyLinkValues {
   "log-group"?: string[];
   time?: string;
   query?: string;
@@ -53,11 +55,12 @@ export interface LinkValues {
   profile?: string;
   "preserve-time-window": boolean;
   "account-id"?: string;
+  raw: boolean;
   open: boolean;
   quiet: boolean;
 }
 
-export async function runLink(values: LinkValues): Promise<void> {
+export async function runCopyLink(values: CopyLinkValues): Promise<void> {
   if (values.query && values["query-file"]) {
     fail("--query and --query-file are mutually exclusive", 2);
   }
@@ -119,11 +122,15 @@ export async function runLink(values: LinkValues): Promise<void> {
     process.env.AWS_PROFILE = profile;
   }
 
+  // The diagnostic preamble (region/profile/account/time) is noise when
+  // --raw is set — the caller asked for nothing but the URL.
+  const showDiagnostics = !values.quiet && !values.raw;
+
   const accountId = await resolveAccountId({
     cliAccountId: values["account-id"],
     envConfig,
     region,
-    quiet: values.quiet,
+    quiet: !showDiagnostics,
     environmentLabel: environment,
   });
 
@@ -133,7 +140,7 @@ export async function runLink(values: LinkValues): Promise<void> {
 
   const time = chooseTimeSpec(timeExpr, range, values["preserve-time-window"]);
 
-  if (!values.quiet) {
+  if (showDiagnostics) {
     if (profile && !values.profile) {
       process.stderr.write(`  AWS_PROFILE: ${profile} (from [env.${environment}])\n`);
     }
@@ -160,12 +167,30 @@ export async function runLink(values: LinkValues): Promise<void> {
   });
   const url = buildConsoleLink({ region, queryDetail });
 
+  if (values.raw) {
+    process.stdout.write(url + "\n");
+    if (values.open) openInBrowser(url);
+    return;
+  }
+
+  try {
+    await copyToPasteboard(url);
+  } catch (err) {
+    if (err instanceof PasteboardError) {
+      fail(err.message, 1);
+    }
+    throw err;
+  }
+
   if (process.stdout.isTTY) {
     process.stdout.write(
-      hyperlink(url, "Open in CloudWatch Logs Insights") + "\n",
+      "AWS Console link copied to pasteboard. " +
+        styledLink(url, "Open directly") +
+        "\n",
     );
+  } else {
+    process.stdout.write("AWS Console link copied to pasteboard.\n");
   }
-  process.stdout.write(url + "\n");
 
   if (values.open) {
     openInBrowser(url);
@@ -238,7 +263,7 @@ interface QuerySource {
   frontMatter: FrontMatter;
 }
 
-function resolveQuerySourceReadOnly(values: LinkValues): QuerySource {
+function resolveQuerySourceReadOnly(values: CopyLinkValues): QuerySource {
   if (values.query) {
     return { queryBody: values.query, frontMatter: {} };
   }

@@ -33,9 +33,17 @@ import {
   updateLatestSymlink,
   writeResults,
 } from "./query-file.mjs";
-import { LinkValues, runLink } from "./link.mjs";
-import { ParseLinkValues, runParseLink } from "./parse-link.mjs";
+import { CopyLinkValues, runCopyLink } from "./copy-link.mjs";
+import { PasteLinkValues, runPasteLink } from "./paste-link.mjs";
 import { RawValues, runRaw } from "./raw.mjs";
+import {
+  buildConsoleLink,
+  buildQueryDetail,
+  TimeSpec,
+} from "./console-link.mjs";
+import { tryParseRelativeDurationSeconds } from "./time-range.mjs";
+import { styledLink } from "./terminal.mjs";
+import { QueryProgress, QueryStatistics } from "./insights.mjs";
 
 const DESCRIPTION = "Download logs from AWS CloudWatch Logs Insights.";
 
@@ -194,6 +202,28 @@ async function runQuery(values: QueryValues): Promise<void> {
     }
   }
 
+  const consoleUrl = buildQueryConsoleUrl({
+    region,
+    logGroups,
+    query: expandedQuery,
+    timeExpr,
+    range,
+  });
+
+  if (frontMatter.dry === true) {
+    if (!values.quiet) {
+      process.stderr.write(
+        `Dry run (front-matter \`dry = true\`); not contacting AWS.\n`,
+      );
+      process.stderr.write(`  log groups: ${logGroups.join(", ")}\n`);
+      process.stderr.write(
+        `  time:       ${range.startTime.toISOString()} → ${range.endTime.toISOString()}\n`,
+      );
+    }
+    if (consoleUrl) emitConsoleLink(consoleUrl);
+    return;
+  }
+
   if (!values.quiet) {
     process.stderr.write(
       `Querying ${logGroups.length} log group(s) from ${range.startTime.toISOString()} ` +
@@ -202,7 +232,7 @@ async function runQuery(values: QueryValues): Promise<void> {
     process.stderr.write(`  log groups: ${logGroups.join(", ")}\n`);
   }
 
-  let lastStatus = "";
+  const progress = createProgressReporter({ quiet: values.quiet });
   const result = await runInsightsQuery({
     client,
     logGroups,
@@ -210,12 +240,9 @@ async function runQuery(values: QueryValues): Promise<void> {
     startTime: range.startTime,
     endTime: range.endTime,
     limit,
-    onStatus: (status) => {
-      if (values.quiet || status === lastStatus) return;
-      lastStatus = String(status);
-      process.stderr.write(`  status: ${status}\n`);
-    },
+    onProgress: progress.update,
   });
+  progress.done();
 
   const flattenFields = defaults.flattenFields ?? [];
   const rows = flattenFields.length === 0
@@ -236,6 +263,8 @@ async function runQuery(values: QueryValues): Promise<void> {
     );
     process.stderr.write(`  ${linkPath} → ${outPath}\n`);
   }
+
+  if (consoleUrl) emitConsoleLink(consoleUrl);
 }
 
 interface QuerySource {
@@ -340,13 +369,13 @@ function resolveLogGroups(args: ResolveLogGroupsArgs): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// link subcommand
+// copy-link subcommand
 // ---------------------------------------------------------------------------
 
-const linkCmd = define({
-  name: "link",
+const copyLinkCmd = define({
+  name: "copy-link",
   description:
-    "Print a shareable AWS Console URL for the query (no editor, no execution)",
+    "Copy a shareable AWS Console URL for the query to the system pasteboard (no editor, no execution)",
   args: {
     "log-group": {
       type: "string",
@@ -395,6 +424,11 @@ const linkCmd = define({
       description:
         "always emit absolute start/end timestamps in the URL, even when -t is a relative duration like 1h",
     },
+    raw: {
+      type: "boolean",
+      default: false,
+      description: "print the URL to stdout and skip the pasteboard copy",
+    },
     open: {
       type: "boolean",
       default: false,
@@ -407,23 +441,19 @@ const linkCmd = define({
     },
   },
   run: async (ctx) => {
-    await runLink(ctx.values as unknown as LinkValues);
+    await runCopyLink(ctx.values as unknown as CopyLinkValues);
   },
 });
 
 // ---------------------------------------------------------------------------
-// parse-link subcommand
+// paste-link subcommand
 // ---------------------------------------------------------------------------
 
-const parseLinkCmd = define({
-  name: "parse-link",
+const pasteLinkCmd = define({
+  name: "paste-link",
   description:
-    "Decode an AWS Console Insights URL and recreate the query state (or print a `raw` shell command with --as-raw)",
+    "Decode an AWS Console Insights URL (default: from the pasteboard) and recreate the query state (or print a `raw` shell command with --as-raw)",
   args: {
-    url: {
-      type: "string",
-      description: "the URL to decode (alternatively pass it as a positional, or pipe it on stdin)",
-    },
     "as-raw": {
       type: "boolean",
       default: false,
@@ -436,6 +466,12 @@ const parseLinkCmd = define({
       description:
         "write the .insights file to this path instead of the current slot's current.insights",
     },
+    prompt: {
+      type: "boolean",
+      short: "p",
+      default: false,
+      description: "prompt for the URL on stdin instead of reading the pasteboard",
+    },
     quiet: {
       type: "boolean",
       default: false,
@@ -446,7 +482,7 @@ const parseLinkCmd = define({
     // gunshi includes the subcommand name as the first positional; drop it
     // so the user-supplied URL (if any) is at index 0.
     const positionals = ((ctx.positionals ?? []) as string[]).slice(1);
-    await runParseLink(ctx.values as unknown as ParseLinkValues, positionals);
+    await runPasteLink(ctx.values as unknown as PasteLinkValues, positionals);
   },
 });
 
@@ -602,6 +638,126 @@ function fail(message: string, code = 1): never {
   process.exit(code);
 }
 
+interface BuildQueryConsoleUrlArgs {
+  region: string | undefined;
+  logGroups: string[];
+  query: string;
+  timeExpr: string;
+  range: { startTime: Date; endTime: Date };
+}
+
+/**
+ * Build a shareable AWS Console URL for the in-progress query, using bare
+ * log-group names (queryBy=logGroupName) so we don't have to look up an
+ * account ID. Returns null when no region is known — without one we can't
+ * pick a Console host.
+ */
+function buildQueryConsoleUrl(args: BuildQueryConsoleUrlArgs): string | null {
+  if (!args.region) return null;
+  const time: TimeSpec = pickTimeSpec(args.timeExpr, args.range);
+  const detail = buildQueryDetail({
+    query: args.query,
+    logGroupArns: args.logGroups,
+    time,
+  });
+  return buildConsoleLink({ region: args.region, queryDetail: detail });
+}
+
+function pickTimeSpec(
+  timeExpr: string,
+  range: { startTime: Date; endTime: Date },
+): TimeSpec {
+  const seconds = tryParseRelativeDurationSeconds(timeExpr);
+  if (seconds !== null) return { kind: "relative", secondsBack: seconds };
+  return {
+    kind: "absolute",
+    startMs: range.startTime.getTime(),
+    endMs: range.endTime.getTime(),
+  };
+}
+
+function emitConsoleLink(url: string): void {
+  if (process.stderr.isTTY) {
+    process.stderr.write(styledLink(url, "Open in AWS Console") + "\n");
+  } else {
+    process.stderr.write(url + "\n");
+  }
+}
+
+interface ProgressReporter {
+  update(progress: QueryProgress): void;
+  done(): void;
+}
+
+/**
+ * Render polling progress on stderr. On a TTY we overwrite a single line
+ * (`\r`-rewriting). Off a TTY we append one line per status change so logs
+ * stay readable.
+ */
+function createProgressReporter(opts: { quiet: boolean }): ProgressReporter {
+  if (opts.quiet) return { update: () => {}, done: () => {} };
+  const tty = !!process.stderr.isTTY;
+  let lastLine = "";
+  let lastStatus = "";
+  let written = false;
+
+  const update = (progress: QueryProgress): void => {
+    const line = formatProgressLine(progress);
+    if (tty) {
+      if (line === lastLine) return;
+      // \x1b[2K erases the current line; \r returns to column 0.
+      process.stderr.write(`\r\x1b[2K  ${line}`);
+      lastLine = line;
+      written = true;
+    } else {
+      const status = String(progress.status);
+      if (status === lastStatus) return;
+      lastStatus = status;
+      process.stderr.write(`  ${line}\n`);
+    }
+  };
+
+  const done = (): void => {
+    if (tty && written) process.stderr.write("\n");
+  };
+
+  return { update, done };
+}
+
+function formatProgressLine(progress: QueryProgress): string {
+  const status = String(progress.status);
+  const stats = formatStatistics(progress.statistics);
+  return stats ? `status: ${status} (${stats})` : `status: ${status}`;
+}
+
+function formatStatistics(stats: QueryStatistics): string {
+  const parts: string[] = [];
+  if (stats.recordsScanned !== undefined) {
+    parts.push(`scanned ${formatCount(stats.recordsScanned)} records`);
+  }
+  if (stats.bytesScanned !== undefined) {
+    parts.push(formatBytes(stats.bytesScanned));
+  }
+  if (stats.recordsMatched !== undefined) {
+    parts.push(`${formatCount(stats.recordsMatched)} matched`);
+  }
+  return parts.join(", ");
+}
+
+function formatCount(n: number): string {
+  if (n < 1_000) return String(n);
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(1)}k`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  return `${(n / 1_000_000_000).toFixed(1)}B`;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KiB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MiB`;
+  return `${(n / 1024 ** 3).toFixed(1)} GiB`;
+}
+
 // ---------------------------------------------------------------------------
 // main entry: unknown commands and `cloudwatch-insights` with no args both
 // fall through to this, which prints a hint.
@@ -613,7 +769,7 @@ const main = define({
   args: {},
   run: () => {
     process.stderr.write(
-      "Usage: cloudwatch-insights <query|raw|link|parse-link|show|edit-config>\n" +
+      "Usage: cloudwatch-insights <query|raw|copy-link|paste-link|show|edit-config>\n" +
         "Run `cloudwatch-insights --help` for details.\n",
     );
     process.exit(2);
@@ -637,8 +793,8 @@ try {
     subCommands: {
       query: queryCmd,
       raw: rawCmd,
-      link: linkCmd,
-      "parse-link": parseLinkCmd,
+      "copy-link": copyLinkCmd,
+      "paste-link": pasteLinkCmd,
       show: showCmd,
       "edit-config": editConfigCmd,
     },

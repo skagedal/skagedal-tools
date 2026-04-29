@@ -69,7 +69,7 @@ export async function runRaw(values: RawValues): Promise<void> {
     startTime: range.startTime,
     endTime: range.endTime,
     limit: values.limit,
-    onStatus: (status) => {
+    onProgress: ({ status }) => {
       if (values.quiet || status === lastStatus) return;
       lastStatus = String(status);
       process.stderr.write(`  status: ${status}\n`);

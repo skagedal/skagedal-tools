@@ -25,6 +25,8 @@ export interface FrontMatter {
   env?: string;
   app?: string;
   "log-group"?: string | string[];
+  /** When true, `query` skips AWS execution after the editor closes. */
+  dry?: boolean;
 }
 
 export interface QueryFile {
