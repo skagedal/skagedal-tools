@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
+import { copyToSystemClipboard } from "./clipboard.js";
 import type { Config, FieldConfig } from "../config.js";
 import type { LogEntry } from "../entry.js";
 import { renderField, renderValueDetailed, stringify } from "../entry.js";
@@ -756,7 +757,6 @@ async function copyToClipboard(
   setFlash: (v: string | null) => void,
 ): Promise<void> {
   try {
-    const { copyToSystemClipboard } = await import("./clipboard.js");
     await copyToSystemClipboard(text);
     flashFor(setFlash, `copied ${label} (${text.length} bytes)`);
   } catch (err) {
