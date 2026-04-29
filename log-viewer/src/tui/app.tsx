@@ -756,8 +756,8 @@ async function copyToClipboard(
   setFlash: (v: string | null) => void,
 ): Promise<void> {
   try {
-    const { default: clipboard } = await import("clipboardy");
-    clipboard.writeSync(text);
+    const { copyToSystemClipboard } = await import("./clipboard.js");
+    await copyToSystemClipboard(text);
     flashFor(setFlash, `copied ${label} (${text.length} bytes)`);
   } catch (err) {
     flashFor(setFlash, `copy failed: ${err instanceof Error ? err.message : String(err)}`);
