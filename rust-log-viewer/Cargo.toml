@@ -7,9 +7,18 @@ edition = "2024"
 name = "rust-log-viewer"
 path = "src/main.rs"
 
+[features]
+default = ["gui"]
+gui = ["dep:iced"]
+
 [dependencies]
 anyhow = "1"
+base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
+iced = { version = "0.13", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "auto-detect-theme", "tokio"] }
 ratatui = "0.29"
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+shell-escape = "0.1"
+toml = "0.8"

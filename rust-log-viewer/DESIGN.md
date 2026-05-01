@@ -16,6 +16,13 @@ Both share a config layer (JSON5, profiles, triggers), a source layer
 or `{ default_field: line }` for non-JSON input). The Rust rewrite has
 to slot in below the same conceptual seams.
 
+> **Update.** The decisions captured below have landed: the TUI is on
+> ratatui, the GUI is on iced behind a default-on `gui` Cargo feature,
+> and the config layer is **TOML** rather than JSON5 — `toml` is in the
+> Rust ecosystem's stdlib-adjacent toolbelt and matches what the rest
+> of the repo's Rust tools (`cloudwatch-insights`, `intellij-patch`)
+> already use.
+
 [ink]: https://github.com/vadimdemedes/ink
 
 ## TUI front-end — ratatui
