@@ -2,7 +2,6 @@
 # Sourced by install and update. Expects SCRIPT_DIR to be set.
 
 INSTALLED_NODE_TOOLS=(
-    cloudwatch-insights
     linear-notifications
     log-viewer
 )
@@ -17,6 +16,7 @@ NODE_TOOLS=(
 )
 
 INSTALLED_RUST_TOOLS=(
+    cloudwatch-insights
     gh-pr
     git-dirty-checker
     intellij-patch
