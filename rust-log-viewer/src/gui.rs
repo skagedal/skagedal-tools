@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use iced::widget::{Column, Row, button, container, scrollable, text};
+use iced::widget::{Column, Row, button, container, scrollable, text, text_input};
 use iced::{Element, Font, Length, Subscription, Task, Theme, keyboard};
 
 use crate::app::App;
@@ -28,8 +28,13 @@ enum Message {
     CloseDetail,
     ToggleFollow,
     ToggleColumn(usize),
+    FilterChanged(String),
+    FilterFocus,
+    FilterClear,
     Quit,
 }
+
+const FILTER_INPUT_ID: &str = "filter-input";
 
 const MONO: Font = Font::MONOSPACE;
 
@@ -59,6 +64,7 @@ fn subscription(_: &State) -> Subscription<Message> {
                 "o" => Some(Message::OpenDetail),
                 "f" => Some(Message::ToggleFollow),
                 "q" => Some(Message::Quit),
+                "/" => Some(Message::FilterFocus),
                 _ => None,
             },
             keyboard::Key::Named(named) => match named {
@@ -81,7 +87,15 @@ fn update(state: &mut State, msg: Message) -> Task<Message> {
         Message::JumpTop => state.app.jump_top(),
         Message::JumpBottom => state.app.jump_bottom(),
         Message::OpenDetail => state.app.open_detail(),
-        Message::CloseDetail => state.app.close_detail(),
+        Message::CloseDetail => {
+            if !state.app.filter_text.is_empty()
+                && matches!(state.app.view, crate::app::View::List)
+            {
+                state.app.filter_clear();
+            } else {
+                state.app.close_detail();
+            }
+        }
         Message::ToggleFollow => state.app.toggle_follow(),
         Message::SelectEntry(i) => {
             state.app.follow = false;
@@ -94,6 +108,11 @@ fn update(state: &mut State, msg: Message) -> Task<Message> {
                 c.visible = !c.visible;
             }
         }
+        Message::FilterChanged(text) => state.app.set_filter(text),
+        Message::FilterFocus => {
+            return text_input::focus(text_input::Id::new(FILTER_INPUT_ID));
+        }
+        Message::FilterClear => state.app.filter_clear(),
         Message::Quit => return iced::exit(),
     }
     Task::none()
@@ -114,6 +133,7 @@ fn drain_stream(state: &mut State) {
 
 fn view(state: &State) -> Element<'_, Message> {
     let header = header_row(state);
+    let filter = filter_bar(state);
     let body: Element<'_, Message> = if matches!(state.app.view, crate::app::View::Detail) {
         detail_view(state)
     } else {
@@ -122,6 +142,7 @@ fn view(state: &State) -> Element<'_, Message> {
     let status = status_bar(state);
     Column::new()
         .push(header)
+        .push(filter)
         .push(body)
         .push(status)
         .spacing(4)
@@ -129,6 +150,19 @@ fn view(state: &State) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+fn filter_bar(state: &State) -> Element<'_, Message> {
+    let input = text_input("filter (fuzzy) — press / to focus", &state.app.filter_text)
+        .id(text_input::Id::new(FILTER_INPUT_ID))
+        .on_input(Message::FilterChanged)
+        .padding(4)
+        .size(13);
+    let mut row = Row::new().spacing(8).push(input);
+    if !state.app.filter_text.is_empty() {
+        row = row.push(button(text("Clear").size(12)).on_press(Message::FilterClear));
+    }
+    container(row).width(Length::Fill).into()
 }
 
 fn header_row(state: &State) -> Element<'_, Message> {
@@ -155,7 +189,9 @@ fn list_view(state: &State) -> Element<'_, Message> {
     }))
     .spacing(8);
 
-    let rows = state.app.entries.iter().enumerate().map(|(i, entry)| {
+    let displayed = state.app.filtered_indices();
+    let rows = displayed.iter().map(|&i| {
+        let entry = &state.app.entries[i];
         let cells = state.app.row_cells(entry);
         let row_widget = Row::with_children(cells.iter().enumerate().map(|(ci, cell)| {
             let col = cols[ci];
@@ -227,15 +263,21 @@ fn detail_view(state: &State) -> Element<'_, Message> {
 
 fn status_bar(state: &State) -> Element<'_, Message> {
     let total = state.app.entries.len();
-    let pos = if total == 0 {
+    let displayed = state.app.displayed_count();
+    let pos = if displayed == 0 {
         0
     } else {
-        state.app.selected.saturating_add(1).min(total)
+        state.app.cursor_in_filtered() + 1
+    };
+    let filter_tag = if state.app.filter_text.is_empty() {
+        String::new()
+    } else {
+        format!(" · {displayed}/{total} match")
     };
     let follow = if state.app.follow { " · FOLLOW" } else { "" };
     let label = format!(
-        "{}/{}{} · {} · j/k move · o open · f follow · q quit",
-        pos, total, follow, state.app.source_label
+        "{pos}/{displayed}{filter_tag}{follow} · {} · j/k move · / filter · o open · f follow · q quit",
+        state.app.source_label
     );
     container(text(label).size(11))
         .width(Length::Fill)

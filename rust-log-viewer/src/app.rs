@@ -1,5 +1,5 @@
 use crate::config::{Config, FieldDef};
-use crate::entry::Entry;
+use crate::entry::{Entry, fuzzy_match, kill_word_left};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -53,6 +53,11 @@ pub struct App {
     pub fields_menu: FieldsMenuState,
     pub status_msg: Option<String>,
     pub should_quit: bool,
+    /// Fuzzy filter applied to the displayed list. Empty string = no filter.
+    pub filter_text: String,
+    /// Filter input is focused — typed characters go into `filter_text`
+    /// rather than triggering navigation.
+    pub filtering: bool,
 }
 
 impl App {
@@ -74,6 +79,8 @@ impl App {
             fields_menu: FieldsMenuState::default(),
             status_msg: None,
             should_quit: false,
+            filter_text: String::new(),
+            filtering: false,
         }
     }
 
@@ -91,10 +98,98 @@ impl App {
             }
             self.entries.push(entry);
         }
-        if self.follow && !self.entries.is_empty() {
-            self.selected = self.entries.len() - 1;
+        if self.follow
+            && let Some(&last) = self.filtered_indices().last()
+        {
+            self.selected = last;
         } else if was_empty && !self.entries.is_empty() {
             self.selected = 0;
+        }
+    }
+
+    /// Indices into `self.entries` that pass the current fuzzy filter.
+    pub fn filtered_indices(&self) -> Vec<usize> {
+        if self.filter_text.is_empty() {
+            return (0..self.entries.len()).collect();
+        }
+        self.entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| fuzzy_match(&self.filter_text, &self.haystack(e)))
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    fn haystack(&self, entry: &Entry) -> String {
+        // Match the TS tool: join the rendered values of every visible column.
+        self.row_cells(entry).join(" ")
+    }
+
+    /// Cursor's position in the filtered list (0 if the selected entry isn't
+    /// currently displayed).
+    pub fn cursor_in_filtered(&self) -> usize {
+        let f = self.filtered_indices();
+        f.iter().position(|&i| i == self.selected).unwrap_or(0)
+    }
+
+    pub fn displayed_count(&self) -> usize {
+        self.filtered_indices().len()
+    }
+
+    fn move_in_filtered(&mut self, delta: isize) {
+        self.follow = false;
+        let f = self.filtered_indices();
+        if f.is_empty() {
+            return;
+        }
+        let pos = f.iter().position(|&i| i == self.selected).unwrap_or(0);
+        let next = (pos as isize + delta).clamp(0, (f.len() - 1) as isize) as usize;
+        self.selected = f[next];
+    }
+
+    pub fn enter_filter(&mut self) {
+        self.filtering = true;
+    }
+
+    pub fn exit_filter(&mut self) {
+        self.filtering = false;
+    }
+
+    pub fn filter_push(&mut self, c: char) {
+        self.filter_text.push(c);
+        self.clamp_selection_to_filter();
+    }
+
+    pub fn filter_backspace(&mut self) {
+        self.filter_text.pop();
+        self.clamp_selection_to_filter();
+    }
+
+    pub fn filter_clear(&mut self) {
+        self.filter_text.clear();
+        self.filtering = false;
+    }
+
+    pub fn filter_kill_word(&mut self) {
+        let len = self.filter_text.len();
+        let (next, _) = kill_word_left(&self.filter_text, len);
+        self.filter_text = next;
+        self.clamp_selection_to_filter();
+    }
+
+    #[allow(dead_code)] // used by GUI feature and tests
+    pub fn set_filter(&mut self, text: String) {
+        self.filter_text = text;
+        self.clamp_selection_to_filter();
+    }
+
+    fn clamp_selection_to_filter(&mut self) {
+        let f = self.filtered_indices();
+        if f.is_empty() {
+            return;
+        }
+        if !f.contains(&self.selected) {
+            self.selected = *f.first().unwrap();
         }
     }
 
@@ -114,35 +209,33 @@ impl App {
     }
 
     pub fn move_down(&mut self) {
-        self.follow = false;
-        if self.selected + 1 < self.entries.len() {
-            self.selected += 1;
-        }
+        self.move_in_filtered(1);
     }
 
     pub fn move_up(&mut self) {
-        self.follow = false;
-        if self.selected > 0 {
-            self.selected -= 1;
-        }
+        self.move_in_filtered(-1);
     }
 
     pub fn jump_top(&mut self) {
         self.follow = false;
-        self.selected = 0;
+        if let Some(&first) = self.filtered_indices().first() {
+            self.selected = first;
+        }
     }
 
     pub fn jump_bottom(&mut self) {
         self.follow = false;
-        if !self.entries.is_empty() {
-            self.selected = self.entries.len() - 1;
+        if let Some(&last) = self.filtered_indices().last() {
+            self.selected = last;
         }
     }
 
     pub fn toggle_follow(&mut self) {
         self.follow = !self.follow;
-        if self.follow && !self.entries.is_empty() {
-            self.selected = self.entries.len() - 1;
+        if self.follow
+            && let Some(&last) = self.filtered_indices().last()
+        {
+            self.selected = last;
         }
     }
 
@@ -191,15 +284,21 @@ impl App {
     }
 
     pub fn detail_next_entry(&mut self) {
-        if self.selected + 1 < self.entries.len() {
-            self.selected += 1;
+        let f = self.filtered_indices();
+        if let Some(pos) = f.iter().position(|&i| i == self.selected)
+            && pos + 1 < f.len()
+        {
+            self.selected = f[pos + 1];
             self.detail.row = self.detail.row.min(self.detail_rows().saturating_sub(1));
         }
     }
 
     pub fn detail_prev_entry(&mut self) {
-        if self.selected > 0 {
-            self.selected -= 1;
+        let f = self.filtered_indices();
+        if let Some(pos) = f.iter().position(|&i| i == self.selected)
+            && pos > 0
+        {
+            self.selected = f[pos - 1];
             self.detail.row = self.detail.row.min(self.detail_rows().saturating_sub(1));
         }
     }
@@ -360,6 +459,69 @@ mod tests {
         assert!(app.detail_field().is_none());
         app.detail_move_down();
         assert!(app.detail_field().is_some());
+    }
+
+    #[test]
+    fn filter_narrows_displayed_count() {
+        let mut app = make(0);
+        app.append_entries([
+            Entry::parse(r#"{"level":"info","message":"hello"}"#, "message"),
+            Entry::parse(r#"{"level":"error","message":"oops"}"#, "message"),
+            Entry::parse(r#"{"level":"info","message":"yo"}"#, "message"),
+        ]);
+        assert_eq!(app.displayed_count(), 3);
+        app.set_filter("err".into());
+        assert_eq!(app.displayed_count(), 1);
+        assert_eq!(app.filtered_indices(), vec![1]);
+    }
+
+    #[test]
+    fn move_down_skips_non_matching_entries() {
+        let mut app = make(0);
+        app.append_entries([
+            Entry::parse(r#"{"message":"alpha"}"#, "message"),
+            Entry::parse(r#"{"message":"beta"}"#, "message"),
+            Entry::parse(r#"{"message":"alphabet"}"#, "message"),
+        ]);
+        app.set_filter("alph".into());
+        // displayed = entries 0 and 2
+        assert_eq!(app.selected, 0);
+        app.move_down();
+        assert_eq!(app.selected, 2);
+        app.move_down();
+        assert_eq!(app.selected, 2); // clamped
+        app.move_up();
+        assert_eq!(app.selected, 0);
+    }
+
+    #[test]
+    fn follow_pins_to_filtered_tail() {
+        let mut app = make(0);
+        app.set_filter("info".into());
+        app.toggle_follow();
+        app.append_entries([Entry::parse(r#"{"level":"error"}"#, "message")]);
+        // No matching entry yet: selection unchanged.
+        app.append_entries([Entry::parse(r#"{"level":"info"}"#, "message")]);
+        // Now the latest matching entry is index 1.
+        assert_eq!(app.selected, 1);
+    }
+
+    #[test]
+    fn filter_clears_with_filter_clear() {
+        let mut app = make(0);
+        app.append_entries([Entry::parse(r#"{"level":"info"}"#, "message")]);
+        app.set_filter("zzz".into());
+        assert_eq!(app.displayed_count(), 0);
+        app.filter_clear();
+        assert_eq!(app.displayed_count(), 1);
+    }
+
+    #[test]
+    fn filter_kill_word_removes_last_word() {
+        let mut app = make(0);
+        app.set_filter("foo bar".into());
+        app.filter_kill_word();
+        assert_eq!(app.filter_text, "foo ");
     }
 
     #[test]

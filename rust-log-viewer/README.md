@@ -106,8 +106,10 @@ List view:
 | `k` / `↑` / `u` | Previous entry |
 | `g` / `G` | Top / bottom |
 | `o` / Enter | Open the selected entry's detail view |
+| `/` | Focus the fuzzy filter input |
 | `f` | Toggle follow mode (pin selection to the latest entry) |
 | `v` | Open the fields menu |
+| `Esc` (when filter is set) | Clear the filter |
 | `q` / Ctrl-C | Quit |
 
 Detail view:
@@ -131,9 +133,20 @@ Fields menu:
 | `J` / `K` | Move the highlighted field down / up |
 | `v` / `q` / `Esc` | Close the menu |
 
-GUI: `j`/`k` and arrow keys move; `o` / Enter opens the detail view; `f`
-toggles follow; `g`/`G` jump to top/bottom; `q` quits; `Esc` closes
-detail. Click an entry row to select it; click a column toggle in the
+Filter input (when focused, in TUI):
+
+| Key | Action |
+|-----|--------|
+| any printable | Append to the filter |
+| Backspace | Remove the last char |
+| Ctrl-W | Delete the word to the left |
+| Ctrl-U | Clear the filter and unfocus |
+| Enter / Esc | Unfocus the input (filter stays applied) |
+
+GUI: `j`/`k` and arrow keys move; `o` / Enter opens the detail view;
+`/` focuses the fuzzy filter input; `f` toggles follow; `g`/`G` jump to
+top/bottom; `q` quits; `Esc` clears the filter or closes the detail
+view. Click an entry row to select it; click a column toggle in the
 header to show/hide a column.
 
 ## Cargo features

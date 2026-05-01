@@ -68,6 +68,48 @@ pub fn stringify(v: &Value) -> String {
     }
 }
 
+/// Subsequence (fuzzy) match: every char of `needle` must appear in
+/// `haystack` in order, case-insensitively. Empty needle matches anything.
+/// Mirrors the TS log-viewer's `fuzzyMatch`.
+pub fn fuzzy_match(needle: &str, haystack: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    let needle_lc = needle.to_lowercase();
+    let haystack_lc = haystack.to_lowercase();
+    let mut hay = haystack_lc.chars();
+    'outer: for nc in needle_lc.chars() {
+        for hc in hay.by_ref() {
+            if hc == nc {
+                continue 'outer;
+            }
+        }
+        return false;
+    }
+    true
+}
+
+/// Emacs-style C-w: drop the word to the left of `cursor` plus any whitespace
+/// between the cursor and that word.
+pub fn kill_word_left(text: &str, cursor: usize) -> (String, usize) {
+    let cursor = cursor.min(text.len());
+    if cursor == 0 {
+        return (text.to_string(), 0);
+    }
+    let bytes = text.as_bytes();
+    let mut i = cursor;
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    while i > 0 && !bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    let mut out = String::with_capacity(text.len() - (cursor - i));
+    out.push_str(&text[..i]);
+    out.push_str(&text[cursor..]);
+    (out, i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +170,40 @@ mod tests {
         assert_eq!(e.get_str("n").unwrap(), "42");
         let obj_str = e.get_str("obj").unwrap();
         assert!(obj_str.contains("\"k\""));
+    }
+
+    #[test]
+    fn fuzzy_match_basic() {
+        assert!(fuzzy_match("", "anything"));
+        assert!(fuzzy_match("abc", "axbxc"));
+        assert!(fuzzy_match("ABC", "aXbXcXd")); // case-insensitive
+        assert!(!fuzzy_match("abc", "acb"));
+        assert!(!fuzzy_match("abcd", "abc"));
+    }
+
+    #[test]
+    fn fuzzy_match_finds_subsequence_in_jsonl() {
+        assert!(fuzzy_match("err", "level=error msg=oops"));
+        assert!(fuzzy_match("nginx", "podname=nginx-abc-1"));
+    }
+
+    #[test]
+    fn kill_word_left_basics() {
+        let (t, c) = kill_word_left("hello world", 11);
+        assert_eq!(t, "hello ");
+        assert_eq!(c, 6);
+        let (t, c) = kill_word_left("hello world", 6);
+        assert_eq!(t, "world");
+        assert_eq!(c, 0);
+        let (t, c) = kill_word_left("", 0);
+        assert_eq!(t, "");
+        assert_eq!(c, 0);
+    }
+
+    #[test]
+    fn kill_word_left_keeps_text_after_cursor() {
+        let (t, c) = kill_word_left("foo bar baz", 7);
+        assert_eq!(t, "foo  baz");
+        assert_eq!(c, 4);
     }
 }

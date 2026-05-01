@@ -63,7 +63,7 @@ fn event_loop(
             app.append_entries(new);
         }
 
-        table_state.select(Some(app.selected));
+        table_state.select(Some(app.cursor_in_filtered()));
         menu_state.select(Some(app.fields_menu.cursor));
         terminal.draw(|f| draw(f, app, &mut table_state, &mut menu_state))?;
 
@@ -83,10 +83,26 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
     app.status_msg = None;
+    if app.filtering {
+        handle_filter_key(app, key);
+        return;
+    }
     match app.view {
         View::List => handle_list_key(app, key),
         View::Detail => handle_detail_key(app, key),
         View::FieldsMenu => handle_fields_menu_key(app, key),
+    }
+}
+
+fn handle_filter_key(app: &mut App, key: KeyEvent) {
+    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    match (key.code, ctrl) {
+        (KeyCode::Esc, _) | (KeyCode::Enter, _) => app.exit_filter(),
+        (KeyCode::Backspace, _) => app.filter_backspace(),
+        (KeyCode::Char('w'), true) => app.filter_kill_word(),
+        (KeyCode::Char('u'), true) => app.filter_clear(),
+        (KeyCode::Char(c), false) if !c.is_control() => app.filter_push(c),
+        _ => {}
     }
 }
 
@@ -101,6 +117,8 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('o') | KeyCode::Enter => app.open_detail(),
         KeyCode::Char('f') => app.toggle_follow(),
         KeyCode::Char('v') => app.open_fields_menu(),
+        KeyCode::Char('/') => app.enter_filter(),
+        KeyCode::Esc if !app.filter_text.is_empty() => app.filter_clear(),
         _ => {}
     }
 }
@@ -163,24 +181,54 @@ fn draw(
     table_state: &mut TableState,
     menu_state: &mut ListState,
 ) {
-    let chunks = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(f.area());
+    let show_filter_bar = app.filtering || !app.filter_text.is_empty();
+    let constraints = if show_filter_bar {
+        vec![
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ]
+    } else {
+        vec![Constraint::Min(0), Constraint::Length(1)]
+    };
+    let chunks = Layout::vertical(constraints).split(f.area());
 
     match app.view {
         View::List => draw_list(f, app, chunks[0], table_state),
         View::Detail => draw_detail(f, app, chunks[0]),
         View::FieldsMenu => draw_fields_menu(f, app, chunks[0], menu_state),
     }
-    draw_status(f, app, chunks[1]);
+    if show_filter_bar {
+        draw_filter_bar(f, app, chunks[1]);
+        draw_status(f, app, chunks[2]);
+    } else {
+        draw_status(f, app, chunks[1]);
+    }
+}
+
+fn draw_filter_bar(f: &mut ratatui::Frame, app: &App, area: Rect) {
+    let cursor = if app.filtering { "│" } else { "" };
+    let label = if app.filtering {
+        format!("/{}{cursor}", app.filter_text)
+    } else {
+        format!("/{} (Esc to clear, / to edit)", app.filter_text)
+    };
+    let style = if app.filtering {
+        Style::default().add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().add_modifier(Modifier::DIM)
+    };
+    f.render_widget(Paragraph::new(label).style(style), area);
 }
 
 fn draw_list(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut TableState) {
     let cols = app.visible_columns();
     let header = Row::new(cols.iter().map(|c| Cell::from(c.name.clone())))
         .style(Style::default().add_modifier(Modifier::BOLD));
-    let rows = app
-        .entries
+    let displayed = app.filtered_indices();
+    let rows = displayed
         .iter()
-        .map(|e| Row::new(app.row_cells(e).into_iter().map(Cell::from)));
+        .map(|&i| Row::new(app.row_cells(&app.entries[i]).into_iter().map(Cell::from)));
     let widths = column_widths(&cols);
     let table = Table::new(rows, widths)
         .header(header)
@@ -273,10 +321,16 @@ fn draw_fields_menu(
 
 fn draw_status(f: &mut ratatui::Frame, app: &App, area: Rect) {
     let total = app.entries.len();
-    let pos = if total == 0 {
+    let displayed = app.displayed_count();
+    let pos = if displayed == 0 {
         0
     } else {
-        app.selected.saturating_add(1).min(total)
+        app.cursor_in_filtered() + 1
+    };
+    let filter_tag = if app.filter_text.is_empty() {
+        String::new()
+    } else {
+        format!(" · {displayed}/{total} match")
     };
     let follow = if app.follow { " · FOLLOW" } else { "" };
     let extra = app
@@ -285,10 +339,10 @@ fn draw_status(f: &mut ratatui::Frame, app: &App, area: Rect) {
         .map(|m| format!(" · {m}"))
         .unwrap_or_default();
     let bindings = match app.view {
-        View::List => " j/k move · g/G top/bottom · o open · f follow · v fields · q quit ",
+        View::List => " j/k move · g/G top/bottom · o open · / filter · f follow · v fields · q quit ",
         View::Detail => " j/k field · n/p entry · t toggle col · c copy · u/Esc back ",
         View::FieldsMenu => " j/k cursor · space toggle · J/K reorder · v close ",
     };
-    let text = format!("{pos}/{total}{follow}{extra} ·{bindings}");
+    let text = format!("{pos}/{displayed}{filter_tag}{follow}{extra} ·{bindings}");
     f.render_widget(Paragraph::new(text), area);
 }
