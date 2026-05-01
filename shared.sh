@@ -28,6 +28,7 @@ INSTALLED_RUST_TOOLS=(
 
 NOT_INSTALLED_RUST_TOOLS=(
     protobuf-text-to-json
+    rust-log-viewer
 )
 
 RUST_TOOLS=(
