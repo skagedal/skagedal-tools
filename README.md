@@ -9,7 +9,7 @@ A collection of small tools.
 | [git-dirty-checker](git-dirty-checker/) | Checks git repositories for uncommitted changes |
 | [git-repos-latest-activity](git-repos-latest-activity/) | Lists git repositories sorted by date of latest commit |
 | [log-jsonify](log-jsonify/) | Processes JSONL streams, wrapping non-JSON lines in JSON envelopes |
-| [log-viewer](log-viewer/) | View JSONL logs in a TUI or browser with vi-like navigation and JSON drill-down |
+| [log-viewer](log-viewer/) | View JSONL logs in a TUI or in a webview-embedded React app, with vi-like navigation and JSON drill-down |
 | [comparison-typescript-cli-arguments](comparison-typescript-cli-arguments/) | Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript |
 | [comparison-aws-emulation](comparison-aws-emulation/) | Comparison of tools for emulating AWS services locally (LocalStack, Moto, DynamoDB Local, MinIO, Adobe S3Mock) |
 | [protobuf-text-to-json](protobuf-text-to-json/) | Converts protobuf text format to JSON |

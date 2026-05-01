@@ -3,7 +3,6 @@
 
 INSTALLED_NODE_TOOLS=(
     linear-notifications
-    log-viewer
 )
 
 NOT_INSTALLED_NODE_TOOLS=(
@@ -21,6 +20,7 @@ INSTALLED_RUST_TOOLS=(
     git-dirty-checker
     intellij-patch
     log-jsonify
+    log-viewer
     package-json-merge
     sync-brewfile
     x-java-home
@@ -54,6 +54,13 @@ check-rust() {
     echo "==> Checking $dir"
     (
         cd "$SCRIPT_DIR/$dir"
+        # If a Rust crate ships an embedded TS sub-package (currently only
+        # log-viewer/browser), type-check / lint it too. The crate itself
+        # is checked without the `web` feature so contributors don't need
+        # GTK/webkit2gtk dev libs to run ./check.
+        if [[ -f browser/package.json5 ]]; then
+            (cd browser && pnpm install && pnpm run check)
+        fi
         cargo clippy --all-targets -- -D warnings
         cargo test
     )
@@ -79,6 +86,15 @@ install-node() {
 install-rust() {
     local dir="$1"
     echo "==> Installing $dir"
+    if [[ "$dir" == "log-viewer" ]]; then
+        # log-viewer's --web mode embeds the React app from browser/web/dist
+        # into the Rust binary via include_dir!. The crate's build.rs runs
+        # `pnpm install && pnpm run build:web` in browser/ automatically when
+        # the `web` feature is on, so all this special case has to do is
+        # turn the feature on.
+        (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir" --features web)
+        return
+    fi
     (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
 }
 

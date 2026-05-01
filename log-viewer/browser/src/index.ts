@@ -5,9 +5,11 @@ import { cli, define } from "gunshi";
 import { applyProfile, configPath, ensureConfigFile, loadConfig } from "./config.js";
 import { startSource, type SourceSpec } from "./source.js";
 import { createTriggerRuntime } from "./triggers.js";
-import { runTui } from "./tui/index.js";
 
-const DESCRIPTION = "View JSONL logs in a TUI or browser.";
+const DESCRIPTION =
+  "Serve the log-viewer React app on a localhost Vite dev server. " +
+  "(For everyday use, prefer the Rust `log-viewer` binary's TUI or its " +
+  "`-w` web mode — this CLI exists for working on the React app.)";
 
 // Pull --exec out of argv before gunshi parses, so any flags meant for the
 // executed command (e.g. `--exec kubectl logs -f my-pod`) aren't interpreted
@@ -38,12 +40,6 @@ const main = define({
       description:
         "run an executable; its stdout is parsed as JSONL. All argv after the command is passed to it as args, e.g. `--exec kubectl logs -f my-pod`",
     },
-    browser: {
-      type: "boolean",
-      short: "b",
-      description: "start a browser app (Vite server) instead of the TUI",
-      default: false,
-    },
     port: {
       type: "number",
       short: "p",
@@ -58,7 +54,7 @@ const main = define({
     open: {
       type: "boolean",
       negatable: true,
-      description: "open the browser automatically in browser mode (use --no-open to suppress)",
+      description: "open the browser automatically (use --no-open to suppress)",
       default: true,
     },
   },
@@ -67,7 +63,6 @@ const main = define({
       file?: string;
       config?: string;
       profile?: string;
-      browser: boolean;
       port: number;
       host: string;
       open: boolean;
@@ -122,19 +117,15 @@ const main = define({
       source.onEntry((entry) => triggers.handle(entry));
     }
 
-    if (values.browser) {
-      const { runBrowser } = await import("./browser/server.js");
-      await runBrowser({
-        config,
-        source,
-        sourceLabel,
-        port: values.port,
-        host: values.host,
-        open: values.open,
-      });
-    } else {
-      await runTui({ config, source, sourceLabel });
-    }
+    const { runBrowser } = await import("./browser/server.js");
+    await runBrowser({
+      config,
+      source,
+      sourceLabel,
+      port: values.port,
+      host: values.host,
+      open: values.open,
+    });
   },
 });
 

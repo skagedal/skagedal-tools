@@ -1,0 +1,31 @@
+[package]
+name = "log-viewer"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "log-viewer"
+path = "src/main.rs"
+
+[features]
+default = []
+# `web` is off by default because wry pulls in heavy system deps
+# (gtk-3 + webkit2gtk-4.1 on Linux), and because building it also runs
+# pnpm + Vite via build.rs to (re)build the React app under browser/.
+# The repo's ./install enables this feature; CI / ./check stays on the
+# default feature set.
+web = ["dep:include_dir", "dep:tao", "dep:wry"]
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
+include_dir = { version = "0.7", optional = true }
+ratatui = "0.29"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+shell-escape = "0.1"
+tao = { version = "0.35", optional = true }
+toml = "0.8"
+wry = { version = "0.55", optional = true }

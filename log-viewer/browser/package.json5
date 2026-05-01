@@ -1,8 +1,14 @@
-// Manifest for log-viewer
+// Manifest for log-viewer (browser-only dev server).
+//
+// This package now exists primarily as the React app that the Rust
+// `log-viewer` binary embeds in its `--web` mode. The Node CLI is kept
+// for working on the React app with Vite hot-reload — `pnpm dev` runs
+// it. It's no longer installed globally; the user-facing `log-viewer`
+// binary is the Rust one (../).
 {
   name: "log-viewer",
   version: "1.0.0",
-  description: "View JSONL logs in a TUI or browser, with vi-like navigation and drill-down",
+  description: "React browser app for log-viewer (served via Vite or embedded by the Rust binary)",
   type: "module",
   main: "dist/index.js",
   bin: {
@@ -10,6 +16,10 @@
   },
   scripts: {
     "build": "tsc",
+    // Build the React app to web/dist/. The Rust crate's build.rs
+    // invokes this on `cargo build --features web` so the binary
+    // always embeds an up-to-date dist.
+    "build:web": "vite build web",
     "prepare": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
@@ -22,7 +32,6 @@
     "@tanstack/react-virtual": "latest",
     "@vitejs/plugin-react": "latest",
     "gunshi": "latest",
-    "ink": "latest",
     "json5": "latest",
     "react": "latest",
     "react-dom": "latest",
