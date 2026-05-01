@@ -7,8 +7,9 @@
 //!   GET /api/meta     -> JSON: { sourceLabel, config: { fields, defaultField } }
 //!   GET /api/stream   -> text/event-stream: replay then live entries
 //!
-//! The wire format mirrors the TS log-viewer's browser server exactly so the
-//! React app in `log-viewer/web/` works without modification.
+//! The wire format mirrors the in-tree TS browser server exactly (see
+//! `browser/src/browser/server.ts`) so the React app under `browser/web/`
+//! works without modification.
 
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -25,7 +26,7 @@ use serde_json::json;
 use crate::config::Config;
 use crate::entry::Entry;
 
-static WEB_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../log-viewer/web/dist");
+static WEB_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/browser/web/dist");
 
 /// Pre-rendered SSE payload (just the JSON body — the `event:`/`data:` framing
 /// is added on write).

@@ -1,11 +1,11 @@
-# rust-log-viewer — todo
+# log-viewer — todo
 
 Things deliberately deferred. Captured here so they don't get lost.
 
 ## Tauri instead of wry for the `--web` mode
 
-The `web` front-end currently uses [wry] directly: a TCP server bound to
-a free localhost port serves the React app + the `/api/meta` and
+The `web` front-end currently uses [wry] directly: a TCP server bound
+to a free localhost port serves the React app + the `/api/meta` and
 `/api/stream` SSE endpoints, and a wry window navigates to that URL.
 That's the smallest moving-parts version of the same architecture
 [Tauri] gives you.
@@ -28,7 +28,7 @@ Migration sketch when/if we want it:
 1. Add `tauri = "2"` and `tauri-build = "2"` to `Cargo.toml`, keeping
    `wry` only as a dev fallback (or dropping it).
 2. Add `tauri.conf.json` next to `Cargo.toml`. `frontendDist` points
-   at `../log-viewer/web/dist` (or its in-tree successor — see below).
+   at `browser/web/dist`.
 3. Replace the embedded HTTP server with Tauri's asset protocol
    (`tauri://localhost/`). The React app's `fetch("/api/meta")` and
    `new EventSource("/api/stream")` would need a thin abstraction
@@ -44,31 +44,29 @@ Net call: stay on wry until either (a) we want bundled installers, or
 [wry]: https://github.com/tauri-apps/wry
 [Tauri]: https://tauri.app/
 
-## Move the React app into rust-log-viewer/
+## Retire the in-tree TS browser CLI
 
-Today the React source lives at `log-viewer/web/src/` (it's the same
-codebase the TS log-viewer's `--browser` mode serves) and our `web`
-feature embeds the built `log-viewer/web/dist/`. That's nice for
-keeping the Rust port truly source-compatible with the TS tool, but
-it's not where this code wants to live long-term:
+[`browser/`](browser/) ships a tiny Node CLI (`browser/src/index.ts`)
+on top of the React app, used as a Vite dev server with hot reload
+when working on the React UI. Once the Rust binary's `--web` mode
+supports a hot-reload dev path — either by proxying a Vite dev server
+during `cargo run --features web` or by serving the React sources
+directly — the Node CLI has no reason to exist. At that point:
 
-- The React app and the Rust binary are now the only things that
-  talk to each other (the TS Node-side server is a separate
-  consumer of the same codebase, but its days are numbered as the
-  Rust port reaches parity).
-- Touching the React app means cross-tool changes during development.
-- The build step (`pnpm run build:web` in `log-viewer/`) is awkward
-  to spell from inside `rust-log-viewer/`.
+1. Delete `browser/src/`, `browser/test/`, the gunshi/json5/tsx deps,
+   and the related lint/test scripts.
+2. Keep `browser/web/`, `browser/package.json5` (with just the React
+   deps + `build:web`), `browser/eslint.config.js`, `browser/examples/`.
+3. `./check`'s `pnpm run check` step in `browser/` collapses to
+   `pnpm exec tsc -p web --noEmit && eslint web`.
 
-Plan when we pull the trigger:
+Until then the Node CLI is a useful seam for iterating on the React
+app without rebuilding the Rust binary.
 
-1. Move `log-viewer/web/` to `rust-log-viewer/web/` (keep the same
-   Vite config, same source tree).
-2. Add a `rust-log-viewer/web/package.json5` so it's an independent
-   pnpm project — no shared root install.
-3. Update `include_dir!` to `$CARGO_MANIFEST_DIR/web/dist`.
-4. Update `./install`'s rust-log-viewer special case to build inside
-   `rust-log-viewer/web/` instead of `log-viewer/`.
-5. Decide whether log-viewer's `--browser` mode keeps the React app
-   too (symlink? duplicate?) or drops the browser front-end entirely
-   in favor of `rust-log-viewer --web`.
+## TUI / web feature parity in either direction
+
+Today the TUI has a few capabilities the React app lacks (OSC 52
+clipboard copy, the Ctrl-W word-delete in the filter input) and the
+React app has a few the TUI lacks (drag-to-reorder columns, a fields
+popover with checkboxes). Worth a pass to align them once the
+restructure dust settles.

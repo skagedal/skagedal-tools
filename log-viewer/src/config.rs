@@ -176,7 +176,7 @@ pub fn load_with_profile(path: &Path, profile: Option<&str>) -> Result<Config> {
 }
 
 pub fn config_path() -> PathBuf {
-    if let Ok(custom) = std::env::var("RUST_LOG_VIEWER_CONFIG") {
+    if let Ok(custom) = std::env::var("LOG_VIEWER_CONFIG") {
         return PathBuf::from(custom);
     }
     base_dir().join("config.toml")
@@ -189,7 +189,7 @@ fn base_dir() -> PathBuf {
             let home = std::env::var("HOME").unwrap_or_else(|_| String::from("."));
             PathBuf::from(home).join(".skagedal-tools")
         });
-    home.join("rust-log-viewer")
+    home.join("log-viewer")
 }
 
 /// Create a starter config at `path` if it doesn't already exist. Returns
@@ -207,7 +207,7 @@ pub fn ensure_config_file(path: &Path) -> Result<bool> {
     Ok(true)
 }
 
-const STARTER_CONFIG: &str = r#"# rust-log-viewer config (TOML)
+const STARTER_CONFIG: &str = r#"# log-viewer config (TOML)
 
 # Field name used to wrap lines that aren't valid JSON.
 default_field = "message"

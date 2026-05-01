@@ -20,10 +20,10 @@ use crate::config::{Config, config_path, ensure_config_file, load_with_profile};
 use crate::source::SourceSpec;
 use crate::triggers::TriggerRuntime;
 
-const DESCRIPTION: &str = "View JSONL logs in a TUI or browser-style GUI (Rust port of log-viewer).";
+const DESCRIPTION: &str = "View JSONL logs in a TUI or webview-embedded React app.";
 
 #[derive(Parser, Debug)]
-#[command(name = "rust-log-viewer", about = DESCRIPTION, version)]
+#[command(name = "log-viewer", about = DESCRIPTION, version)]
 struct Cli {
     /// JSONL file to read; use "-" for stdin.
     #[arg(short = 'f', long = "file")]

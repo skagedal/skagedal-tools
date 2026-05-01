@@ -1,179 +1,58 @@
 # log-viewer
 
-View JSONL logs in a TUI or browser, with vi-like navigation and JSON
-drill-down.
+View JSONL logs in a TUI or in a webview-embedded React app, with
+vi-like navigation and JSON drill-down.
 
-## Features
+Two front-ends, one source / config / trigger engine:
 
-- Reads JSONL from a **file**, **stdin**, or the streaming output of an
-  **executable command**.
-- Two front-ends:
-  - **TUI** built with [Ink](https://github.com/vadimdemedes/ink) (default).
-  - **Browser** app served by a [Vite](https://vitejs.dev/) dev server
-    (`-b` / `--browser`).
-- vi-like navigation in both: `j`/`k` (and arrows) move, `u` moves up, `o`
-  (or Enter) opens the entry in detail view, `g`/`G` jump to top/bottom,
-  `q`/Esc quits or closes the detail.
-- Detail view shows each field on its own row, so you can navigate
-  field-by-field, copy a single value, or toggle a field's visibility
-  in the main list with `t`.
-- Field management: `v` opens a menu listing every field ever seen,
-  with toggles for visibility and `J`/`K` to reorder columns. The
-  browser exposes the same menu as a popover with checkboxes and drag
-  reordering.
-- Configurable display fields and configurable default field name for
-  non-JSON lines (matches the convention from
-  [log-jsonify](../log-jsonify/)).
-- Named **profiles** in the config file, picked at startup with
-  `--profile <name>`, swap in different field layouts for different
-  log shapes (e.g. app logs vs. `kubectl`/`stern`).
+- **TUI** ([ratatui][ratatui]) — default. Streaming sources, profiles,
+  triggers, follow mode, fields menu, per-field detail view with `t`
+  toggle and `c` copy via OSC 52, fuzzy filter on `/`.
+- **Embedded React app** — `-w` / `--web`. The React app under
+  [`browser/`](browser/) is built by Vite and embedded into the
+  binary; a hand-rolled localhost HTTP server serves it inside a
+  [wry][wry] webview. Behind the `web` Cargo feature (off by
+  default; the repo's `./install` enables it).
 
-## Install
+The two modes are mutually exclusive at startup. See
+[`DESIGN.md`](DESIGN.md) for why these stacks, and [`TODO.md`](TODO.md)
+for follow-ups (Tauri migration, retiring the in-tree TS browser CLI).
 
-```bash
-pnpm install
-pnpm run build
-pnpm link --global
-```
-
-The repo's `install` script does this for you.
+[ratatui]: https://ratatui.rs/
+[wry]: https://github.com/tauri-apps/wry
 
 ## Usage
 
 ```bash
 # TUI from a file
 log-viewer app.jsonl
+log-viewer -f app.jsonl
 
-# TUI from stdin (-f -)
-some-command | log-viewer -f -
+# TUI from stdin
+some-command | log-viewer
 
-# TUI from a streaming command — every argv after the command is passed through
+# TUI from a streaming command — every argv after --exec is passed through
 log-viewer --exec kubectl logs -f my-pod
 
-# Browser mode — prints a localhost URL
-log-viewer --browser app.jsonl
-log-viewer -b --exec kubectl logs -f my-pod --port 5174    # ⚠ flags AFTER --exec go to kubectl, not log-viewer
-log-viewer -b --port 5174 --exec kubectl logs -f my-pod    # put log-viewer flags BEFORE --exec
+# Pick a profile from the config
+log-viewer --profile stern --exec stern --output json my-app
+
+# Web mode (embedded React app in a wry webview)
+log-viewer -w app.jsonl
+log-viewer -w --exec kubectl logs -f my-pod
 ```
-
-## Examples
-
-The [`examples/`](examples/) folder ships ready-to-go input:
-
-- `examples/sample.jsonl` — a static file with ~30 entries covering
-  multiple services, levels, nested objects, stack traces, and a couple
-  of plain-text lines so you can see how non-JSON input is wrapped.
-- `examples/streaming-logs` — an executable that emits a fake log line
-  every ~400 ms (one in ten is plain text). Each line carries a
-  `podname` field that rotates through three pods over time. Tweak
-  with `INTERVAL=`, `MAX=`, `POD_PERIOD=` env vars.
-- `examples/config.json5` — surfaces a `pod` column and registers a
-  `say new pod {value} deployed` trigger on the `podname` field, with
-  a 2-second startup delay.
-
-```bash
-# From the log-viewer/ directory:
-log-viewer examples/sample.jsonl                  # TUI, file
-log-viewer -b examples/sample.jsonl               # browser, file
-log-viewer --exec ./examples/streaming-logs       # TUI, live stream
-log-viewer -b --exec ./examples/streaming-logs    # browser, live stream
-```
-
-### Trying the trigger demo
-
-Run the streaming feed with the example config:
-
-```bash
-log-viewer --config examples/config.json5 --exec ./examples/streaming-logs
-```
-
-What you should see:
-
-1. The first pod, `api-server-abc123`, streams immediately. The
-   trigger does **not** fire — it's within the 2-second startup
-   delay, so log-viewer just records it as "already seen".
-2. After about 5 seconds, a brand-new `api-server-def456` shows up
-   and the trigger fires for the first time (`say new pod
-   api-server-def456 deployed` on macOS).
-3. About 5 seconds later, `api-server-ghi789` appears and the
-   trigger fires again.
-4. Then the pods rotate back through the same three names — none of
-   those fire, because they've all been seen now.
-
-If you're not on macOS (no `say`), edit the `action` in
-`examples/config.json5`. Portable alternatives:
-
-```json5
-action: "printf '\\a'"                                           // terminal bell
-action: "notify-send 'new pod' '{value}'"                        // Linux desktop
-action: "echo new pod {value} >> /tmp/log-viewer-new-pods.log"   // log to a file
-```
-
-## Using with kubectl
-
-`kubectl logs -f` streams plain-text lines, so they get wrapped under
-the `default_field` (typically `message`):
-
-```bash
-log-viewer --exec kubectl logs -f deploy/my-app -n my-ns
-```
-
-If your app already emits structured JSON logs, log-viewer will pick
-them up directly — point your `[[fields]]` `from` candidates at the
-keys your logger uses.
-
-## Using with stern
-
-[stern](https://github.com/stern/stern) tails logs across multiple pods
-and supports JSON output, which pairs naturally with log-viewer:
-
-```bash
-log-viewer --exec stern --output json my-app
-```
-
-stern's JSON shape includes `timestamp`, `message`, `podName`,
-`containerName`, and `namespace`. A matching config:
-
-```json5
-{
-  fields: [
-    { name: "time",      from: ["timestamp"] },
-    { name: "namespace", from: ["namespace"] },
-    { name: "pod",       from: ["podName"] },
-    { name: "container", from: ["containerName"] },
-    { name: "message",   from: ["message"] },
-  ],
-
-  // Make a sound whenever a new pod shows up — useful when watching
-  // a deployment roll over.
-  triggers: [
-    {
-      name: "new-pod",
-      on_new_value: "podName",
-      action: "say new pod {value}",
-      startup_delay_ms: 2000,
-    },
-  ],
-}
-```
-
-Save it as `~/.skagedal-tools/log-viewer/config.json5` (or pass
-`--config path/to/file.json5`).
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
 | `-f`, `--file <path>` | Read JSONL from a file. Use `-` for stdin. |
-| `-c`, `--config <path>` | Path to a config file (overrides `~/.skagedal-tools/log-viewer/config.json5` and `$LOG_VIEWER_CONFIG`). |
-| `--profile <name>` | Activate a profile defined in the config file (overrides the top-level `fields` and optional `default_field`). |
-| `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. **Every argv after the command is forwarded to it**, so `--exec kubectl logs -f my-pod` runs `kubectl logs -f my-pod`. Put log-viewer's own flags before `--exec`. |
-| `-b`, `--browser` | Start the browser app instead of the TUI. |
-| `-p`, `--port <n>` | Port for the browser server (default `5173`). |
-| `--host <h>` | Host for the browser server (default `127.0.0.1`). |
-| `--no-open` | Skip auto-opening the browser (browser mode opens it by default). |
+| `-c`, `--config <path>` | Path to a config file (overrides `~/.skagedal-tools/log-viewer/config.toml` and `$LOG_VIEWER_CONFIG`). |
+| `--profile <name>` | Activate a profile defined in the config file. |
+| `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. Every argv after `--exec` is forwarded to it, so `--exec kubectl logs -f pod` runs `kubectl logs -f pod`. Put log-viewer's own flags before `--exec`. |
+| `-w`, `--web` | Open the React app in a wry webview (only available with the `web` Cargo feature; `./install` enables it). |
 
-There's also one subcommand:
+Subcommand:
 
 | Subcommand | Description |
 |------------|-------------|
@@ -184,180 +63,139 @@ If no input flag and no positional argument are given but stdin is piped,
 
 ## Configuration
 
-The config file is JSON5 (comments, trailing commas, and unquoted keys
-are fine) and lives at:
+The config file is **TOML** and lives at
+`~/.skagedal-tools/log-viewer/config.toml` by default. Override the
+base directory with `SKAGEDAL_TOOLS_HOME`, or set `LOG_VIEWER_CONFIG`
+to point at a specific file.
 
-```
-~/.skagedal-tools/log-viewer/config.json5
-```
+```toml
+# Field name used to wrap lines that aren't valid JSON.
+default_field = "message"
 
-Override the base directory with `SKAGEDAL_TOOLS_HOME`, or set
-`LOG_VIEWER_CONFIG` to point at a specific file.
+[[fields]]
+name = "time"
+from = ["@timestamp", "timestamp", "time", "ts"]
 
-`log-viewer edit-config` creates the file with sensible defaults if it
-doesn't exist yet, then opens it in `$EDITOR` (or `$VISUAL`).
+[[fields]]
+name = "level"
+from = ["level", "severity", "lvl"]
 
-```json5
-{
-  // Field name used to wrap lines that aren't valid JSON. Matches log-jsonify.
-  default_field: "message",
+[[fields]]
+name = "message"
+from = ["message", "msg", "@message"]
 
-  // Each entry is a column shown in the log list. `from` lists candidate keys
-  // to read from each JSON entry; the first one with a non-empty value wins.
-  fields: [
-    { name: "time",    from: ["@timestamp", "timestamp", "time", "ts"] },
-    { name: "level",   from: ["level", "severity", "lvl"] },
-    { name: "message", from: ["message", "msg", "@message"] },
-  ],
-}
-```
+[[profiles]]
+name = "stern"
 
-## Triggers
+[[profiles.fields]]
+name = "time"
+from = ["timestamp"]
 
-A trigger runs a shell command the first time a configured field takes
-on a value `log-viewer` hasn't seen before. The motivating use case is
-"make a sound when a new pod is deployed":
+[[profiles.fields]]
+name = "pod"
+from = ["podName"]
 
-```json5
-{
-  triggers: [
-    {
-      name: "pod-deployed",
-      on_new_value: "podname",
-      action: "say new pod {value} deployed",
-      startup_delay_ms: 2000,
-    },
-  ],
-}
+[[triggers]]
+name = "pod-deployed"
+on_new_value = "podname"   # or a list: ["podname", "podName"]
+action = "say new pod {value} deployed"
+startup_delay_ms = 2000
 ```
 
-- `on_new_value` is the field to watch (a string, or a list of
-  candidate keys like the `from` lists for columns).
-- `{value}` and `{field}` in `action` are substituted as **shell-quoted**
-  strings, so values with spaces or quotes are safe.
-- `startup_delay_ms` suppresses the action for that long after start.
-  Values seen during the delay are still recorded as "already seen", so
-  when log-viewer attaches to e.g. `kubectl logs`, the existing pods
-  don't all fire the trigger — only genuinely new ones do.
-
-The action runs with these env vars set:
-
-| Var | Value |
-|-----|-------|
-| `LOG_VIEWER_VALUE` | the new value |
-| `LOG_VIEWER_FIELD` | the first key in `on_new_value` |
-| `LOG_VIEWER_TRIGGER` | the trigger's `name` |
-| `LOG_VIEWER_ENTRY` | the entry's full JSON |
-
-You can have multiple `[[triggers]]` blocks; each tracks its own set of
-seen values independently.
-
-## Non-JSON lines
-
-Like [log-jsonify](../log-jsonify/), lines that don't parse as JSON are
-treated as a single message under the configured `default_field`:
-
-```
-plain text line, not json
-```
-
-becomes
-
-```json
-{ "message": "plain text line, not json" }
-```
-
-so they show up in the same column as your real `message` fields.
+`{value}` and `{field}` in `action` are substituted as shell-quoted
+strings. Action env vars: `LOG_VIEWER_VALUE`, `LOG_VIEWER_FIELD`,
+`LOG_VIEWER_TRIGGER`, `LOG_VIEWER_ENTRY`.
 
 ## Keyboard
 
-In the list:
+List view:
 
 | Key | Action |
 |-----|--------|
 | `j` / `↓` | Next entry |
-| `k` / `↑` | Previous entry |
-| `u` | Up one entry |
-| `o` / Enter | Open the selected entry (field-row detail view) |
-| `f` | Toggle **follow** mode — pin selection to the latest entry as new ones arrive. Any navigation key turns it back off. |
-| `v` | Open the **fields menu** (toggle visibility, reorder columns). |
+| `k` / `↑` / `u` | Previous entry |
 | `g` / `G` | Top / bottom |
-| `q` / Ctrl-C | Quit (TUI only) |
+| `o` / Enter | Open the selected entry's detail view |
+| `/` | Focus the fuzzy filter input |
+| `f` | Toggle follow mode (pin selection to the latest entry) |
+| `v` | Open the fields menu |
+| `Esc` (when filter is set) | Clear the filter |
+| `q` / Ctrl-C | Quit |
 
-The TUI runs in the terminal's alternate screen buffer (full-screen),
-so it doesn't pollute your scrollback; on quit, the previous terminal
-contents are restored.
-
-In the detail view:
+Detail view:
 
 | Key | Action |
 |-----|--------|
-| `j` / `↓` | Move down (entry header → first field → next field, …) |
-| `k` / `↑` | Move up |
+| `j` / `↓` | Next field row |
+| `k` / `↑` | Previous field row |
 | `n` / `p` | Next / previous entry (stay in detail) |
-| `c` | Copy the selected field's value, or the full JSON when the entry header is selected |
-| `t` | Toggle visibility of the selected field in the main list |
+| `t` | Toggle the selected field's column visibility in the list |
+| `c` | Copy the selected field's value (or the whole entry on the header row) via OSC 52 |
 | `v` | Open the fields menu |
 | `u` / `Esc` / `q` | Back to the list |
 
-The browser shows the same expanded view inline under the clicked
-entry, with a checkbox next to each field for show/hide and a per-field
-"Copy" button.
-
-In the fields menu:
+Fields menu:
 
 | Key | Action |
 |-----|--------|
 | `j` / `↓`, `k` / `↑` / `u` | Move the cursor |
-| `space` / `t` | Toggle the highlighted field's visibility |
-| `J` / `K` | Move the highlighted field down / up in the column order |
+| Space / `t` | Toggle the highlighted field's visibility |
+| `J` / `K` | Move the highlighted field down / up |
 | `v` / `q` / `Esc` | Close the menu |
 
-In the browser, the same menu is available as a popover from the
-"Fields" button in the header. Toggle visibility with the checkbox,
-reorder with the up/down arrows or by drag-and-drop.
+Filter input (when focused):
 
-## Profiles
+| Key | Action |
+|-----|--------|
+| any printable | Append to the filter |
+| Backspace | Remove the last char |
+| Ctrl-W | Delete the word to the left |
+| Ctrl-U | Clear the filter and unfocus |
+| Enter / Esc | Unfocus the input (filter stays applied) |
 
-A profile is a named override for `fields` (and optionally
-`default_field`) that you can pick at startup:
+In `--web` mode the keyboard map is whatever the React app implements
+(see [`browser/web/src/`](browser/web/src/)).
 
-```json5
-{
-  fields: [
-    { name: "time", from: ["@timestamp"] },
-    { name: "level", from: ["level"] },
-    { name: "message", from: ["message"] },
-  ],
+## Cargo features
 
-  profiles: [
-    {
-      name: "stern",
-      fields: [
-        { name: "time",      from: ["timestamp"] },
-        { name: "namespace", from: ["namespace"] },
-        { name: "pod",       from: ["podName"] },
-        { name: "msg",       from: ["message"] },
-      ],
-    },
-    {
-      name: "wide",
-      fields: [
-        { name: "time",    from: ["@timestamp"] },
-        { name: "level",   from: ["level"] },
-        { name: "service", from: ["service"] },
-        { name: "host",    from: ["host", "hostname"] },
-        { name: "message", from: ["message"] },
-      ],
-    },
-  ],
-}
-```
+| Feature | Default | Effect |
+|---------|---------|--------|
+| `web` | **no** | Compiles the wry-based webview front-end in. Embeds the React app dist via `include_dir!`. The crate's `build.rs` runs `pnpm install && pnpm run build:web` in [`browser/`](browser/) automatically, so a fresh `cargo build --features web` produces an up-to-date dist. Linux additionally needs system packages `libgtk-3-dev` + `libwebkit2gtk-4.1-dev` and `pnpm` on PATH. |
 
 ```bash
-log-viewer --profile stern --exec stern --output json my-app
-log-viewer --profile wide app.jsonl
+# Default build — TUI only, no pnpm/Vite required
+cargo build --release
+
+# Build with the embedded webview front-end
+cargo build --release --features web
 ```
 
-Profiles only override the field layout — triggers and the rest of the
-config still apply. Unknown profile names exit with a non-zero status.
+`./install log-viewer` from the repo root invokes
+`cargo install --features web` and `build.rs` handles the React build.
+
+The `web` feature only adds dependencies; the wry window is created
+lazily inside `web::run`, so the TUI startup path doesn't pay any
+wry cost beyond the larger binary.
+
+## Development
+
+```bash
+cargo build
+cargo test
+cargo clippy --all-targets -- -D warnings
+
+# Web feature — pnpm needs to be on PATH; build.rs handles the React build.
+cargo clippy --features web --all-targets -- -D warnings
+cargo test --features web
+
+# Working on the React app itself (Vite hot-reload):
+cd browser
+pnpm install
+pnpm dev examples/sample.jsonl    # or `pnpm dev -- --exec ./examples/streaming-logs`
+```
+
+The top-level `./check` runs the default-feature Rust clippy + test
+gate, plus `pnpm run check` inside [`browser/`](browser/) to type-check
+and lint the React app. It doesn't try to build the Rust crate with
+`--features web`, so contributors who don't have GTK/webkit2gtk dev
+libs installed can still run it.

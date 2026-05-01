@@ -1,35 +1,40 @@
-# rust-log-viewer — design exploration
+# log-viewer — design exploration
 
 This document captures the framework-shopping pass requested in
-[issue #39](https://github.com/skagedal/skagedal-tools/issues/39): rewrite
-[`log-viewer`](../log-viewer/) in Rust, picking sensible Rust-native
-replacements for Ink (TUI) and React + Vite (browser).
+[issue #39](https://github.com/skagedal/skagedal-tools/issues/39):
+rewrite log-viewer in Rust, picking sensible Rust-native replacements
+for Ink (TUI) and React + Vite (browser).
 
-The starting point is concrete. log-viewer today has two front-ends:
+The starting point was a TypeScript log-viewer with two front-ends:
 
 - A TUI built with [Ink][ink] (React for the terminal).
-- A browser app served from a Vite dev server, also React, using TanStack
-  Table + TanStack Virtual for the list and a popover for the fields menu.
+- A browser app served from a Vite dev server, also React, using
+  TanStack Table + TanStack Virtual for the list and a popover for
+  the fields menu.
 
-Both share a config layer (JSON5, profiles, triggers), a source layer
-(file / stdin / `--exec` subprocess), and an entry model (JSON object
-or `{ default_field: line }` for non-JSON input). The Rust rewrite has
-to slot in below the same conceptual seams.
+Both shared a config layer (JSON5, profiles, triggers), a source
+layer (file / stdin / `--exec` subprocess), and an entry model (JSON
+object or `{ default_field: line }` for non-JSON input). The Rust
+rewrite had to slot in below the same conceptual seams.
 
 > **Update.** What landed differs from the original recommendation
-> below. We have two front-ends:
+> below. The Rust crate is now `log-viewer` (the original TS package
+> is folded into [`browser/`](browser/) and only its React app is
+> still load-bearing). Two front-ends:
 >
 > - The **TUI** on ratatui, with full feature parity with the TS tool
 >   (streaming sources, profiles, triggers, follow mode, fields menu,
 >   field-row detail view with `t` toggle and `c` copy via OSC 52,
 >   fuzzy filter on `/`).
-> - A **browser-style GUI** behind the `web` Cargo feature (off by
->   default): the existing React app from `log-viewer/web/` is built
->   to static assets, embedded into the Rust binary via
+> - A **webview-embedded React app** behind the `web` Cargo feature
+>   (off by default): the React app under `browser/web/` is built by
+>   Vite (driven by `build.rs` so `cargo build --features web` does
+>   it automatically), embedded into the Rust binary via
 >   `include_dir!`, and served from a hand-rolled localhost HTTP
 >   server inside the binary that exposes the same `/api/meta` and
->   `/api/stream` SSE contract as the TS browser mode. A wry webview
->   points at that URL. The React code is consumed verbatim.
+>   `/api/stream` SSE contract the original TS browser server used.
+>   A wry webview points at that URL. The React code is consumed
+>   verbatim.
 >
 > An iced-based native GUI was prototyped and then removed — it added
 > a lot of dependency weight (iced + winit + wgpu + tokio) for a
@@ -39,7 +44,8 @@ to slot in below the same conceptual seams.
 > The config layer is **TOML** rather than JSON5 — `toml` is in the
 > Rust ecosystem's stdlib-adjacent toolbelt and matches what the rest
 > of the repo's Rust tools (`cloudwatch-insights`, `intellij-patch`)
-> already use.
+> already use. The TS sub-package under `browser/` still reads the
+> original JSON5 config when used as a Vite dev server.
 
 [ink]: https://github.com/vadimdemedes/ink
 
@@ -186,7 +192,8 @@ Two front-ends:
   `--exec` argv extraction, fuzzy match.
 - **Embedded React app via wry.** Behind the `web` Cargo feature
   (off by default; the repo's `./install` enables it). The React
-  source from `log-viewer/web/` is built by Vite to static assets,
+  source under `browser/web/` is built by Vite (driven from
+  `build.rs` so `cargo build --features web` does it automatically),
   embedded with `include_dir!`, and served from a hand-rolled
   localhost HTTP server (`std::net::TcpListener`, one thread per
   connection, ~250 lines including SSE). A [wry] window points at
@@ -199,6 +206,6 @@ thin shells over the same engine.
 [wry]: https://github.com/tauri-apps/wry
 
 See [`TODO.md`](TODO.md) for the planned migration to Tauri (when we
-want bundled signed installers) and the planned co-location of the
-React app under `rust-log-viewer/web/` once the TS browser mode is
-retired.
+want bundled signed installers) and for the eventual retirement of
+the in-tree TS browser CLI once the Rust binary's `--web` mode
+supports React hot-reload directly.

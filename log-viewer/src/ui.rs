@@ -236,7 +236,7 @@ fn draw_list(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut TableSta
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(format!(" rust-log-viewer — {} ", app.source_label)),
+                .title(format!(" log-viewer — {} ", app.source_label)),
         );
     f.render_stateful_widget(table, area, state);
 }

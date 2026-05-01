@@ -1,9 +1,10 @@
-//! Browser-GUI front-end. Compiled in only when the `web` feature is on.
+//! Webview-embedded React front-end. Compiled in only when the `web` feature
+//! is on.
 //!
-//! This mode embeds the React app from `log-viewer/web/dist` into the Rust
-//! binary, serves it from a localhost HTTP server (with the same `/api/meta`
-//! and `/api/stream` SSE contract the TS browser mode uses), and opens a
-//! [wry] webview pointing at that URL. The React code is consumed verbatim.
+//! Embeds the React app from `browser/web/dist/` into the Rust binary, serves
+//! it from a localhost HTTP server (with the same `/api/meta` and
+//! `/api/stream` SSE contract the in-tree TS browser server uses), and opens
+//! a [wry] webview pointing at that URL. The React code is consumed verbatim.
 //!
 //! The HTTP server is hand-rolled (~250 lines, no axum/hyper) because all we
 //! need is two GET endpoints and SSE on a single localhost port.
@@ -39,7 +40,7 @@ pub fn run(
 
     spawn_consumer(stream, triggers, state.clone());
 
-    eprintln!("rust-log-viewer (web) listening at {url}");
+    eprintln!("log-viewer (web) listening at {url}");
     eprintln!("  source: {source_label}");
 
     open_window(&url, &source_label)
@@ -71,7 +72,7 @@ fn spawn_consumer(
 fn open_window(url: &str, source_label: &str) -> Result<()> {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
-        .with_title(format!("rust-log-viewer — {source_label}"))
+        .with_title(format!("log-viewer — {source_label}"))
         .with_inner_size(LogicalSize::new(1100.0, 720.0))
         .build(&event_loop)
         .map_err(|e| anyhow::anyhow!("creating window: {e}"))?;
