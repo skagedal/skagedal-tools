@@ -1,6 +1,6 @@
-import type { FieldConfig } from "../config.js";
-import type { LogEntry } from "../entry.js";
-import { renderField } from "../entry.js";
+import type { FieldConfig } from "../config.mjs";
+import type { LogEntry } from "../entry.mjs";
+import { renderField } from "../entry.mjs";
 
 /**
  * Subsequence ("fuzzy") match: every character of `needle` must appear in

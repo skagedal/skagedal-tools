@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { entryHaystack, fuzzyMatch, killWordLeft, stripUnprintable } from "../src/tui/filter.ts";
-import { parseLine } from "../src/entry.ts";
+import { entryHaystack, fuzzyMatch, killWordLeft, stripUnprintable } from "../src/tui/filter.mts";
+import { parseLine } from "../src/entry.mts";
 
 test("fuzzyMatch: empty needle matches anything", () => {
   assert.equal(fuzzyMatch("", ""), true);

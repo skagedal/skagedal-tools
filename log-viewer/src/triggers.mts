@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import type { LogEntry } from "./entry.js";
+import type { LogEntry } from "./entry.mjs";
 
 /**
  * A trigger fires a shell action the first time a configured field takes on

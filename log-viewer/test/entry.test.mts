@@ -6,8 +6,8 @@ import {
   renderField,
   renderValueDetailed,
   stringify,
-} from "../src/entry.ts";
-import type { Config } from "../src/config.ts";
+} from "../src/entry.mts";
+import type { Config } from "../src/config.mts";
 
 test("parseLine: valid JSON object passes through unwrapped", () => {
   const e = parseLine(`{"level":"info","msg":"hi"}`, 0, "message");

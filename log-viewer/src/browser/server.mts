@@ -3,9 +3,9 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { readFile } from "fs/promises";
 import type { IncomingMessage, ServerResponse } from "http";
-import type { Config } from "../config.js";
-import type { LogEntry } from "../entry.js";
-import type { SourceHandle } from "../source.js";
+import type { Config } from "../config.mjs";
+import type { LogEntry } from "../entry.mjs";
+import type { SourceHandle } from "../source.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // In dev (tsx) this resolves to <pkg>/src/browser, in build to <pkg>/dist/browser.

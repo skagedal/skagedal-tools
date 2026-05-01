@@ -2,11 +2,11 @@
 import { existsSync } from "fs";
 import { spawnSync } from "child_process";
 import { cli, define } from "gunshi";
-import { applyProfile, configPath, ensureConfigFile, loadConfig } from "./config.js";
-import { startSource, type SourceSpec } from "./source.js";
-import { createTriggerRuntime } from "./triggers.js";
-import { runTui } from "./tui/index.js";
-import { runBrowser } from "./browser/server.js";
+import { applyProfile, configPath, ensureConfigFile, loadConfig } from "./config.mjs";
+import { startSource, type SourceSpec } from "./source.mjs";
+import { createTriggerRuntime } from "./triggers.mjs";
+import { runTui } from "./tui/index.mjs";
+import { runBrowser } from "./browser/server.mjs";
 
 const DESCRIPTION = "View JSONL logs in a TUI or browser.";
 

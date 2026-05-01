@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, createElement as h } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import clipboard from "clipboardy";
-import type { Config, FieldConfig } from "../config.js";
-import type { LogEntry } from "../entry.js";
-import { renderField, renderValueDetailed, stringify } from "../entry.js";
-import type { SourceHandle } from "../source.js";
-import { entryHaystack, fuzzyMatch, killWordLeft, stripUnprintable } from "./filter.js";
+import type { Config, FieldConfig } from "../config.mjs";
+import type { LogEntry } from "../entry.mjs";
+import { renderField, renderValueDetailed, stringify } from "../entry.mjs";
+import type { SourceHandle } from "../source.mjs";
+import { entryHaystack, fuzzyMatch, killWordLeft, stripUnprintable } from "./filter.mjs";
 
 interface Props {
   config: Config;
@@ -392,74 +392,64 @@ export const App: React.FC<Props> = ({ config, source, sourceLabel }) => {
   const window = displayed.slice(start, start + visible);
 
   if (view === "fieldsMenu") {
-    return (
-      <FieldsMenu
-        fields={fields}
-        cursor={menuCursor}
-        flash={flash}
-      />
-    );
+    return h(FieldsMenu, { fields, cursor: menuCursor, flash });
   }
 
   if (view === "detail" && displayed[cursor]) {
-    return (
-      <Detail
-        entry={displayed[cursor]}
-        sourceLabel={sourceLabel}
-        position={{ index: cursor, total: displayed.length }}
-        fields={fields}
-        cursor={detailCursor}
-        flash={flash}
-        width={size.cols}
-      />
-    );
+    return h(Detail, {
+      entry: displayed[cursor]!,
+      sourceLabel,
+      position: { index: cursor, total: displayed.length },
+      fields,
+      cursor: detailCursor,
+      flash,
+      width: size.cols,
+    });
   }
 
-  return (
-    <Box flexDirection="column" height={totalRows} width={size.cols}>
-      <Header
-        fields={activeFields}
-        widths={widths}
-        sourceLabel={sourceLabel}
-        count={entries.length}
-        filteredCount={filterActive && filterText.length > 0 ? displayed.length : null}
-        done={done}
-      />
-      <Box flexDirection="column" flexGrow={1}>
-        {window.length === 0 ? (
-          <Text dimColor>
-            {entries.length === 0
-              ? "(waiting for log lines…)"
-              : "(no entries match filter)"}
-          </Text>
-        ) : (
-          window.map((entry, i) => {
+  return h(
+    Box,
+    { flexDirection: "column", height: totalRows, width: size.cols },
+    h(Header, {
+      fields: activeFields,
+      widths,
+      sourceLabel,
+      count: entries.length,
+      filteredCount: filterActive && filterText.length > 0 ? displayed.length : null,
+      done,
+    }),
+    h(
+      Box,
+      { flexDirection: "column", flexGrow: 1 },
+      window.length === 0
+        ? h(
+            Text,
+            { dimColor: true },
+            entries.length === 0 ? "(waiting for log lines…)" : "(no entries match filter)",
+          )
+        : window.map((entry, i) => {
             const idx = start + i;
             const selected = !follow && idx === cursor;
             const tail = follow && idx === displayed.length - 1;
-            return (
-              <Row
-                key={entry.id}
-                entry={entry}
-                fields={activeFields}
-                widths={widths}
-                selected={selected}
-                tail={tail}
-              />
-            );
-          })
-        )}
-      </Box>
-      <StatusBar
-        follow={follow}
-        cursor={cursor}
-        total={displayed.length}
-        filterMode={filterMode}
-        filterActive={filterActive}
-        filterText={filterText}
-        filterCursor={filterCursor}
-      />
-    </Box>
+            return h(Row, {
+              key: entry.id,
+              entry,
+              fields: activeFields,
+              widths,
+              selected,
+              tail,
+            });
+          }),
+    ),
+    h(StatusBar, {
+      follow,
+      cursor,
+      total: displayed.length,
+      filterMode,
+      filterActive,
+      filterText,
+      filterCursor,
+    }),
   );
 };
 
@@ -470,25 +460,34 @@ const Header: React.FC<{
   count: number;
   filteredCount: number | null;
   done: boolean;
-}> = ({ fields, widths, sourceLabel, count, filteredCount, done }) => (
-  <Box flexDirection="column">
-    <Text>
-      <Text bold>log-viewer</Text>
-      <Text dimColor>
-        {" "}· {sourceLabel} · {count} entries{done ? " (eof)" : ""}
-        {filteredCount !== null ? ` · ${filteredCount} match` : ""}
-      </Text>
-    </Text>
-    <Box>
-      <Text> </Text>
-      {fields.map((field, i) => (
-        <Box key={field.name} width={widths[i]} marginRight={1}>
-          <Text bold underline>{truncate(field.name, widths[i] - 1)}</Text>
-        </Box>
-      ))}
-    </Box>
-  </Box>
-);
+}> = ({ fields, widths, sourceLabel, count, filteredCount, done }) =>
+  h(
+    Box,
+    { flexDirection: "column" },
+    h(
+      Text,
+      null,
+      h(Text, { bold: true }, "log-viewer"),
+      h(
+        Text,
+        { dimColor: true },
+        ` · ${sourceLabel} · ${count} entries${done ? " (eof)" : ""}` +
+          (filteredCount !== null ? ` · ${filteredCount} match` : ""),
+      ),
+    ),
+    h(
+      Box,
+      null,
+      h(Text, null, " "),
+      fields.map((field, i) =>
+        h(
+          Box,
+          { key: field.name, width: widths[i], marginRight: 1 },
+          h(Text, { bold: true, underline: true }, truncate(field.name, widths[i]! - 1)),
+        ),
+      ),
+    ),
+  );
 
 const Row: React.FC<{
   entry: LogEntry;
@@ -500,17 +499,21 @@ const Row: React.FC<{
   const levelField = fields.find((f) => f.name.toLowerCase() === "level");
   const levelValue = levelField ? renderField(entry, levelField) : "";
   const color = selected ? undefined : levelColor(levelValue);
-  return (
-    <Box>
-      <Text color={tail ? "green" : undefined}>{tail ? "▌" : " "}</Text>
-      {fields.map((field, i) => (
-        <Box key={field.name} width={widths[i]} marginRight={1}>
-          <Text inverse={selected} color={color}>
-            {truncate(renderField(entry, field), Math.max(1, widths[i] - 1))}
-          </Text>
-        </Box>
-      ))}
-    </Box>
+  return h(
+    Box,
+    null,
+    h(Text, { color: tail ? "green" : undefined }, tail ? "▌" : " "),
+    fields.map((field, i) =>
+      h(
+        Box,
+        { key: field.name, width: widths[i], marginRight: 1 },
+        h(
+          Text,
+          { inverse: selected, color },
+          truncate(renderField(entry, field), Math.max(1, widths[i]! - 1)),
+        ),
+      ),
+    ),
   );
 };
 
@@ -529,44 +532,49 @@ const Detail: React.FC<{
     8,
     Math.min(24, keys.reduce((w, k) => Math.max(w, k.length), 0) + 1),
   );
-  return (
-    <Box flexDirection="column">
-      <Text inverse={headerSelected}>
-        <Text bold>entry #{entry.id}</Text>
-        <Text dimColor={!headerSelected}>
-          {" "}
-          · {position.index + 1}/{position.total} · {sourceLabel}
-          {entry.wrapped ? " · wrapped" : ""}
-        </Text>
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        {keys.length === 0 ? (
-          <Text dimColor>(empty)</Text>
-        ) : (
-          keys.map((key, i) => {
+  return h(
+    Box,
+    { flexDirection: "column" },
+    h(
+      Text,
+      { inverse: headerSelected },
+      h(Text, { bold: true }, `entry #${entry.id}`),
+      h(
+        Text,
+        { dimColor: !headerSelected },
+        ` · ${position.index + 1}/${position.total} · ${sourceLabel}` +
+          (entry.wrapped ? " · wrapped" : ""),
+      ),
+    ),
+    h(
+      Box,
+      { marginTop: 1, flexDirection: "column" },
+      keys.length === 0
+        ? h(Text, { dimColor: true }, "(empty)")
+        : keys.map((key, i) => {
             const selected = cursor === i + 1;
             const visible = isKeyVisible(fields, key);
-            return (
-              <FieldRow
-                key={key}
-                fieldName={key}
-                value={entry.data[key]}
-                visible={visible}
-                selected={selected}
-                keyColumnWidth={keyColumnWidth}
-                width={width}
-              />
-            );
-          })
-        )}
-      </Box>
-      <Box marginTop={1}>
-        <Text dimColor>
-          j/k field · n/p next/prev entry · u/esc back · t toggle visibility · c copy · v fields menu
-          {flash ? `  ·  ${flash}` : ""}
-        </Text>
-      </Box>
-    </Box>
+            return h(FieldRow, {
+              key,
+              fieldName: key,
+              value: entry.data[key],
+              visible,
+              selected,
+              keyColumnWidth,
+              width,
+            });
+          }),
+    ),
+    h(
+      Box,
+      { marginTop: 1 },
+      h(
+        Text,
+        { dimColor: true },
+        "j/k field · n/p next/prev entry · u/esc back · t toggle visibility · c copy · v fields menu" +
+          (flash ? `  ·  ${flash}` : ""),
+      ),
+    ),
   );
 };
 
@@ -581,22 +589,30 @@ const FieldRow: React.FC<{
   const rendered = renderValueDetailed(value);
   const lines = rendered.split("\n");
   const valueWidth = Math.max(10, width - keyColumnWidth - 4);
-  return (
-    <Box>
-      <Box width={2}><Text>{visible ? "•" : " "}</Text></Box>
-      <Box width={keyColumnWidth} marginRight={1}>
-        <Text inverse={selected} bold dimColor={!selected && !visible}>
-          {truncate(fieldName, keyColumnWidth - 1)}
-        </Text>
-      </Box>
-      <Box flexDirection="column">
-        {lines.map((line, i) => (
-          <Text key={i} inverse={selected} dimColor={!selected && !visible}>
-            {truncate(line, valueWidth)}
-          </Text>
-        ))}
-      </Box>
-    </Box>
+  return h(
+    Box,
+    null,
+    h(Box, { width: 2 }, h(Text, null, visible ? "•" : " ")),
+    h(
+      Box,
+      { width: keyColumnWidth, marginRight: 1 },
+      h(
+        Text,
+        { inverse: selected, bold: true, dimColor: !selected && !visible },
+        truncate(fieldName, keyColumnWidth - 1),
+      ),
+    ),
+    h(
+      Box,
+      { flexDirection: "column" },
+      lines.map((line, i) =>
+        h(
+          Text,
+          { key: i, inverse: selected, dimColor: !selected && !visible },
+          truncate(line, valueWidth),
+        ),
+      ),
+    ),
   );
 };
 
@@ -609,37 +625,42 @@ const FieldsMenu: React.FC<{
     8,
     fields.reduce((w, f) => Math.max(w, f.name.length), 0) + 1,
   );
-  return (
-    <Box flexDirection="column">
-      <Text>
-        <Text bold>Fields</Text>
-        <Text dimColor> · select which columns appear and in what order</Text>
-      </Text>
-      <Box marginTop={1} flexDirection="column">
-        {fields.length === 0 ? (
-          <Text dimColor>(no fields seen yet)</Text>
-        ) : (
-          fields.map((f, i) => {
+  return h(
+    Box,
+    { flexDirection: "column" },
+    h(
+      Text,
+      null,
+      h(Text, { bold: true }, "Fields"),
+      h(Text, { dimColor: true }, " · select which columns appear and in what order"),
+    ),
+    h(
+      Box,
+      { marginTop: 1, flexDirection: "column" },
+      fields.length === 0
+        ? h(Text, { dimColor: true }, "(no fields seen yet)")
+        : fields.map((f, i) => {
             const selected = i === cursor;
             const mark = f.visible ? "[x]" : "[ ]";
-            const fromHint = f.from.length > 1 || f.from[0] !== f.name
-              ? ` (from: ${f.from.join(", ")})`
-              : "";
-            return (
-              <Text key={f.name} inverse={selected} dimColor={!selected && !f.visible}>
-                {" "}{mark} {pad(f.name, nameWidth)}{fromHint}
-              </Text>
+            const fromHint =
+              f.from.length > 1 || f.from[0] !== f.name ? ` (from: ${f.from.join(", ")})` : "";
+            return h(
+              Text,
+              { key: f.name, inverse: selected, dimColor: !selected && !f.visible },
+              ` ${mark} ${pad(f.name, nameWidth)}${fromHint}`,
             );
-          })
-        )}
-      </Box>
-      <Box marginTop={1}>
-        <Text dimColor>
-          j/k (or u) move · space/t toggle · J/K reorder · v/q/esc back
-          {flash ? `  ·  ${flash}` : ""}
-        </Text>
-      </Box>
-    </Box>
+          }),
+    ),
+    h(
+      Box,
+      { marginTop: 1 },
+      h(
+        Text,
+        { dimColor: true },
+        "j/k (or u) move · space/t toggle · J/K reorder · v/q/esc back" +
+          (flash ? `  ·  ${flash}` : ""),
+      ),
+    ),
   );
 };
 
@@ -653,40 +674,45 @@ const StatusBar: React.FC<{
   filterCursor: number;
 }> = ({ follow, cursor, total, filterMode, filterActive, filterText, filterCursor }) => {
   if (filterMode) {
-    return (
-      <Box>
-        <Text>/</Text>
-        <FilterField text={filterText} cursor={filterCursor} />
-        <Text dimColor>  enter: keep filter · esc: clear filter</Text>
-      </Box>
+    return h(
+      Box,
+      null,
+      h(Text, null, "/"),
+      h(FilterField, { text: filterText, cursor: filterCursor }),
+      h(Text, { dimColor: true }, "  enter: keep filter · esc: clear filter"),
     );
   }
   const pos = total === 0 ? 0 : cursor + 1;
-  const filterTag = filterActive && filterText.length > 0
-    ? <Text color="yellow"> [/{filterText}]</Text>
-    : null;
+  const filterTag =
+    filterActive && filterText.length > 0
+      ? h(Text, { color: "yellow" }, ` [/${filterText}]`)
+      : null;
   if (follow) {
-    return (
-      <Box>
-        <Text>
-          <Text color="green" bold inverse>{" FOLLOW "}</Text>
-          <Text dimColor>
-            {" "}{pos}/{total} · any nav key exits · j/k move · u up · o open · v fields ·
-            g/G top/bottom · / filter · q quit
-          </Text>
-          {filterTag}
-        </Text>
-      </Box>
+    return h(
+      Box,
+      null,
+      h(
+        Text,
+        null,
+        h(Text, { color: "green", bold: true, inverse: true }, " FOLLOW "),
+        h(
+          Text,
+          { dimColor: true },
+          ` ${pos}/${total} · any nav key exits · j/k move · u up · o open · v fields · g/G top/bottom · / filter · q quit`,
+        ),
+        filterTag,
+      ),
     );
   }
-  return (
-    <Box>
-      <Text dimColor>
-        {pos}/{total} · j/k move · PgUp/PgDn page · u up · o open · f follow · v fields ·
-        g/G top/bottom · / filter · q quit
-      </Text>
-      {filterTag}
-    </Box>
+  return h(
+    Box,
+    null,
+    h(
+      Text,
+      { dimColor: true },
+      `${pos}/${total} · j/k move · PgUp/PgDn page · u up · o open · f follow · v fields · g/G top/bottom · / filter · q quit`,
+    ),
+    filterTag,
   );
 };
 
@@ -696,12 +722,12 @@ const FilterField: React.FC<{ text: string; cursor: number }> = ({ text, cursor 
   const before = text.slice(0, cursor);
   const at = cursor < text.length ? text[cursor]! : " ";
   const after = cursor < text.length ? text.slice(cursor + 1) : "";
-  return (
-    <Text>
-      <Text>{before}</Text>
-      <Text inverse>{at}</Text>
-      <Text>{after}</Text>
-    </Text>
+  return h(
+    Text,
+    null,
+    h(Text, null, before),
+    h(Text, { inverse: true }, at),
+    h(Text, null, after),
   );
 };
 

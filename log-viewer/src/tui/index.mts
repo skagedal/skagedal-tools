@@ -1,8 +1,8 @@
 import React from "react";
 import { render } from "ink";
-import type { Config } from "../config.js";
-import type { SourceHandle } from "../source.js";
-import { App } from "./app.js";
+import type { Config } from "../config.mjs";
+import type { SourceHandle } from "../source.mjs";
+import { App } from "./app.mjs";
 
 const ENTER_ALT_SCREEN = "\x1b[?1049h";
 const LEAVE_ALT_SCREEN = "\x1b[?1049l";

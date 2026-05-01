@@ -2,7 +2,7 @@ import { spawn } from "child_process";
 import { createReadStream } from "fs";
 import { Readable } from "stream";
 import { createInterface } from "readline";
-import { parseLine, type LogEntry } from "./entry.js";
+import { parseLine, type LogEntry } from "./entry.mjs";
 
 export type SourceSpec =
   | { kind: "file"; path: string }

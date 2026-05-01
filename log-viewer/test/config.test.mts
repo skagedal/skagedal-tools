@@ -6,7 +6,7 @@ import {
   configPath,
   DEFAULT_CONFIG,
   parseConfig,
-} from "../src/config.ts";
+} from "../src/config.mts";
 
 test("parseConfig: empty object falls back to defaults", () => {
   const cfg = parseConfig("{}");

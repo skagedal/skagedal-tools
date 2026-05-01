@@ -1,4 +1,4 @@
-import type { Config, FieldConfig } from "./config.js";
+import type { Config, FieldConfig } from "./config.mjs";
 
 /** A single parsed log line. */
 export interface LogEntry {

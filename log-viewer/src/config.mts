@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 import JSON5 from "json5";
-import type { TriggerConfig } from "./triggers.js";
+import type { TriggerConfig } from "./triggers.mjs";
 
 /**
  * Configuration for log-viewer. The config file lives at

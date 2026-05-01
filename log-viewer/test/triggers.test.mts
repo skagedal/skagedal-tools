@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { createTriggerRuntime } from "../src/triggers.ts";
-import { parseLine } from "../src/entry.ts";
+import { createTriggerRuntime } from "../src/triggers.mts";
+import { parseLine } from "../src/entry.mts";
 
 test("trigger fires once per new value, not on repeats", () => {
   let clock = 0;

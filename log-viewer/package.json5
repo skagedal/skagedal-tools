@@ -4,17 +4,17 @@
   version: "1.0.0",
   description: "View JSONL logs in a TUI or browser, with vi-like navigation and drill-down",
   type: "module",
-  main: "dist/index.js",
+  main: "dist/index.mjs",
   bin: {
-    "log-viewer": "dist/index.js"
+    "log-viewer": "dist/index.mjs"
   },
   scripts: {
     "build": "tsc",
     "prepare": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
+    "start": "node dist/index.mjs",
+    "dev": "tsx src/index.mts",
     "lint": "eslint .",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx --test test/*.test.mts",
     "check": "tsc --noEmit && pnpm test && pnpm lint"
   },
   dependencies: {
