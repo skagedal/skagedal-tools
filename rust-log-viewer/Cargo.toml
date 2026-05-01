@@ -10,6 +10,11 @@ path = "src/main.rs"
 [features]
 default = ["gui"]
 gui = ["dep:iced"]
+# `web` is off by default because wry pulls in heavy system deps
+# (gtk-3 + webkit2gtk-4.1 on Linux). The repo's ./install enables it
+# explicitly for rust-log-viewer; CI / ./check stays on the default
+# feature set.
+web = ["dep:include_dir", "dep:tao", "dep:wry"]
 
 [dependencies]
 anyhow = "1"
@@ -17,8 +22,11 @@ base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
 iced = { version = "0.13", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "auto-detect-theme", "tokio"] }
+include_dir = { version = "0.7", optional = true }
 ratatui = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 shell-escape = "0.1"
+tao = { version = "0.35", optional = true }
 toml = "0.8"
+wry = { version = "0.55", optional = true }

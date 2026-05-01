@@ -8,6 +8,9 @@ mod ui;
 #[cfg(feature = "gui")]
 mod gui;
 
+#[cfg(feature = "web")]
+mod web;
+
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
@@ -47,6 +50,17 @@ struct Cli {
         arg(short = 'g', long = "gui", default_value_t = false, hide = true)
     )]
     gui: bool,
+
+    /// Open the embedded React app in a webview (browser-style GUI).
+    #[cfg_attr(
+        feature = "web",
+        arg(short = 'w', long = "web", default_value_t = false)
+    )]
+    #[cfg_attr(
+        not(feature = "web"),
+        arg(short = 'w', long = "web", default_value_t = false, hide = true)
+    )]
+    web: bool,
 
     /// Positional file path (alternative to -f).
     path: Option<PathBuf>,
@@ -103,16 +117,33 @@ fn dispatch(cli: Cli, exec_argv: Option<Vec<OsString>>) -> Result<()> {
     }
     let config = load_with_profile(&cfg_path, cli.profile.as_deref())?;
     let spec = resolve_source(&cli, exec_argv)?;
-    run_with(spec, config, cli.gui)
+    if cli.gui && cli.web {
+        anyhow::bail!("--gui and --web are mutually exclusive");
+    }
+    run_with(spec, config, cli.gui, cli.web)
 }
 
-fn run_with(spec: SourceSpec, config: Config, want_gui: bool) -> Result<()> {
+fn run_with(spec: SourceSpec, config: Config, want_gui: bool, want_web: bool) -> Result<()> {
     let label = spec.label();
     let stream = source::start(&spec, &config.default_field)
         .with_context(|| format!("starting source {label}"))?;
     let triggers = TriggerRuntime::new(config.triggers.clone());
-    let app = App::new(&config, label);
 
+    if want_web {
+        #[cfg(feature = "web")]
+        {
+            return web::run(config, label, stream, triggers);
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            let _ = (config, label, stream, triggers);
+            anyhow::bail!(
+                "this build was compiled without the `web` feature; rebuild with --features web"
+            );
+        }
+    }
+
+    let app = App::new(&config, label);
     if want_gui {
         #[cfg(feature = "gui")]
         {

@@ -1,15 +1,25 @@
 # rust-log-viewer
 
-A Rust port of [`log-viewer`](../log-viewer/), built around
-[ratatui][ratatui] for the TUI and [iced][iced] for the optional GUI. The
-two front-ends share a single source/config/trigger engine; they are
-mutually exclusive at startup, picked with the `-g` / `--gui` flag.
+A Rust port of [`log-viewer`](../log-viewer/), with three front-ends
+that share one source/config/trigger engine:
+
+- **TUI** ([ratatui][ratatui]) — default.
+- **Native GUI** ([iced][iced]) — `-g` / `--gui`. Behind the `gui`
+  Cargo feature (default-on).
+- **Browser-style GUI** — `-w` / `--web`. Embeds the React app from
+  [`../log-viewer/web/`](../log-viewer/web/) into a localhost HTTP
+  server inside the binary, then opens a [wry][wry] webview pointing
+  at it. The React source is consumed verbatim — same UI as the TS
+  tool's `--browser` mode. Behind the `web` Cargo feature (off by
+  default; the repo's `./install` enables it for this tool).
+
+The three modes are mutually exclusive at startup. See
+[`DESIGN.md`](DESIGN.md) for why these stacks, and [`TODO.md`](TODO.md)
+for follow-ups (Tauri migration, co-locating the React app).
 
 [ratatui]: https://ratatui.rs/
 [iced]: https://iced.rs/
-
-See [`DESIGN.md`](DESIGN.md) for the framework comparison that motivated
-the iced choice.
+[wry]: https://github.com/tauri-apps/wry
 
 ## Usage
 
@@ -30,6 +40,10 @@ rust-log-viewer --profile stern --exec stern --output json my-app
 # GUI (iced) from any source
 rust-log-viewer -g app.jsonl
 rust-log-viewer -g --exec kubectl logs -f my-pod
+
+# Browser-GUI (embedded React app in a wry webview)
+rust-log-viewer -w app.jsonl
+rust-log-viewer -w --exec kubectl logs -f my-pod
 ```
 
 ### Flags
@@ -41,6 +55,7 @@ rust-log-viewer -g --exec kubectl logs -f my-pod
 | `--profile <name>` | Activate a profile defined in the config file. |
 | `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. Every argv after `--exec` is forwarded to it, so `--exec kubectl logs -f pod` runs `kubectl logs -f pod`. Put rust-log-viewer's own flags before `--exec`. |
 | `-g`, `--gui` | Open the iced GUI instead of the TUI (only available with the `gui` Cargo feature, on by default). |
+| `-w`, `--web` | Open the React app in a wry webview (only available with the `web` Cargo feature; `./install` enables it). |
 
 Subcommand:
 
@@ -154,18 +169,26 @@ header to show/hide a column.
 | Feature | Default | Effect |
 |---------|---------|--------|
 | `gui` | yes | Compiles the iced GUI in. Drops ~30 MB of crates and a chunk of binary size when off. |
+| `web` | **no** | Compiles the wry-based browser GUI in. Embeds the React app dist via `include_dir!`. Requires the React app to be pre-built (`pnpm run build:web` in `log-viewer/`) and, on Linux, system packages `libgtk-3-dev` + `libwebkit2gtk-4.1-dev`. |
 
 ```bash
-# Default install — TUI + GUI
+# Default build — TUI + iced GUI, no wry, no embedded React app
 cargo build --release
 
-# TUI-only build (no iced, no wgpu, no winit)
+# TUI-only build (no iced, no wgpu, no winit, no wry)
 cargo build --release --no-default-features
+
+# Full build with all three front-ends
+pnpm --dir ../log-viewer install && pnpm --dir ../log-viewer run build:web
+cargo build --release --features web
 ```
 
-The `gui` feature only adds dependencies; iced is initialized lazily
-inside `gui::run`, so the TUI startup path doesn't pay any iced cost
-beyond the larger binary.
+`./install rust-log-viewer` from the repo root does the React build
+and the `--features web` install in one shot.
+
+Each feature only adds dependencies; the front-end is initialized
+lazily inside its `run` entry point, so the TUI startup path doesn't
+pay any iced or wry cost beyond the larger binary.
 
 ## Development
 
@@ -174,6 +197,13 @@ cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo clippy --no-default-features --all-targets -- -D warnings
+
+# Web feature — needs the React app built first.
+pnpm --dir ../log-viewer install && pnpm --dir ../log-viewer run build:web
+cargo clippy --features web --all-targets -- -D warnings
+cargo test --features web
 ```
 
-The top-level `./check` runs the clippy + test gate with default features.
+The top-level `./check` runs the default-feature clippy + test gate
+(it doesn't try to build with `--features web` so contributors who
+don't have GTK/webkit2gtk dev libs installed can still run it).

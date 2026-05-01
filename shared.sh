@@ -80,6 +80,15 @@ install-node() {
 install-rust() {
     local dir="$1"
     echo "==> Installing $dir"
+    if [[ "$dir" == "rust-log-viewer" ]]; then
+        # rust-log-viewer's --web mode embeds the React app from
+        # log-viewer/web/dist into the Rust binary via include_dir!.
+        # Build that first, then turn the `web` feature on for cargo install.
+        echo "==> Building React app for rust-log-viewer (log-viewer/web)"
+        (cd "$SCRIPT_DIR/log-viewer" && pnpm install && pnpm run build:web)
+        (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir" --features web)
+        return
+    fi
     (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
 }
 

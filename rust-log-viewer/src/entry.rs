@@ -6,21 +6,29 @@ use serde_json::{Map, Value};
 pub struct Entry {
     pub raw: String,
     pub value: Value,
+    /// True when the original line wasn't a JSON object and was wrapped
+    /// under the default field. Mirrors the TS log-viewer's `wrapped` flag
+    /// so the React browser app can render the same "(wrapped)" hint.
+    /// Only the `web` front-end currently surfaces this; the TUI and iced
+    /// GUI ignore it.
+    #[cfg_attr(not(feature = "web"), allow(dead_code))]
+    pub wrapped: bool,
 }
 
 impl Entry {
     pub fn parse(line: &str, default_field: &str) -> Self {
-        let value = match serde_json::from_str::<Value>(line) {
-            Ok(v @ Value::Object(_)) => v,
+        let (value, wrapped) = match serde_json::from_str::<Value>(line) {
+            Ok(v @ Value::Object(_)) => (v, false),
             _ => {
                 let mut map = Map::new();
                 map.insert(default_field.to_string(), Value::String(line.to_string()));
-                Value::Object(map)
+                (Value::Object(map), true)
             }
         };
         Self {
             raw: line.to_string(),
             value,
+            wrapped,
         }
     }
 
