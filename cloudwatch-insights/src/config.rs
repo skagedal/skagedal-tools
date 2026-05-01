@@ -43,27 +43,9 @@ pub struct Settings {
 /// lower kebab-case: starts with a letter, segments separated by single
 /// dashes, no underscores or uppercase.
 pub fn is_valid_environment_name(name: &str) -> bool {
-    if name.is_empty() {
-        return false;
-    }
-    let bytes = name.as_bytes();
-    if !bytes[0].is_ascii_lowercase() {
-        return false;
-    }
-    let mut prev_dash = false;
-    for (i, &b) in bytes.iter().enumerate() {
-        if b == b'-' {
-            if prev_dash || i == 0 || i == bytes.len() - 1 {
-                return false;
-            }
-            prev_dash = true;
-        } else if b.is_ascii_lowercase() || b.is_ascii_digit() {
-            prev_dash = false;
-        } else {
-            return false;
-        }
-    }
-    true
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| regex::Regex::new(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$").unwrap())
+        .is_match(name)
 }
 
 #[derive(Debug, Deserialize)]
