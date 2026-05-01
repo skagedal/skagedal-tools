@@ -18,8 +18,8 @@ use crate::console_link::{
     build_console_link, build_query_detail, ConsoleLinkInput, QueryDetailInput, TimeSpec,
 };
 use crate::insights::{run_insights_query, ProgressCallback, QueryProgress, RunQueryOptions};
-use crate::progress::ProgressReporter;
-use crate::terminal::{default_link_style, styled_link};
+use crate::progress::{ProgressReporter, HEADER_COLUMN_WIDTH};
+use crate::terminal::{colorize, styled_link, Color, ColorOptions};
 use crate::output::{update_latest_symlink, write_results};
 use crate::paths;
 use crate::query_file::{
@@ -104,55 +104,18 @@ pub async fn run(args: QueryArgs) -> Result<()> {
     let client = Client::new(&aws_config);
 
     if !args.quiet {
-        if let Some(p) = &profile {
-            if args.profile.is_none() {
-                if let Some(env) = &environment {
-                    eprintln!("  AWS_PROFILE: {p} (from [env.{env}])");
-                }
-            }
-        }
-        if args.region.is_none() {
-            if let Some(r) = &env_config.region {
-                if let Some(env) = &environment {
-                    eprintln!("  AWS region:  {r} (from [env.{env}])");
-                }
-            } else if let Some(r) = &defaults.region {
-                let from = if let Some(s) = &section_name {
-                    format!("[repo.{s}] or [defaults]")
-                } else {
-                    "[defaults]".to_string()
-                };
-                eprintln!("  AWS region:  {r} (from {from})");
-            }
-        }
+        print_header(region.as_deref(), &log_groups, &time_expr);
     }
 
     let console_url = build_query_console_url(region.as_deref(), &log_groups, &expanded_query, &time_expr, &range);
 
     if front_matter.dry == Some(true) {
         if !args.quiet {
+            eprintln!();
             eprintln!("Dry run (front-matter `dry = true`); not contacting AWS.");
-            eprintln!("  log groups: {}", log_groups.join(", "));
-            eprintln!(
-                "  time:       {} → {}",
-                range.start.to_rfc3339(),
-                range.end.to_rfc3339()
-            );
         }
-        if let Some(url) = &console_url {
-            emit_console_link(url);
-        }
+        emit_trailer(console_url.as_deref(), args.quiet);
         return Ok(());
-    }
-
-    if !args.quiet {
-        eprintln!(
-            "Querying {n} log group(s) from {start} to {end}",
-            n = log_groups.len(),
-            start = range.start.to_rfc3339(),
-            end = range.end.to_rfc3339(),
-        );
-        eprintln!("  log groups: {}", log_groups.join(", "));
     }
 
     let quiet = args.quiet;
@@ -193,35 +156,49 @@ pub async fn run(args: QueryArgs) -> Result<()> {
 
     let out_path = run_result_path(&cwd);
     write_results(&out_path, &rows)?;
-    let link_path = update_latest_symlink(&out_path)?;
+    let _link_path = update_latest_symlink(&out_path)?;
 
-    println!("{}", out_path.display());
-
-    if !args.quiet {
-        let stats = result.statistics.unwrap_or_default();
-        eprintln!(
-            "Done. {n} rows written (matched={m} scanned={s} bytes={b}).",
-            n = result.rows.len(),
-            m = stats
-                .records_matched
-                .map(|v| (v as i64).to_string())
-                .unwrap_or_else(|| "?".into()),
-            s = stats
-                .records_scanned
-                .map(|v| (v as i64).to_string())
-                .unwrap_or_else(|| "?".into()),
-            b = stats
-                .bytes_scanned
-                .map(|v| (v as i64).to_string())
-                .unwrap_or_else(|| "?".into()),
-        );
-        eprintln!("  {} → {}", link_path.display(), out_path.display());
-    }
-
-    if let Some(url) = &console_url {
-        emit_console_link(url);
-    }
+    emit_trailer(console_url.as_deref(), args.quiet);
     Ok(())
+}
+
+fn print_header(region: Option<&str>, log_groups: &[String], time_expr: &str) {
+    print_header_line("AWS region:", region.unwrap_or("(unset)"));
+    print_header_line("Log groups:", &log_groups.join(", "));
+    print_header_line("Time range:", time_expr);
+}
+
+fn print_header_line(label: &str, value: &str) {
+    let bold = colorize(label, ColorOptions { bold: true, ..Default::default() });
+    let pad = " ".repeat(HEADER_COLUMN_WIDTH.saturating_sub(label.len()));
+    eprintln!("{bold}{pad}{value}");
+}
+
+fn emit_trailer(console_url: Option<&str>, quiet: bool) {
+    if quiet {
+        if let Some(url) = console_url {
+            eprintln!("{url}");
+        }
+        return;
+    }
+    use std::io::IsTerminal;
+    eprintln!();
+    let link = match console_url {
+        Some(url) if std::io::stderr().is_terminal() => {
+            let style = ColorOptions {
+                color: Some(Color::Cyan),
+                underline: false,
+                bold: false,
+            };
+            Some(styled_link(url, "Open in AWS", style))
+        }
+        Some(url) => Some(format!("Open in AWS: {url}")),
+        None => None,
+    };
+    match link {
+        Some(l) => eprintln!("Use cloudwatch-insights show to view results. ({l})"),
+        None => eprintln!("Use cloudwatch-insights show to view results."),
+    }
 }
 
 /// Build a shareable AWS Console URL for the in-progress query, using bare
@@ -257,18 +234,6 @@ fn pick_time_spec(time_expr: &str, range: &TimeRange) -> TimeSpec {
     TimeSpec::Absolute {
         start_ms: range.start.timestamp_millis(),
         end_ms: range.end.timestamp_millis(),
-    }
-}
-
-fn emit_console_link(url: &str) {
-    use std::io::IsTerminal;
-    if std::io::stderr().is_terminal() {
-        eprintln!(
-            "{}",
-            styled_link(url, "Open in AWS Console", default_link_style())
-        );
-    } else {
-        eprintln!("{url}");
     }
 }
 
