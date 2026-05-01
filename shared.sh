@@ -22,13 +22,13 @@ INSTALLED_RUST_TOOLS=(
     intellij-patch
     log-jsonify
     package-json-merge
+    rust-log-viewer
     sync-brewfile
     x-java-home
 )
 
 NOT_INSTALLED_RUST_TOOLS=(
     protobuf-text-to-json
-    rust-log-viewer
 )
 
 RUST_TOOLS=(
