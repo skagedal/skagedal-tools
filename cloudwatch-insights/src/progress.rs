@@ -4,6 +4,11 @@
 use std::io::{IsTerminal, Write};
 
 use crate::insights::{QueryProgress, QueryStatistics};
+use crate::terminal::{colorize, ColorOptions};
+
+/// Width of the bold prompt column shared by the header and the live status
+/// line (e.g. "AWS region:  ", "Status:      ").
+pub const HEADER_COLUMN_WIDTH: usize = 13;
 
 pub struct ProgressReporter {
     quiet: bool,
@@ -30,12 +35,13 @@ impl ProgressReporter {
         }
         let line = format_progress_line(progress);
         let mut stderr = std::io::stderr().lock();
+        let prefix = status_prefix();
         if self.tty {
             if line == self.last_line {
                 return;
             }
             // \x1b[2K erases the current line; \r returns to column 0.
-            let _ = write!(stderr, "\r\x1b[2K  {line}");
+            let _ = write!(stderr, "\r\x1b[2K{prefix}{line}");
             let _ = stderr.flush();
             self.last_line = line;
             self.written = true;
@@ -44,7 +50,7 @@ impl ProgressReporter {
                 return;
             }
             self.last_status = progress.status.clone();
-            let _ = writeln!(stderr, "  {line}");
+            let _ = writeln!(stderr, "{prefix}{line}");
         }
     }
 
@@ -56,12 +62,19 @@ impl ProgressReporter {
     }
 }
 
+fn status_prefix() -> String {
+    let label = "Status:";
+    let bold = colorize(label, ColorOptions { bold: true, ..Default::default() });
+    let pad = " ".repeat(HEADER_COLUMN_WIDTH.saturating_sub(label.len()));
+    format!("{bold}{pad}")
+}
+
 fn format_progress_line(progress: &QueryProgress) -> String {
     let stats = format_statistics(&progress.statistics);
     if stats.is_empty() {
-        format!("status: {}", progress.status)
+        progress.status.clone()
     } else {
-        format!("status: {} ({stats})", progress.status)
+        format!("{} ({stats})", progress.status)
     }
 }
 
@@ -74,7 +87,7 @@ fn format_statistics(stats: &QueryStatistics) -> String {
         parts.push(format_bytes(n));
     }
     if let Some(n) = stats.records_matched {
-        parts.push(format!("{} matched", format_count(n)));
+        parts.push(format!("{} rows", format_count(n)));
     }
     parts.join(", ")
 }
@@ -135,7 +148,7 @@ mod tests {
         };
         assert_eq!(
             format_progress_line(&p),
-            "status: Running (scanned 1.2M records, 456.0 MiB, 0 matched)"
+            "Running (scanned 1.2M records, 456.0 MiB, 0 rows)"
         );
     }
 
@@ -145,6 +158,6 @@ mod tests {
             status: "Scheduled".into(),
             statistics: QueryStatistics::default(),
         };
-        assert_eq!(format_progress_line(&p), "status: Scheduled");
+        assert_eq!(format_progress_line(&p), "Scheduled");
     }
 }
