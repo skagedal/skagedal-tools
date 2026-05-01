@@ -50,7 +50,9 @@ async fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            // Use the chain so that anyhow::Context is preserved.
+            if is_broken_pipe(&err) {
+                return ExitCode::SUCCESS;
+            }
             let msg = err.to_string();
             if let Some(exit_err) = err.downcast_ref::<commands::ExitError>() {
                 eprintln!("error: {}", exit_err.message);
@@ -61,4 +63,12 @@ async fn main() -> ExitCode {
             }
         }
     }
+}
+
+fn is_broken_pipe(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::BrokenPipe)
+    })
 }
