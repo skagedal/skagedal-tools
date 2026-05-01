@@ -1,11 +1,9 @@
 # rust-log-viewer
 
-A Rust port of [`log-viewer`](../log-viewer/), with three front-ends
+A Rust port of [`log-viewer`](../log-viewer/), with two front-ends
 that share one source/config/trigger engine:
 
 - **TUI** ([ratatui][ratatui]) — default.
-- **Native GUI** ([iced][iced]) — `-g` / `--gui`. Behind the `gui`
-  Cargo feature (default-on).
 - **Browser-style GUI** — `-w` / `--web`. Embeds the React app from
   [`../log-viewer/web/`](../log-viewer/web/) into a localhost HTTP
   server inside the binary, then opens a [wry][wry] webview pointing
@@ -13,12 +11,11 @@ that share one source/config/trigger engine:
   tool's `--browser` mode. Behind the `web` Cargo feature (off by
   default; the repo's `./install` enables it for this tool).
 
-The three modes are mutually exclusive at startup. See
+The two modes are mutually exclusive at startup. See
 [`DESIGN.md`](DESIGN.md) for why these stacks, and [`TODO.md`](TODO.md)
 for follow-ups (Tauri migration, co-locating the React app).
 
 [ratatui]: https://ratatui.rs/
-[iced]: https://iced.rs/
 [wry]: https://github.com/tauri-apps/wry
 
 ## Usage
@@ -37,11 +34,7 @@ rust-log-viewer --exec kubectl logs -f my-pod
 # Pick a profile from the config
 rust-log-viewer --profile stern --exec stern --output json my-app
 
-# GUI (iced) from any source
-rust-log-viewer -g app.jsonl
-rust-log-viewer -g --exec kubectl logs -f my-pod
-
-# Browser-GUI (embedded React app in a wry webview)
+# Web mode (embedded React app in a wry webview)
 rust-log-viewer -w app.jsonl
 rust-log-viewer -w --exec kubectl logs -f my-pod
 ```
@@ -54,7 +47,6 @@ rust-log-viewer -w --exec kubectl logs -f my-pod
 | `-c`, `--config <path>` | Path to a config file (overrides `~/.skagedal-tools/rust-log-viewer/config.toml` and `$RUST_LOG_VIEWER_CONFIG`). |
 | `--profile <name>` | Activate a profile defined in the config file. |
 | `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. Every argv after `--exec` is forwarded to it, so `--exec kubectl logs -f pod` runs `kubectl logs -f pod`. Put rust-log-viewer's own flags before `--exec`. |
-| `-g`, `--gui` | Open the iced GUI instead of the TUI (only available with the `gui` Cargo feature, on by default). |
 | `-w`, `--web` | Open the React app in a wry webview (only available with the `web` Cargo feature; `./install` enables it). |
 
 Subcommand:
@@ -148,7 +140,7 @@ Fields menu:
 | `J` / `K` | Move the highlighted field down / up |
 | `v` / `q` / `Esc` | Close the menu |
 
-Filter input (when focused, in TUI):
+Filter input (when focused):
 
 | Key | Action |
 |-----|--------|
@@ -158,37 +150,30 @@ Filter input (when focused, in TUI):
 | Ctrl-U | Clear the filter and unfocus |
 | Enter / Esc | Unfocus the input (filter stays applied) |
 
-GUI: `j`/`k` and arrow keys move; `o` / Enter opens the detail view;
-`/` focuses the fuzzy filter input; `f` toggles follow; `g`/`G` jump to
-top/bottom; `q` quits; `Esc` clears the filter or closes the detail
-view. Click an entry row to select it; click a column toggle in the
-header to show/hide a column.
+In `--web` mode the keyboard map is whatever the React app implements
+(currently the same set as log-viewer's TS browser mode).
 
 ## Cargo features
 
 | Feature | Default | Effect |
 |---------|---------|--------|
-| `gui` | yes | Compiles the iced GUI in. Drops ~30 MB of crates and a chunk of binary size when off. |
 | `web` | **no** | Compiles the wry-based browser GUI in. Embeds the React app dist via `include_dir!`. Requires the React app to be pre-built (`pnpm run build:web` in `log-viewer/`) and, on Linux, system packages `libgtk-3-dev` + `libwebkit2gtk-4.1-dev`. |
 
 ```bash
-# Default build — TUI + iced GUI, no wry, no embedded React app
+# Default build — TUI only
 cargo build --release
 
-# TUI-only build (no iced, no wgpu, no winit, no wry)
-cargo build --release --no-default-features
-
-# Full build with all three front-ends
+# Build with the embedded web GUI
 pnpm --dir ../log-viewer install && pnpm --dir ../log-viewer run build:web
 cargo build --release --features web
 ```
 
-`./install rust-log-viewer` from the repo root does the React build
+`./install rust-log-viewer` from the repo root runs the React build
 and the `--features web` install in one shot.
 
-Each feature only adds dependencies; the front-end is initialized
-lazily inside its `run` entry point, so the TUI startup path doesn't
-pay any iced or wry cost beyond the larger binary.
+The `web` feature only adds dependencies; the wry window is created
+lazily inside `web::run`, so the TUI startup path doesn't pay any
+wry cost beyond the larger binary.
 
 ## Development
 
@@ -196,7 +181,6 @@ pay any iced or wry cost beyond the larger binary.
 cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
-cargo clippy --no-default-features --all-targets -- -D warnings
 
 # Web feature — needs the React app built first.
 pnpm --dir ../log-viewer install && pnpm --dir ../log-viewer run build:web

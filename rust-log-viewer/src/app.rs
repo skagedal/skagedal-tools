@@ -177,7 +177,7 @@ impl App {
         self.clamp_selection_to_filter();
     }
 
-    #[allow(dead_code)] // used by GUI feature and tests
+    #[allow(dead_code)] // tests only — TUI uses filter_push/backspace/clear
     pub fn set_filter(&mut self, text: String) {
         self.filter_text = text;
         self.clamp_selection_to_filter();

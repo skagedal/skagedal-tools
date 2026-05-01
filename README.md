@@ -10,7 +10,7 @@ A collection of small tools.
 | [git-repos-latest-activity](git-repos-latest-activity/) | Lists git repositories sorted by date of latest commit |
 | [log-jsonify](log-jsonify/) | Processes JSONL streams, wrapping non-JSON lines in JSON envelopes |
 | [log-viewer](log-viewer/) | View JSONL logs in a TUI or browser with vi-like navigation and JSON drill-down |
-| [rust-log-viewer](rust-log-viewer/) | Rust port of log-viewer (early scaffold; ratatui TUI only) |
+| [rust-log-viewer](rust-log-viewer/) | Rust port of log-viewer (ratatui TUI plus an optional wry webview that embeds the same React app log-viewer's `--browser` mode uses) |
 | [comparison-typescript-cli-arguments](comparison-typescript-cli-arguments/) | Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript |
 | [comparison-aws-emulation](comparison-aws-emulation/) | Comparison of tools for emulating AWS services locally (LocalStack, Moto, DynamoDB Local, MinIO, Adobe S3Mock) |
 | [protobuf-text-to-json](protobuf-text-to-json/) | Converts protobuf text format to JSON |

@@ -9,8 +9,7 @@ pub struct Entry {
     /// True when the original line wasn't a JSON object and was wrapped
     /// under the default field. Mirrors the TS log-viewer's `wrapped` flag
     /// so the React browser app can render the same "(wrapped)" hint.
-    /// Only the `web` front-end currently surfaces this; the TUI and iced
-    /// GUI ignore it.
+    /// Only the `web` front-end surfaces this; the TUI ignores it.
     #[cfg_attr(not(feature = "web"), allow(dead_code))]
     pub wrapped: bool,
 }

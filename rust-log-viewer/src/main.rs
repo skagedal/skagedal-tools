@@ -5,9 +5,6 @@ mod source;
 mod triggers;
 mod ui;
 
-#[cfg(feature = "gui")]
-mod gui;
-
 #[cfg(feature = "web")]
 mod web;
 
@@ -23,7 +20,7 @@ use crate::config::{Config, config_path, ensure_config_file, load_with_profile};
 use crate::source::SourceSpec;
 use crate::triggers::TriggerRuntime;
 
-const DESCRIPTION: &str = "View JSONL logs in a TUI or GUI (Rust port of log-viewer).";
+const DESCRIPTION: &str = "View JSONL logs in a TUI or browser-style GUI (Rust port of log-viewer).";
 
 #[derive(Parser, Debug)]
 #[command(name = "rust-log-viewer", about = DESCRIPTION, version)]
@@ -39,17 +36,6 @@ struct Cli {
     /// Activate a profile defined in the config file.
     #[arg(long = "profile")]
     profile: Option<String>,
-
-    /// Open the iced GUI instead of the TUI.
-    #[cfg_attr(
-        feature = "gui",
-        arg(short = 'g', long = "gui", default_value_t = false)
-    )]
-    #[cfg_attr(
-        not(feature = "gui"),
-        arg(short = 'g', long = "gui", default_value_t = false, hide = true)
-    )]
-    gui: bool,
 
     /// Open the embedded React app in a webview (browser-style GUI).
     #[cfg_attr(
@@ -117,13 +103,10 @@ fn dispatch(cli: Cli, exec_argv: Option<Vec<OsString>>) -> Result<()> {
     }
     let config = load_with_profile(&cfg_path, cli.profile.as_deref())?;
     let spec = resolve_source(&cli, exec_argv)?;
-    if cli.gui && cli.web {
-        anyhow::bail!("--gui and --web are mutually exclusive");
-    }
-    run_with(spec, config, cli.gui, cli.web)
+    run_with(spec, config, cli.web)
 }
 
-fn run_with(spec: SourceSpec, config: Config, want_gui: bool, want_web: bool) -> Result<()> {
+fn run_with(spec: SourceSpec, config: Config, want_web: bool) -> Result<()> {
     let label = spec.label();
     let stream = source::start(&spec, &config.default_field)
         .with_context(|| format!("starting source {label}"))?;
@@ -143,22 +126,7 @@ fn run_with(spec: SourceSpec, config: Config, want_gui: bool, want_web: bool) ->
         }
     }
 
-    let app = App::new(&config, label);
-    if want_gui {
-        #[cfg(feature = "gui")]
-        {
-            return gui::run(app, stream, triggers);
-        }
-        #[cfg(not(feature = "gui"))]
-        {
-            let _ = (app, stream, triggers);
-            anyhow::bail!(
-                "this build was compiled without the `gui` feature; rebuild with --features gui"
-            );
-        }
-    }
-
-    let mut app = app;
+    let mut app = App::new(&config, label);
     ui::run(&mut app, stream, triggers)
 }
 

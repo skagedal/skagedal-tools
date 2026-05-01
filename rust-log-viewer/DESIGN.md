@@ -16,9 +16,27 @@ Both share a config layer (JSON5, profiles, triggers), a source layer
 or `{ default_field: line }` for non-JSON input). The Rust rewrite has
 to slot in below the same conceptual seams.
 
-> **Update.** The decisions captured below have landed: the TUI is on
-> ratatui, the GUI is on iced behind a default-on `gui` Cargo feature,
-> and the config layer is **TOML** rather than JSON5 — `toml` is in the
+> **Update.** What landed differs from the original recommendation
+> below. We have two front-ends:
+>
+> - The **TUI** on ratatui, with full feature parity with the TS tool
+>   (streaming sources, profiles, triggers, follow mode, fields menu,
+>   field-row detail view with `t` toggle and `c` copy via OSC 52,
+>   fuzzy filter on `/`).
+> - A **browser-style GUI** behind the `web` Cargo feature (off by
+>   default): the existing React app from `log-viewer/web/` is built
+>   to static assets, embedded into the Rust binary via
+>   `include_dir!`, and served from a hand-rolled localhost HTTP
+>   server inside the binary that exposes the same `/api/meta` and
+>   `/api/stream` SSE contract as the TS browser mode. A wry webview
+>   points at that URL. The React code is consumed verbatim.
+>
+> An iced-based native GUI was prototyped and then removed — it added
+> a lot of dependency weight (iced + winit + wgpu + tokio) for a
+> middle-ground UX that wasn't a clear win over the embedded React
+> app, which already does the table well.
+>
+> The config layer is **TOML** rather than JSON5 — `toml` is in the
 > Rust ecosystem's stdlib-adjacent toolbelt and matches what the rest
 > of the repo's Rust tools (`cloudwatch-insights`, `intellij-patch`)
 > already use.
@@ -38,28 +56,6 @@ this one. No realistic alternative; the only call to make is the
 backend (crossterm) and the layout primitives.
 
 [ratatui]: https://ratatui.rs/
-
-The MVP in this repo wires up:
-
-- crossterm raw mode + alternate screen, restored on exit.
-- A `Table` with header row + selection-highlight + scrolling.
-- A detail view that pretty-prints `serde_json` for the selected entry.
-- `j/k`, arrows, `g`/`G`, `o`/Enter, `q`, `Ctrl-C`.
-
-What's still missing on the TUI side and tracked as follow-up work:
-
-- Streaming sources (`--exec`, stdin tail). The current loader is
-  eager. Switching to a `mpsc::channel` fed by a producer thread and
-  drained on each tick is a small change.
-- Config file (`~/.skagedal-tools/rust-log-viewer/config.json5`) +
-  profiles. `serde_json` already pulls in everything needed; `json5`
-  the crate or `serde_json5` would cover the JSON5 dialect.
-- Field-row detail navigation (the TS tool lets you select a single
-  field and copy it). Trivial with `ratatui`'s `List` + a state.
-- Fields menu (`v`) for visibility / reordering.
-- Triggers. The TS implementation is a separate runtime that doesn't
-  touch the UI; same shape ports cleanly.
-- Follow mode (`f`).
 
 ## Browser / GUI front-end — pick one
 
@@ -141,14 +137,7 @@ Pros:
 
 - Truly native, no webview, single static binary.
 - Elm/Redux model is a natural fit for the kinds of state we manage
-  (selected entry, follow mode, fields menu) and pairs well with
-  Tokio for the streaming source.
-- Pop-OS's [libcosmic][libcosmic] is built on iced — if we ever
-  wanted a "looks at home on Linux" coat of paint, the path is
-  there. (Don't think we need libcosmic for this app; iced alone is
-  sufficient and avoids pulling in a desktop-shell dependency.)
-- Active development, recent 0.13 release added scrollable tables
-  and broke fewer APIs than iced 0.10→0.12.
+  (selected entry, follow mode, fields menu).
 
 Cons:
 
@@ -159,113 +148,57 @@ Cons:
   this reason.
 - Text selection / copy across multiple cells is not a free thing
   in iced; we'd either render each cell as `text_input` (ugly) or
-  ship a "copy this row" affordance (matches the TS tool's `c`
-  binding).
-- No drag-and-drop story for column reordering — would need to
-  re-implement with pointer events.
+  ship a "copy this row" affordance.
+- No drag-and-drop story for column reordering.
+- Heavy dep tree (iced + winit + wgpu + tokio) for a UX that doesn't
+  meaningfully beat the TUI for this app shape.
 
-When it's the right call: if we accept that the GUI will feel
-toolkit-native rather than "browser-like," and we're willing to
-build a virtualized table once. Probably the best fit on the
-Rust-purity axis.
+We tried iced and pulled it back out — the prototype worked but it
+didn't earn its keep alongside the TUI and the embedded React app.
 
 [iced]: https://github.com/iced-rs/iced
-[libcosmic]: https://github.com/pop-os/libcosmic
 
-### floem
+### floem / Slint / egui
 
-[floem][floem] is a fine-grained reactive toolkit (think SolidJS for
-Rust), built on top of [Lapce][lapce]'s rendering stack. It's
-rendered with vello/peniko (GPU) and ships a real virtualized
-`virtual_stack` widget, plus drag-and-drop primitives.
-
-Pros:
-
-- Has a virtual list out of the box, which is exactly what we need
-  for big log streams — would be a clear win over iced for this
-  workload.
-- Reactive primitives (`RwSignal`, `Memo`) mean the table can
-  observe filtered views of the entry list without re-allocating
-  every frame.
-- Single static binary.
-
-Cons:
-
-- Younger and less stable than iced. APIs churn, fewer tutorials.
-  Lapce is the only large user, so anything they don't need is
-  thin.
-- Docs are light. Discovery happens by reading source.
-- Linux/macOS/Windows support; mobile not in scope.
-
-When it's the right call: if we hit performance ceilings on iced
-and want `virtual_stack` without writing it. Likely premature
-unless we know we want huge scrollback.
+[floem][floem] (fine-grained reactive, has a virtualized list),
+[Slint][slint] (DSL + Rust bindings, multi-screen apps), and egui
+(immediate-mode debugger/inspector vibes) all considered briefly.
+None of them shifted the calculus once we'd decided we wanted the
+exact React UX rather than a native rebuild — at that point the
+right tool is whatever puts a webview on the React app with the
+least ceremony. egui in particular is a poor fit for a long
+list-of-rows app: text selection is awkward and large tables need
+manual virtualization.
 
 [floem]: https://github.com/lapce/floem
-[lapce]: https://lapce.dev/
-
-### Slint
-
-[Slint][slint] is a declarative UI toolkit with its own DSL (`.slint`
-files compiled at build time) and Rust bindings. It targets desktop,
-embedded, and web (via wasm).
-
-Pros:
-
-- The DSL gives a clean separation between view and logic — much
-  easier to read at a glance than a deep iced `view()` tree.
-- Built-in `ListView`/`StandardListView` with virtualization.
-- Mature commercial backing; embedded story is good if that ever
-  becomes interesting (it isn't for this tool).
-
-Cons:
-
-- The DSL is a real second language to learn, and the Rust binding
-  still feels like an FFI surface in places — string interpolation,
-  conversions to/from Slint types, etc.
-- Licensing is GPLv3-or-commercial, which is fine for this repo but
-  worth flagging.
-- Less idiomatic for "small CLI gets a GUI dialog" — best in class
-  for app-shaped UIs with lots of screens.
-
-When it's the right call: if we end up with a multi-screen GUI
-beyond "table + detail." For this tool, probably overkill.
-
 [slint]: https://github.com/slint-ui/slint
 
-### egui — explicitly out
+## What shipped
 
-The issue rules egui out and that's the right call. egui is brilliant
-for tools with constantly-changing layouts (debuggers, inspectors,
-profilers), but its immediate-mode reflow doesn't suit a long
-list-of-rows app: text selection is poor, large tables stutter
-unless you opt into `egui_extras::TableBuilder` with manual
-virtualization, and the look-and-feel is unmistakably "developer
-tool."
+Two front-ends:
 
-## Recommendation
+- **TUI on ratatui.** Default. Streaming sources, profiles, triggers,
+  follow mode, fields menu, per-field detail with `t` toggle and `c`
+  copy via OSC 52, fuzzy filter on `/`. crossterm raw mode + alt
+  screen, restored on exit. ~50 unit tests cover entry parsing,
+  navigation, follow-mode pinning, fields-menu reorder, detail
+  toggle, trigger substitution + dedupe, config profile resolution,
+  `--exec` argv extraction, fuzzy match.
+- **Embedded React app via wry.** Behind the `web` Cargo feature
+  (off by default; the repo's `./install` enables it). The React
+  source from `log-viewer/web/` is built by Vite to static assets,
+  embedded with `include_dir!`, and served from a hand-rolled
+  localhost HTTP server (`std::net::TcpListener`, one thread per
+  connection, ~250 lines including SSE). A [wry] window points at
+  the URL.
 
-Land the ratatui TUI now (this PR's scaffold), then revisit the GUI
-question once the TUI has feature parity with the TS tool. By that
-point we'll know how much of the codebase is in the source/config/
-trigger layer (front-end-agnostic) vs the UI layer (front-end-bound),
-which is the input that should drive the GUI choice.
+Architecture seams kept clean: `source`, `config`, `triggers`, `entry`
+are all front-end-agnostic. `ui::run` (TUI) and `web::run` (wry) are
+thin shells over the same engine.
 
-Tentative ranking, today, for when we're ready:
+[wry]: https://github.com/tauri-apps/wry
 
-1. **iced** — best tradeoff between Rust-purity, complexity, and
-   long-term maintainability. Accept that we own the virtualized
-   table. The Elm architecture is a comfortable fit for this app
-   shape.
-2. **Tauri** (with a thin Leptos or Yew front-end, dropping the
-   React/Vite stack) — fallback if iced's table story becomes a
-   blocker. Keeps the door open to feature-parity with the TS
-   browser mode but stays in Rust end-to-end.
-3. **floem** — reach for it only if iced's virtualization can't keep
-   up with a realistic stern/kubectl stream.
-4. **Dioxus / Slint** — possible but neither is the obvious win for
-   this specific app.
-
-Whichever wins, the source / entry / config / trigger layers should
-live in a `lib.rs` (or a sibling crate) so the GUI is a thin shell
-on top of the same engine the TUI uses.
+See [`TODO.md`](TODO.md) for the planned migration to Tauri (when we
+want bundled signed installers) and the planned co-location of the
+React app under `rust-log-viewer/web/` once the TS browser mode is
+retired.
