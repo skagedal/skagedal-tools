@@ -45,14 +45,6 @@ pub fn level_color(level: &str) -> Option<Color> {
     }
 }
 
-/// True when the level should override a pod-hash row color — i.e., it's
-/// an "alert me" level that we don't want visually drowned out by the
-/// hash-based grouping.
-pub fn level_overrides_pod_color(level: &str) -> bool {
-    let v = level.to_ascii_lowercase();
-    v.contains("error") || v == "err" || v.contains("fatal") || v.contains("warn")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,13 +77,4 @@ mod tests {
         assert_eq!(level_color("audit"), None);
     }
 
-    #[test]
-    fn override_only_for_warn_and_error_levels() {
-        assert!(level_overrides_pod_color("ERROR"));
-        assert!(level_overrides_pod_color("warn"));
-        assert!(level_overrides_pod_color("FATAL"));
-        assert!(!level_overrides_pod_color("INFO"));
-        assert!(!level_overrides_pod_color("DEBUG"));
-        assert!(!level_overrides_pod_color(""));
-    }
 }

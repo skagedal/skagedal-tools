@@ -17,7 +17,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState};
 
 use crate::app::{App, View};
-use crate::colors::{hash_color, level_color, level_overrides_pod_color};
+use crate::colors::{hash_color, level_color};
 use crate::source::EntryStream;
 use crate::triggers::TriggerRuntime;
 
@@ -229,18 +229,28 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
     app.list_page_size = (area.height as usize).saturating_sub(3);
 
     let cols = app.visible_columns();
-    let header = Row::new(cols.iter().map(|c| Cell::from(c.name.clone())))
-        .style(Style::default().add_modifier(Modifier::BOLD));
+    let show_gutter = app.color_by_field.is_some();
+    let header_cells: Vec<Cell> = std::iter::once(Cell::from(""))
+        .filter(|_| show_gutter)
+        .chain(cols.iter().map(|c| Cell::from(c.name.clone())))
+        .collect();
+    let header = Row::new(header_cells).style(Style::default().add_modifier(Modifier::BOLD));
     let displayed = app.filtered_indices();
     let rows = displayed.iter().map(|&i| {
         let entry = &app.entries[i];
-        let row = Row::new(app.row_cells(entry).into_iter().map(Cell::from));
+        let body = app.row_cells(entry).into_iter().map(Cell::from);
+        let cells: Vec<Cell> = if show_gutter {
+            std::iter::once(gutter_cell(app, entry)).chain(body).collect()
+        } else {
+            body.collect()
+        };
+        let row = Row::new(cells);
         match row_color(app, entry) {
             Some(c) => row.style(Style::default().fg(c)),
             None => row,
         }
     });
-    let widths = column_widths(&cols);
+    let widths = column_widths(&cols, show_gutter);
     let table = Table::new(rows, widths)
         .header(header)
         .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
@@ -252,27 +262,38 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
     f.render_stateful_widget(table, area, state);
 }
 
-/// Pick a foreground color for the row. Precedence:
-///   stderr (red) > error/fatal (red) > warn (yellow) > pod-hash > info/debug
+/// Foreground color for the row's text. The pod-hash signal lives in the
+/// gutter cell, so this only handles stderr and level coloring.
 fn row_color(app: &App, entry: &crate::entry::Entry) -> Option<Color> {
     if entry.is_stderr {
         return Some(Color::Red);
     }
-    let level = app.level_for(entry);
-    if !level.is_empty() && level_overrides_pod_color(&level) {
-        return level_color(&level);
-    }
-    if let Some(key) = app.color_key_for(entry) {
-        return Some(hash_color(&key));
-    }
-    level_color(&level)
+    level_color(&app.level_for(entry))
 }
 
-fn column_widths(cols: &[&crate::app::ColumnState]) -> Vec<Constraint> {
+/// Build the leading gutter cell — a colored block per pod (or whichever
+/// `color_by_field` names). The cell uses its own foreground style so the
+/// row-level level color doesn't override it.
+fn gutter_cell(app: &App, entry: &crate::entry::Entry) -> Cell<'static> {
+    let color = app
+        .color_key_for(entry)
+        .map(|k| hash_color(&k))
+        .unwrap_or(Color::Reset);
+    Cell::from("▌").style(Style::default().fg(color))
+}
+
+fn column_widths(cols: &[&crate::app::ColumnState], show_gutter: bool) -> Vec<Constraint> {
     if cols.is_empty() {
-        return Vec::new();
+        return if show_gutter {
+            vec![Constraint::Length(1)]
+        } else {
+            Vec::new()
+        };
     }
-    let mut out = Vec::with_capacity(cols.len());
+    let mut out = Vec::with_capacity(cols.len() + usize::from(show_gutter));
+    if show_gutter {
+        out.push(Constraint::Length(1));
+    }
     for (i, _) in cols.iter().enumerate() {
         if i + 1 == cols.len() {
             out.push(Constraint::Min(10));

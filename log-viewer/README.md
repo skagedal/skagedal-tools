@@ -89,10 +89,11 @@ from = ["message", "msg", "@message"]
 # merged up and the parent key is dropped. Inner keys win on collision.
 flatten_fields = []
 
-# Optional. When set, each row in the list view is colored by a hash
-# of the named field's value — like stern's per-pod coloring. Rows
-# whose level is WARN/ERROR/FATAL still get the level color (yellow/
-# red) so they stand out. Leave unset to disable.
+# Optional. When set, the list view grows a 1-column gutter on the
+# left whose color is a hash of the named field's value — like stern's
+# per-pod coloring. The row text itself stays free for level coloring,
+# so pod and level signals don't compete. Leave unset to hide the
+# gutter entirely.
 # color_by_field = "pod"
 
 [[profiles]]
