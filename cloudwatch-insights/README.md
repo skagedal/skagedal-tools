@@ -55,20 +55,13 @@ Results are written as JSONL to:
 ~/.skagedal-tools/cloudwatch-insights/queries/<repo>/results/run-<timestamp>.jsonl
 ```
 
-The path of the run file is the only thing printed to stdout, making it easy to capture:
-
-```sh
-last=$(cloudwatch-insights query)
-jq . < "$last"
-```
-
-After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file.
+After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file. Use `cloudwatch-insights show` to stream that file to stdout (see below).
 
 While the query runs, a single status line on stderr (`status: Running (scanned 1.2M records, 456 MiB)`) is rewritten in place from the polled `GetQueryResults` statistics. On a non-TTY stderr, status changes are appended one per line instead.
 
 After the query completes, an `Open in AWS Console` clickable hyperlink is printed to stderr (when stderr is a TTY), pointing at the same query in the CloudWatch Logs Insights Console. Off-TTY, the raw URL is printed instead.
 
-Set `dry = true` in the front-matter to skip the AWS round-trip — the query won't execute, but the resolved log groups, time range, and Console link are still printed. Useful for previewing a query before running it.
+Set `dry = true` in the front-matter to skip the AWS round-trip — the query won't execute, but the resolved log groups, time range, and Console link are still printed. Mostly useful to abort the query from the editor.
 
 ### `raw`
 
