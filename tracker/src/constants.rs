@@ -1,0 +1,2 @@
+pub const DEFAULT_WORK_HOURS_PER_DAY: u32 = 8;
+pub const DEFAULT_WORK_DAYS_PER_WEEK: u32 = 5;

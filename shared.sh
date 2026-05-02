@@ -25,6 +25,7 @@ INSTALLED_RUST_TOOLS=(
     log-viewer
     package-json-merge
     sync-brewfile
+    tracker
     x-java-home
 )
 

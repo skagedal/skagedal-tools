@@ -1,0 +1,17 @@
+[package]
+name = "tracker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "*", features = ["derive"] }
+clap_complete = "*"
+chrono = "*"
+# TODO: replace with etcetera
+directories = "*"
+num-traits = "*"
+regex = "*"
+serde = { version = "*", features = ["derive"] }
+temp-dir = "*"
+toml = "*"
+etcetera = "*"

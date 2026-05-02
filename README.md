@@ -22,3 +22,4 @@ A collection of small tools.
 | [intellij-patch](intellij-patch/) | Apply XML patches to IntelliJ project files from a TOML config |
 | [sync-brewfile](sync-brewfile/) | Reconcile locally installed Homebrew packages against a Brewfile, prompting to add or uninstall each extra |
 | [package-json-merge](package-json-merge/) | Git merge driver for `package.json` that picks the higher semver range when both branches bumped the same dependency |
+| [tracker](tracker/) | Tracks weekly work hours in a simple per-week text file with start/stop/report commands |
