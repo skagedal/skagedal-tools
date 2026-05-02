@@ -84,8 +84,15 @@ from = ["level", "severity", "lvl"]
 name = "message"
 from = ["message", "msg", "@message"]
 
+# Optional. For each name listed, if an entry has that key with an
+# object value (or a stringified-JSON object), the inner keys are
+# merged up and the parent key is dropped. Inner keys win on collision.
+flatten_fields = []
+
 [[profiles]]
 name = "stern"
+# Stern's --output extjson nests the app log under "message".
+flatten_fields = ["message"]
 
 [[profiles.fields]]
 name = "time"
@@ -93,7 +100,7 @@ from = ["timestamp"]
 
 [[profiles.fields]]
 name = "pod"
-from = ["podName"]
+from = ["pod"]
 
 [[triggers]]
 name = "pod-deployed"

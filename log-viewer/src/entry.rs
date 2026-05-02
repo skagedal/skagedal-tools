@@ -41,6 +41,34 @@ impl Entry {
         e
     }
 
+    /// For each field name in `fields`, if the entry has that key with an
+    /// object value (or a string value that itself parses to an object),
+    /// remove the parent key and merge the inner keys into the entry. Inner
+    /// keys win on collision. Mirrors cloudwatch-insights' `flatten-fields`.
+    pub fn flatten_fields(&mut self, fields: &[String]) {
+        if fields.is_empty() {
+            return;
+        }
+        let Value::Object(map) = &mut self.value else {
+            return;
+        };
+        for field in fields {
+            let inner = match map.get(field) {
+                Some(Value::Object(o)) => Some(o.clone()),
+                Some(Value::String(s)) => match serde_json::from_str::<Value>(s) {
+                    Ok(Value::Object(o)) => Some(o),
+                    _ => None,
+                },
+                _ => None,
+            };
+            let Some(inner) = inner else { continue };
+            map.shift_remove(field);
+            for (k, v) in inner {
+                map.insert(k, v);
+            }
+        }
+    }
+
     pub fn object(&self) -> Option<&Map<String, Value>> {
         match &self.value {
             Value::Object(m) => Some(m),
@@ -222,5 +250,54 @@ mod tests {
         let (t, c) = kill_word_left("foo bar baz", 7);
         assert_eq!(t, "foo  baz");
         assert_eq!(c, 4);
+    }
+
+    #[test]
+    fn flatten_merges_nested_object() {
+        // Stern --output extjson shape: outer keys + a nested object under "message".
+        let mut e = Entry::parse(
+            r#"{"pod":"p1","container":"c","message":{"level":"INFO","app":"x"}}"#,
+            "message",
+        );
+        e.flatten_fields(&["message".into()]);
+        assert_eq!(e.get_str("pod").unwrap(), "p1");
+        assert_eq!(e.get_str("level").unwrap(), "INFO");
+        assert_eq!(e.get_str("app").unwrap(), "x");
+        assert!(!e.keys().contains(&"message".to_string()));
+    }
+
+    #[test]
+    fn flatten_parses_string_as_json() {
+        let mut e = Entry::parse(
+            r#"{"@message":"{\"foo\":\"bar\"}"}"#,
+            "message",
+        );
+        e.flatten_fields(&["@message".into()]);
+        assert_eq!(e.get_str("foo").unwrap(), "bar");
+        assert!(!e.keys().contains(&"@message".to_string()));
+    }
+
+    #[test]
+    fn flatten_leaves_non_object_values() {
+        let mut e = Entry::parse(r#"{"message":"plain text"}"#, "message");
+        e.flatten_fields(&["message".into()]);
+        assert_eq!(e.get_str("message").unwrap(), "plain text");
+    }
+
+    #[test]
+    fn flatten_inner_wins_on_collision() {
+        let mut e = Entry::parse(
+            r#"{"app":"outer","message":{"app":"inner"}}"#,
+            "message",
+        );
+        e.flatten_fields(&["message".into()]);
+        assert_eq!(e.get_str("app").unwrap(), "inner");
+    }
+
+    #[test]
+    fn flatten_no_op_when_field_list_empty() {
+        let mut e = Entry::parse(r#"{"message":{"a":1}}"#, "message");
+        e.flatten_fields(&[]);
+        assert!(e.keys().contains(&"message".to_string()));
     }
 }

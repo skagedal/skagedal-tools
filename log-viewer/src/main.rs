@@ -108,7 +108,7 @@ fn dispatch(cli: Cli, exec_argv: Option<Vec<OsString>>) -> Result<()> {
 
 fn run_with(spec: SourceSpec, config: Config, want_web: bool) -> Result<()> {
     let label = spec.label();
-    let stream = source::start(&spec, &config.default_field)
+    let stream = source::start(&spec, &config.default_field, &config.flatten_fields)
         .with_context(|| format!("starting source {label}"))?;
     let triggers = TriggerRuntime::new(config.triggers.clone());
 

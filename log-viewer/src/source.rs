@@ -75,19 +75,30 @@ impl Drop for EntryStream {
     }
 }
 
-pub fn start(spec: &SourceSpec, default_field: &str) -> Result<EntryStream> {
+pub fn start(
+    spec: &SourceSpec,
+    default_field: &str,
+    flatten_fields: &[String],
+) -> Result<EntryStream> {
     let (tx, rx) = channel();
     let default_field = default_field.to_string();
+    let flatten_fields: Vec<String> = flatten_fields.to_vec();
     let mut child_handle: Option<Child> = None;
     match spec {
         SourceSpec::File(path) => {
             let reader = BufReader::new(
                 File::open(path).with_context(|| format!("opening {}", path.display()))?,
             );
-            spawn_reader(reader, tx, default_field, false);
+            spawn_reader(reader, tx, default_field, flatten_fields, false);
         }
         SourceSpec::Stdin => {
-            spawn_reader(BufReader::new(io::stdin()), tx, default_field, false);
+            spawn_reader(
+                BufReader::new(io::stdin()),
+                tx,
+                default_field,
+                flatten_fields,
+                false,
+            );
         }
         SourceSpec::Command(argv) => {
             let mut cmd_iter = argv.iter();
@@ -110,8 +121,16 @@ pub fn start(spec: &SourceSpec, default_field: &str) -> Result<EntryStream> {
                 .stderr
                 .take()
                 .ok_or_else(|| anyhow::anyhow!("child stderr missing"))?;
-            spawn_reader(BufReader::new(stdout), tx.clone(), default_field.clone(), false);
-            spawn_reader(BufReader::new(stderr), tx, default_field, true);
+            spawn_reader(
+                BufReader::new(stdout),
+                tx.clone(),
+                default_field.clone(),
+                flatten_fields.clone(),
+                false,
+            );
+            // Stderr is rendered as-is (red rows in the TUI), so it
+            // intentionally skips flatten_fields.
+            spawn_reader(BufReader::new(stderr), tx, default_field, Vec::new(), true);
             child_handle = Some(child);
         }
     }
@@ -125,6 +144,7 @@ fn spawn_reader<R: BufRead + Send + 'static>(
     reader: R,
     tx: Sender<Entry>,
     default_field: String,
+    flatten_fields: Vec<String>,
     is_stderr: bool,
 ) {
     thread::spawn(move || {
@@ -133,11 +153,12 @@ fn spawn_reader<R: BufRead + Send + 'static>(
             if line.is_empty() {
                 continue;
             }
-            let entry = if is_stderr {
+            let mut entry = if is_stderr {
                 Entry::parse_stderr(&line, &default_field)
             } else {
                 Entry::parse(&line, &default_field)
             };
+            entry.flatten_fields(&flatten_fields);
             if tx.send(entry).is_err() {
                 return;
             }
@@ -183,7 +204,7 @@ mod tests {
             .map(|s| OsString::from(*s))
             .collect(),
         );
-        let stream = start(&spec, "message").expect("start");
+        let stream = start(&spec, "message", &[]).expect("start");
         // Both reader threads need time to push their lines.
         let mut entries = Vec::new();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
@@ -208,7 +229,7 @@ mod tests {
                 .map(|s| OsString::from(*s))
                 .collect(),
         );
-        let stream = start(&spec, "message").expect("start");
+        let stream = start(&spec, "message", &[]).expect("start");
         // Wait for the pid line.
         let mut pid: Option<i32> = None;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);

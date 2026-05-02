@@ -15,6 +15,8 @@ struct RawConfig {
     #[serde(default)]
     fields: Vec<FieldDef>,
     #[serde(default)]
+    flatten_fields: Vec<String>,
+    #[serde(default)]
     profiles: Vec<RawProfile>,
     #[serde(default)]
     triggers: Vec<RawTrigger>,
@@ -27,6 +29,8 @@ struct RawProfile {
     default_field: Option<String>,
     #[serde(default)]
     fields: Vec<FieldDef>,
+    #[serde(default)]
+    flatten_fields: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -65,6 +69,7 @@ impl StringOrList {
 pub struct Config {
     pub default_field: String,
     pub fields: Vec<FieldDef>,
+    pub flatten_fields: Vec<String>,
     pub triggers: Vec<TriggerDef>,
 }
 
@@ -81,6 +86,7 @@ impl Default for Config {
         Self {
             default_field: DEFAULT_FIELD.to_string(),
             fields: default_fields(),
+            flatten_fields: Vec::new(),
             triggers: Vec::new(),
         }
     }
@@ -130,6 +136,7 @@ fn finalize(raw: RawConfig) -> Config {
     Config {
         default_field,
         fields,
+        flatten_fields: raw.flatten_fields,
         triggers,
     }
 }
@@ -167,6 +174,7 @@ pub fn load_with_profile(path: &Path, profile: Option<&str>) -> Result<Config> {
             } else {
                 profile.fields
             },
+            flatten_fields: profile.flatten_fields.unwrap_or(raw.flatten_fields),
             profiles: Vec::new(),
             triggers: raw.triggers,
         };
@@ -224,11 +232,19 @@ from = ["level", "severity", "lvl"]
 name = "message"
 from = ["message", "msg", "@message"]
 
-# Profiles override `fields` (and optionally `default_field`) when picked
-# at startup with `--profile <name>`.
+# For each name listed here, if an entry has that key with an object
+# value (or a stringified-JSON object), the inner keys are merged up
+# into the entry and the parent key is dropped. Useful for stern's
+# extjson output, which nests app logs under a "message" key.
+#
+# flatten_fields = ["message"]
+
+# Profiles override `fields`, `flatten_fields` and `default_field` when
+# picked at startup with `--profile <name>`.
 #
 # [[profiles]]
 # name = "stern"
+# flatten_fields = ["message"]
 #
 # [[profiles.fields]]
 # name = "time"
@@ -236,7 +252,7 @@ from = ["message", "msg", "@message"]
 #
 # [[profiles.fields]]
 # name = "pod"
-# from = ["podName"]
+# from = ["pod"]
 
 # Triggers run a shell command the first time `on_new_value` takes a
 # new value. {value} and {field} are substituted as shell-quoted strings.
@@ -321,6 +337,48 @@ from = ["podName"]
         assert_eq!(cfg.default_field, "msg");
         assert_eq!(cfg.fields.len(), 1);
         assert_eq!(cfg.fields[0].name, "pod");
+    }
+
+    #[test]
+    fn flatten_fields_round_trip_top_level_and_profile() {
+        let dir = tempdir();
+        let path = dir.join("config.toml");
+        fs::write(
+            &path,
+            r#"
+default_field = "message"
+flatten_fields = ["payload"]
+
+[[profiles]]
+name = "stern"
+flatten_fields = ["message"]
+"#,
+        )
+        .unwrap();
+        // Top-level
+        let cfg = load_with_profile(&path, None).unwrap();
+        assert_eq!(cfg.flatten_fields, vec!["payload"]);
+        // Profile overrides
+        let cfg = load_with_profile(&path, Some("stern")).unwrap();
+        assert_eq!(cfg.flatten_fields, vec!["message"]);
+    }
+
+    #[test]
+    fn profile_without_flatten_fields_inherits_top_level() {
+        let dir = tempdir();
+        let path = dir.join("config.toml");
+        fs::write(
+            &path,
+            r#"
+flatten_fields = ["payload"]
+
+[[profiles]]
+name = "stern"
+"#,
+        )
+        .unwrap();
+        let cfg = load_with_profile(&path, Some("stern")).unwrap();
+        assert_eq!(cfg.flatten_fields, vec!["payload"]);
     }
 
     #[test]
