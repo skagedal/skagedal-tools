@@ -128,6 +128,11 @@ fn run_with(spec: SourceSpec, config: Config, want_web: bool) -> Result<()> {
     }
 
     let mut app = App::new(&config, label);
+    // Live sources (--exec) start in follow mode by default — the user
+    // almost always wants to see new entries as they arrive.
+    if matches!(spec, SourceSpec::Command(_)) {
+        app.follow = true;
+    }
     ui::run(&mut app, stream, triggers)
 }
 

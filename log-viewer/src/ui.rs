@@ -272,14 +272,15 @@ fn row_color(app: &App, entry: &crate::entry::Entry) -> Option<Color> {
 }
 
 /// Build the leading gutter cell — a colored block per pod (or whichever
-/// `color_by_field` names). The cell uses its own foreground style so the
-/// row-level level color doesn't override it.
+/// `color_by_field` names). Both fg and bg are set to the hash color so the
+/// REVERSED highlight applied to the selected row doesn't carve a hole in
+/// the gutter (REVERSED swaps fg/bg, but they're equal here).
 fn gutter_cell(app: &App, entry: &crate::entry::Entry) -> Cell<'static> {
     let color = app
         .color_key_for(entry)
         .map(|k| hash_color(&k))
         .unwrap_or(Color::Reset);
-    Cell::from("▌").style(Style::default().fg(color))
+    Cell::from("█").style(Style::default().fg(color).bg(color))
 }
 
 fn column_widths(cols: &[&crate::app::ColumnState], show_gutter: bool) -> Vec<Constraint> {
