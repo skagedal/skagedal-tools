@@ -254,6 +254,7 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
     let widths = column_widths(&cols, &measured, show_gutter);
     let table = Table::new(rows, widths)
         .header(header)
+        .column_spacing(2)
         .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .block(
             Block::default()
