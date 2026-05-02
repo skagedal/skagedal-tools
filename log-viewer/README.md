@@ -191,7 +191,7 @@ cargo test --features web
 # Working on the React app itself (Vite hot-reload):
 cd browser
 pnpm install
-pnpm dev examples/sample.jsonl    # or `pnpm dev -- --exec ./examples/streaming-logs`
+pnpm dev ../examples/sample.jsonl    # or `pnpm dev -- --exec ../examples/streaming-logs`
 ```
 
 The top-level `./check` runs the default-feature Rust clippy + test

@@ -28,10 +28,10 @@ React app is always part of the Rust build pipeline.
 pnpm install        # one-time setup
 
 # Vite dev server with hot reload, fed from a JSONL file:
-pnpm dev examples/sample.jsonl
+pnpm dev ../examples/sample.jsonl
 
 # Vite dev server fed from a streaming command:
-pnpm dev -- --exec ./examples/streaming-logs
+pnpm dev -- --exec ../examples/streaming-logs
 ```
 
 The Node CLI accepts the same `-f`, `--exec`, `--profile`, `--port`,

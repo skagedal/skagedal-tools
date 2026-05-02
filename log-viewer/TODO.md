@@ -56,7 +56,8 @@ directly — the Node CLI has no reason to exist. At that point:
 1. Delete `browser/src/`, `browser/test/`, the gunshi/json5/tsx deps,
    and the related lint/test scripts.
 2. Keep `browser/web/`, `browser/package.json5` (with just the React
-   deps + `build:web`), `browser/eslint.config.js`, `browser/examples/`.
+   deps + `build:web`), `browser/eslint.config.js`, and the top-level
+   `examples/`.
 3. `./check`'s `pnpm run check` step in `browser/` collapses to
    `pnpm exec tsc -p web --noEmit && eslint web`.
 
