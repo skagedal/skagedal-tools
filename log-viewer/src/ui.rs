@@ -236,6 +236,7 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
         .collect();
     let header = Row::new(header_cells).style(Style::default().add_modifier(Modifier::BOLD));
     let displayed = app.filtered_indices();
+    let measured = measured_widths(app, &cols, &displayed);
     let rows = displayed.iter().map(|&i| {
         let entry = &app.entries[i];
         let body = app.row_cells(entry).into_iter().map(Cell::from);
@@ -250,7 +251,7 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
             None => row,
         }
     });
-    let widths = column_widths(&cols, show_gutter);
+    let widths = column_widths(&cols, &measured, show_gutter);
     let table = Table::new(rows, widths)
         .header(header)
         .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
@@ -283,7 +284,40 @@ fn gutter_cell(app: &App, entry: &crate::entry::Entry) -> Cell<'static> {
     Cell::from("█").style(Style::default().fg(color).bg(color))
 }
 
-fn column_widths(cols: &[&crate::app::ColumnState], show_gutter: bool) -> Vec<Constraint> {
+/// Maximum content width per visible column, including the header name.
+/// One pass over the displayed entries; one entry = `entry.row_cells(...)`.
+fn measured_widths(
+    app: &App,
+    cols: &[&crate::app::ColumnState],
+    displayed: &[usize],
+) -> Vec<usize> {
+    let mut widths: Vec<usize> = cols.iter().map(|c| c.name.chars().count()).collect();
+    for &i in displayed {
+        let cells = app.row_cells(&app.entries[i]);
+        for (j, cell) in cells.iter().enumerate() {
+            let w = cell.chars().count();
+            if w > widths[j] {
+                widths[j] = w;
+            }
+        }
+    }
+    widths
+}
+
+/// Auto-size each visible column to fit its widest content (header or any
+/// row cell), clamped to a sane range. The trailing column uses
+/// `Constraint::Min` so it absorbs any leftover horizontal space.
+fn column_widths(
+    cols: &[&crate::app::ColumnState],
+    measured: &[usize],
+    show_gutter: bool,
+) -> Vec<Constraint> {
+    /// Don't let a column grow wider than this — keeps a single very long
+    /// value from squeezing out the rest. The last column is exempt.
+    const MAX_AUTO_WIDTH: u16 = 60;
+    /// Floor so 1- or 2-character column names don't render weirdly.
+    const MIN_AUTO_WIDTH: u16 = 3;
+
     if cols.is_empty() {
         return if show_gutter {
             vec![Constraint::Length(1)]
@@ -295,11 +329,17 @@ fn column_widths(cols: &[&crate::app::ColumnState], show_gutter: bool) -> Vec<Co
     if show_gutter {
         out.push(Constraint::Length(1));
     }
-    for (i, _) in cols.iter().enumerate() {
+    for (i, &w) in measured.iter().enumerate() {
+        let raw = u16::try_from(w).unwrap_or(u16::MAX);
         if i + 1 == cols.len() {
-            out.push(Constraint::Min(10));
+            // Last column: at least its measured width (capped to the
+            // auto-width ceiling so it still has a sensible minimum), but
+            // free to grow to fill the row.
+            let floor = raw.clamp(MIN_AUTO_WIDTH, MAX_AUTO_WIDTH);
+            out.push(Constraint::Min(floor));
         } else {
-            out.push(Constraint::Length(20));
+            let clamped = raw.clamp(MIN_AUTO_WIDTH, MAX_AUTO_WIDTH);
+            out.push(Constraint::Length(clamped));
         }
     }
     out
