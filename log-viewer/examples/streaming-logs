@@ -12,9 +12,11 @@
 #   log-viewer --config examples/config.json5 --exec ./examples/streaming-logs
 set -euo pipefail
 
-interval="${INTERVAL:-0.4}"
-max="${MAX:-0}"  # 0 = run forever
-pod_period="${POD_PERIOD:-12}"  # entries per pod before rotating
+prefill="${PREFILL:-10}"        # entries flushed at startup with no delay
+min_interval="${MIN_INTERVAL:-0.05}"
+max_interval="${MAX_INTERVAL:-0.9}"
+max="${MAX:-0}"                  # 0 = run forever
+pod_period="${POD_PERIOD:-12}"   # entries per pod before rotating
 
 levels=(info info info info debug warn warn error)
 services=(api worker auth billing)
@@ -22,9 +24,49 @@ paths=("/v1/users/42" "/v1/orders" "/v1/products/search" "/v1/sessions" "/health
 methods=(GET POST DELETE PUT)
 pods=("api-server-abc123" "api-server-def456" "api-server-ghi789")
 
+# GNU date (gdate on macOS via coreutils) supports %3N for milliseconds;
+# BSD date does not, so the fallback drops sub-second precision.
+if command -v gdate >/dev/null 2>&1; then
+    date_cmd=gdate
+    ts_format='%Y-%m-%dT%H:%M:%S.%3NZ'
+else
+    date_cmd=date
+    ts_format='%Y-%m-%dT%H:%M:%SZ'
+fi
+
+info_messages=(
+    "Request handled"
+    "Served response"
+    "Cache hit"
+    "Session validated"
+    "Connection accepted"
+    "Background job completed"
+)
+debug_messages=(
+    "Trace span emitted"
+    "Cache lookup"
+    "Worker picked up job"
+    "Connection pool checked out"
+    "Token decoded"
+)
+warn_messages=(
+    "Rate limit exceeded"
+    "Slow query detected"
+    "Retry attempted"
+    "Deprecated API used"
+    "Connection pool nearly exhausted"
+)
+error_messages=(
+    "Unhandled exception"
+    "Database connection failed"
+    "Upstream timeout"
+    "Failed to authenticate"
+    "Payload deserialization failed"
+)
+
 i=0
 while :; do
-    ts="$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")"
+    ts="$("$date_cmd" -u +"$ts_format")"
     level="${levels[$((RANDOM % ${#levels[@]}))]}"
     service="${services[$((RANDOM % ${#services[@]}))]}"
     method="${methods[$((RANDOM % ${#methods[@]}))]}"
@@ -36,6 +78,13 @@ while :; do
         error) status=500 ;;
     esac
 
+    case "$level" in
+        info)  message="${info_messages[$((RANDOM % ${#info_messages[@]}))]}" ;;
+        debug) message="${debug_messages[$((RANDOM % ${#debug_messages[@]}))]}" ;;
+        warn)  message="${warn_messages[$((RANDOM % ${#warn_messages[@]}))]}" ;;
+        error) message="${error_messages[$((RANDOM % ${#error_messages[@]}))]}" ;;
+    esac
+
     pod_index=$(( (i / pod_period) % ${#pods[@]} ))
     pod="${pods[$pod_index]}"
 
@@ -44,13 +93,19 @@ while :; do
     if (( i % 10 == 7 )); then
         echo "[stderr-bridge] dropped frame at offset ${i}"
     else
-        printf '{"@timestamp":"%s","level":"%s","service":"%s","podname":"%s","message":"Request","method":"%s","path":"%s","status":%d,"duration_ms":%d,"seq":%d}\n' \
-            "$ts" "$level" "$service" "$pod" "$method" "$path" "$status" "$duration" "$i"
+        printf '{"@timestamp":"%s","level":"%s","service":"%s","podname":"%s","message":"%s","method":"%s","path":"%s","status":%d,"duration_ms":%d,"seq":%d}\n' \
+            "$ts" "$level" "$service" "$pod" "$message" "$method" "$path" "$status" "$duration" "$i"
     fi
 
     i=$((i + 1))
     if (( max > 0 && i >= max )); then
         break
     fi
-    sleep "$interval"
+    # First `prefill` lines flush back-to-back, like the tail of a log file
+    # being replayed; after that, vary the delay so it feels like live traffic.
+    if (( i >= prefill )); then
+        sleep_for=$(awk -v r=$RANDOM -v lo="$min_interval" -v hi="$max_interval" \
+            'BEGIN{srand(r); printf "%.3f\n", lo + rand()*(hi-lo)}')
+        sleep "$sleep_for"
+    fi
 done
