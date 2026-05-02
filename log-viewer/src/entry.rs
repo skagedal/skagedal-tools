@@ -12,6 +12,9 @@ pub struct Entry {
     /// Only the `web` front-end surfaces this; the TUI ignores it.
     #[cfg_attr(not(feature = "web"), allow(dead_code))]
     pub wrapped: bool,
+    /// True when this line came from the executed subprocess's stderr
+    /// stream rather than its stdout. The TUI renders these in red.
+    pub is_stderr: bool,
 }
 
 impl Entry {
@@ -28,7 +31,14 @@ impl Entry {
             raw: line.to_string(),
             value,
             wrapped,
+            is_stderr: false,
         }
+    }
+
+    pub fn parse_stderr(line: &str, default_field: &str) -> Self {
+        let mut e = Self::parse(line, default_field);
+        e.is_stderr = true;
+        e
     }
 
     pub fn object(&self) -> Option<&Map<String, Value>> {

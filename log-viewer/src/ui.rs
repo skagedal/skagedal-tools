@@ -12,7 +12,7 @@ use crossterm::terminal::{
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState};
 
@@ -226,9 +226,15 @@ fn draw_list(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut TableSta
     let header = Row::new(cols.iter().map(|c| Cell::from(c.name.clone())))
         .style(Style::default().add_modifier(Modifier::BOLD));
     let displayed = app.filtered_indices();
-    let rows = displayed
-        .iter()
-        .map(|&i| Row::new(app.row_cells(&app.entries[i]).into_iter().map(Cell::from)));
+    let rows = displayed.iter().map(|&i| {
+        let entry = &app.entries[i];
+        let row = Row::new(app.row_cells(entry).into_iter().map(Cell::from));
+        if entry.is_stderr {
+            row.style(Style::default().fg(Color::Red))
+        } else {
+            row
+        }
+    });
     let widths = column_widths(&cols);
     let table = Table::new(rows, widths)
         .header(header)
