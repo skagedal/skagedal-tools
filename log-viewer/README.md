@@ -89,14 +89,17 @@ from = ["message", "msg", "@message"]
 # merged up and the parent key is dropped. Inner keys win on collision.
 flatten_fields = []
 
+# Optional. When set, each row in the list view is colored by a hash
+# of the named field's value — like stern's per-pod coloring. Rows
+# whose level is WARN/ERROR/FATAL still get the level color (yellow/
+# red) so they stand out. Leave unset to disable.
+# color_by_field = "pod"
+
 [[profiles]]
 name = "stern"
 # Stern's --output extjson nests the app log under "message".
 flatten_fields = ["message"]
-
-[[profiles.fields]]
-name = "time"
-from = ["timestamp"]
+color_by_field = "pod"
 
 [[profiles.fields]]
 name = "pod"
@@ -121,6 +124,7 @@ List view:
 |-----|--------|
 | `j` / `↓` | Next entry |
 | `k` / `↑` / `u` | Previous entry |
+| PgDn / PgUp | Page down / up |
 | `g` / `G` | Top / bottom |
 | `o` / Enter | Open the selected entry's detail view |
 | `/` | Focus the fuzzy filter input |

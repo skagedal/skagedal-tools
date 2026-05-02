@@ -1,4 +1,5 @@
 mod app;
+mod colors;
 mod config;
 mod entry;
 mod source;

@@ -58,6 +58,11 @@ pub struct App {
     /// Filter input is focused — typed characters go into `filter_text`
     /// rather than triggering navigation.
     pub filtering: bool,
+    /// Optional entry-field name whose value picks a row color via a hash.
+    pub color_by_field: Option<String>,
+    /// Number of body rows in the list area on the most recent draw, used as
+    /// the page size for PgUp/PgDown. The UI updates this before each frame.
+    pub list_page_size: usize,
 }
 
 impl App {
@@ -81,7 +86,34 @@ impl App {
             should_quit: false,
             filter_text: String::new(),
             filtering: false,
+            color_by_field: config.color_by_field.clone(),
+            list_page_size: 0,
         }
+    }
+
+    /// Resolve the entry's level using the column named "level"
+    /// (case-insensitive) if defined, else the canonical fallback list. Used
+    /// for level-based row coloring.
+    pub fn level_for(&self, entry: &Entry) -> String {
+        if let Some(col) = self
+            .columns
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case("level"))
+        {
+            return entry.pick(&col.from);
+        }
+        entry.pick(&[
+            "level".to_string(),
+            "severity".to_string(),
+            "lvl".to_string(),
+        ])
+    }
+
+    /// Value of the configured `color_by_field`, if any, for `entry`.
+    pub fn color_key_for(&self, entry: &Entry) -> Option<String> {
+        let key = self.color_by_field.as_ref()?;
+        let v = entry.get_str(key)?;
+        if v.is_empty() { None } else { Some(v) }
     }
 
     pub fn append_entries<I: IntoIterator<Item = Entry>>(&mut self, new: I) {
@@ -214,6 +246,14 @@ impl App {
 
     pub fn move_up(&mut self) {
         self.move_in_filtered(-1);
+    }
+
+    /// Move by a page (PgUp / PgDown). The page size is the list area's
+    /// last-drawn body height; falls back to a small default when nothing
+    /// has been drawn yet.
+    pub fn move_page(&mut self, direction: isize) {
+        let page = self.list_page_size.max(1) as isize;
+        self.move_in_filtered(direction * page);
     }
 
     pub fn jump_top(&mut self) {
@@ -522,6 +562,65 @@ mod tests {
         app.set_filter("foo bar".into());
         app.filter_kill_word();
         assert_eq!(app.filter_text, "foo ");
+    }
+
+    #[test]
+    fn level_for_uses_level_column_when_present() {
+        let mut cfg = cfg();
+        cfg.fields = vec![
+            crate::config::FieldDef {
+                name: "level".into(),
+                from: vec!["severity".into(), "level".into()],
+            },
+        ];
+        let app = App::new(&cfg, "test".into());
+        let e = Entry::parse(r#"{"severity":"WARN"}"#, "message");
+        assert_eq!(app.level_for(&e), "WARN");
+    }
+
+    #[test]
+    fn level_for_falls_back_to_canonical_keys() {
+        let mut cfg = cfg();
+        cfg.fields.clear();
+        let app = App::new(&cfg, "test".into());
+        let e = Entry::parse(r#"{"lvl":"ERROR"}"#, "message");
+        assert_eq!(app.level_for(&e), "ERROR");
+    }
+
+    #[test]
+    fn color_key_for_returns_value_when_field_set() {
+        let mut cfg = cfg();
+        cfg.color_by_field = Some("pod".into());
+        let app = App::new(&cfg, "test".into());
+        let e = Entry::parse(r#"{"pod":"p1"}"#, "message");
+        assert_eq!(app.color_key_for(&e).as_deref(), Some("p1"));
+    }
+
+    #[test]
+    fn color_key_for_returns_none_when_unset_or_empty() {
+        let app = App::new(&cfg(), "test".into());
+        let e = Entry::parse(r#"{"pod":"p1"}"#, "message");
+        assert!(app.color_key_for(&e).is_none()); // no color_by_field configured
+        let mut cfg = cfg();
+        cfg.color_by_field = Some("pod".into());
+        let app = App::new(&cfg, "test".into());
+        let e = Entry::parse(r#"{"other":"v"}"#, "message");
+        assert!(app.color_key_for(&e).is_none()); // field absent
+    }
+
+    #[test]
+    fn move_page_uses_list_page_size() {
+        let mut app = make(50);
+        app.list_page_size = 10;
+        app.move_page(1);
+        assert_eq!(app.selected, 10);
+        app.move_page(1);
+        assert_eq!(app.selected, 20);
+        app.move_page(-1);
+        assert_eq!(app.selected, 10);
+        // Going past the end clamps.
+        app.move_page(99);
+        assert_eq!(app.selected, 49);
     }
 
     #[test]

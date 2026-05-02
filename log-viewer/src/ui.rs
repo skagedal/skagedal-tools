@@ -17,6 +17,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState};
 
 use crate::app::{App, View};
+use crate::colors::{hash_color, level_color, level_overrides_pod_color};
 use crate::source::EntryStream;
 use crate::triggers::TriggerRuntime;
 
@@ -114,6 +115,8 @@ fn handle_list_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('u') => app.move_up(),
         KeyCode::Char('g') => app.jump_top(),
         KeyCode::Char('G') => app.jump_bottom(),
+        KeyCode::PageDown => app.move_page(1),
+        KeyCode::PageUp => app.move_page(-1),
         KeyCode::Char('o') | KeyCode::Enter => app.open_detail(),
         KeyCode::Char('f') => app.toggle_follow(),
         KeyCode::Char('v') => app.open_fields_menu(),
@@ -177,7 +180,7 @@ fn osc52_copy(text: &str) -> io::Result<()> {
 
 fn draw(
     f: &mut ratatui::Frame,
-    app: &App,
+    app: &mut App,
     table_state: &mut TableState,
     menu_state: &mut ListState,
 ) {
@@ -221,7 +224,10 @@ fn draw_filter_bar(f: &mut ratatui::Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(label).style(style), area);
 }
 
-fn draw_list(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut TableState) {
+fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut TableState) {
+    // Body height = area minus top/bottom borders and the header row.
+    app.list_page_size = (area.height as usize).saturating_sub(3);
+
     let cols = app.visible_columns();
     let header = Row::new(cols.iter().map(|c| Cell::from(c.name.clone())))
         .style(Style::default().add_modifier(Modifier::BOLD));
@@ -229,10 +235,9 @@ fn draw_list(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut TableSta
     let rows = displayed.iter().map(|&i| {
         let entry = &app.entries[i];
         let row = Row::new(app.row_cells(entry).into_iter().map(Cell::from));
-        if entry.is_stderr {
-            row.style(Style::default().fg(Color::Red))
-        } else {
-            row
+        match row_color(app, entry) {
+            Some(c) => row.style(Style::default().fg(c)),
+            None => row,
         }
     });
     let widths = column_widths(&cols);
@@ -245,6 +250,22 @@ fn draw_list(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut TableSta
                 .title(format!(" log-viewer — {} ", app.source_label)),
         );
     f.render_stateful_widget(table, area, state);
+}
+
+/// Pick a foreground color for the row. Precedence:
+///   stderr (red) > error/fatal (red) > warn (yellow) > pod-hash > info/debug
+fn row_color(app: &App, entry: &crate::entry::Entry) -> Option<Color> {
+    if entry.is_stderr {
+        return Some(Color::Red);
+    }
+    let level = app.level_for(entry);
+    if !level.is_empty() && level_overrides_pod_color(&level) {
+        return level_color(&level);
+    }
+    if let Some(key) = app.color_key_for(entry) {
+        return Some(hash_color(&key));
+    }
+    level_color(&level)
 }
 
 fn column_widths(cols: &[&crate::app::ColumnState]) -> Vec<Constraint> {

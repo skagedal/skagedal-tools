@@ -17,6 +17,8 @@ struct RawConfig {
     #[serde(default)]
     flatten_fields: Vec<String>,
     #[serde(default)]
+    color_by_field: Option<String>,
+    #[serde(default)]
     profiles: Vec<RawProfile>,
     #[serde(default)]
     triggers: Vec<RawTrigger>,
@@ -31,6 +33,8 @@ struct RawProfile {
     fields: Vec<FieldDef>,
     #[serde(default)]
     flatten_fields: Option<Vec<String>>,
+    #[serde(default)]
+    color_by_field: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,6 +74,10 @@ pub struct Config {
     pub default_field: String,
     pub fields: Vec<FieldDef>,
     pub flatten_fields: Vec<String>,
+    /// Optional name of an entry field whose value picks a row color via a
+    /// hash. Mirrors stern's pod-color behavior; typically set to "pod" in
+    /// the stern profile.
+    pub color_by_field: Option<String>,
     pub triggers: Vec<TriggerDef>,
 }
 
@@ -87,6 +95,7 @@ impl Default for Config {
             default_field: DEFAULT_FIELD.to_string(),
             fields: default_fields(),
             flatten_fields: Vec::new(),
+            color_by_field: None,
             triggers: Vec::new(),
         }
     }
@@ -137,6 +146,7 @@ fn finalize(raw: RawConfig) -> Config {
         default_field,
         fields,
         flatten_fields: raw.flatten_fields,
+        color_by_field: raw.color_by_field.filter(|s| !s.is_empty()),
         triggers,
     }
 }
@@ -175,6 +185,7 @@ pub fn load_with_profile(path: &Path, profile: Option<&str>) -> Result<Config> {
                 profile.fields
             },
             flatten_fields: profile.flatten_fields.unwrap_or(raw.flatten_fields),
+            color_by_field: profile.color_by_field.or(raw.color_by_field),
             profiles: Vec::new(),
             triggers: raw.triggers,
         };
@@ -239,16 +250,18 @@ from = ["message", "msg", "@message"]
 #
 # flatten_fields = ["message"]
 
-# Profiles override `fields`, `flatten_fields` and `default_field` when
-# picked at startup with `--profile <name>`.
+# Color rows in the list view by a hash of the named field's value.
+# Mimics stern's per-pod coloring. Leave unset to disable.
+#
+# color_by_field = "pod"
+
+# Profiles override `fields`, `flatten_fields`, `color_by_field` and
+# `default_field` when picked at startup with `--profile <name>`.
 #
 # [[profiles]]
 # name = "stern"
 # flatten_fields = ["message"]
-#
-# [[profiles.fields]]
-# name = "time"
-# from = ["timestamp"]
+# color_by_field = "pod"
 #
 # [[profiles.fields]]
 # name = "pod"
@@ -379,6 +392,39 @@ name = "stern"
         .unwrap();
         let cfg = load_with_profile(&path, Some("stern")).unwrap();
         assert_eq!(cfg.flatten_fields, vec!["payload"]);
+    }
+
+    #[test]
+    fn color_by_field_top_level_and_profile_override() {
+        let dir = tempdir();
+        let path = dir.join("config.toml");
+        fs::write(
+            &path,
+            r#"
+color_by_field = "host"
+
+[[profiles]]
+name = "stern"
+color_by_field = "pod"
+
+[[profiles]]
+name = "plain"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            load_with_profile(&path, None).unwrap().color_by_field,
+            Some("host".into())
+        );
+        assert_eq!(
+            load_with_profile(&path, Some("stern")).unwrap().color_by_field,
+            Some("pod".into())
+        );
+        // Profile without its own color_by_field inherits.
+        assert_eq!(
+            load_with_profile(&path, Some("plain")).unwrap().color_by_field,
+            Some("host".into())
+        );
     }
 
     #[test]
