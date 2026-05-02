@@ -2,6 +2,8 @@
 
 Download logs from [AWS CloudWatch Logs Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html) from the command line, with a flexible time-range syntax, per-git-repository defaults, and persistent editable query files.
 
+See the introducing blog post: [Small tools, shared with agents: a CloudWatch Insights example](https://skagedal.tech/posts/2026-05-01-cloudwatch-insights-tool).
+
 ## Requirements
 
 - A recent Rust toolchain (1.85+ — uses edition 2024)
