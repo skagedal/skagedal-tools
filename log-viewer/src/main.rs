@@ -52,6 +52,18 @@ struct Cli {
     /// Positional file path (alternative to -f).
     path: Option<PathBuf>,
 
+    /// Run a command and view its stdout as logs. Everything after this flag
+    /// is the command to run, e.g. `--exec kubectl logs -f pod`.
+    #[arg(
+        short = 'e',
+        long = "exec",
+        num_args = 1..,
+        value_name = "COMMAND",
+        allow_hyphen_values = true,
+        conflicts_with_all = ["file", "path"],
+    )]
+    exec: Option<Vec<OsString>>,
+
     #[command(subcommand)]
     command: Option<SubCmd>,
 }
@@ -66,10 +78,8 @@ enum SubCmd {
 }
 
 fn main() -> ExitCode {
-    let raw_argv: Vec<OsString> = std::env::args_os().collect();
-    let (rest, exec_argv) = extract_exec(&raw_argv);
-    match Cli::try_parse_from(rest) {
-        Ok(cli) => match dispatch(cli, exec_argv) {
+    match Cli::try_parse() {
+        Ok(cli) => match dispatch(cli) {
             Ok(()) => ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("error: {err:#}");
@@ -88,7 +98,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn dispatch(cli: Cli, exec_argv: Option<Vec<OsString>>) -> Result<()> {
+fn dispatch(cli: Cli) -> Result<()> {
     if let Some(SubCmd::EditConfig { config }) = cli.command {
         let path = config.unwrap_or_else(config_path);
         let created = ensure_config_file(&path)?;
@@ -103,7 +113,7 @@ fn dispatch(cli: Cli, exec_argv: Option<Vec<OsString>>) -> Result<()> {
         anyhow::bail!("config file not found: {}", cfg_path.display());
     }
     let config = load_with_profile(&cfg_path, cli.profile.as_deref())?;
-    let spec = resolve_source(&cli, exec_argv)?;
+    let spec = resolve_source(&cli)?;
     run_with(spec, config, cli.web)
 }
 
@@ -136,15 +146,9 @@ fn run_with(spec: SourceSpec, config: Config, want_web: bool) -> Result<()> {
     ui::run(&mut app, stream, triggers)
 }
 
-fn resolve_source(cli: &Cli, exec_argv: Option<Vec<OsString>>) -> Result<SourceSpec> {
-    if let Some(argv) = exec_argv {
-        if argv.is_empty() {
-            anyhow::bail!("--exec requires a command");
-        }
-        if cli.file.is_some() || cli.path.is_some() {
-            anyhow::bail!("--file/positional path and --exec are mutually exclusive");
-        }
-        return Ok(SourceSpec::Command(argv));
+fn resolve_source(cli: &Cli) -> Result<SourceSpec> {
+    if let Some(argv) = &cli.exec {
+        return Ok(SourceSpec::Command(argv.clone()));
     }
     if let Some(file) = &cli.file {
         if file == "-" {
@@ -169,27 +173,6 @@ fn resolve_source(cli: &Cli, exec_argv: Option<Vec<OsString>>) -> Result<SourceS
     anyhow::bail!(
         "no input given — pass a JSONL file (or '-' for stdin), use --exec, or pipe data in"
     );
-}
-
-/// Pull `--exec`/`-e` and the rest of argv that follows it. Everything from
-/// the flag onward (after its value) is consumed as positional args to the
-/// executed command, mirroring the TS log-viewer's behavior.
-fn extract_exec(argv: &[OsString]) -> (Vec<OsString>, Option<Vec<OsString>>) {
-    let mut rest = Vec::new();
-    for arg in argv {
-        let s = arg.to_string_lossy();
-        if s == "--exec" || s == "-e" {
-            let exec: Vec<OsString> = argv.iter().skip(rest.len() + 1).cloned().collect();
-            return (rest, Some(exec));
-        }
-        if let Some(value) = s.strip_prefix("--exec=") {
-            let mut exec = vec![OsString::from(value)];
-            exec.extend(argv.iter().skip(rest.len() + 1).cloned());
-            return (rest, Some(exec));
-        }
-        rest.push(arg.clone());
-    }
-    (rest, None)
 }
 
 fn open_editor(path: &std::path::Path) -> Result<()> {
@@ -218,60 +201,63 @@ fn shell_split(s: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
 
-    fn osv(parts: &[&str]) -> Vec<OsString> {
-        parts.iter().map(|s| OsString::from(*s)).collect()
+    fn exec_strings(cli: &Cli) -> Vec<String> {
+        cli.exec
+            .as_ref()
+            .expect("expected --exec to be present")
+            .iter()
+            .map(|s| s.to_string_lossy().into_owned())
+            .collect()
     }
 
     #[test]
-    fn extract_exec_with_long_flag() {
-        let argv = osv(&["bin", "--profile", "stern", "--exec", "kubectl", "logs", "-f", "pod"]);
-        let (rest, exec) = extract_exec(&argv);
-        assert_eq!(
-            rest.iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
-            vec!["bin", "--profile", "stern"]
-        );
-        let exec = exec.unwrap();
-        assert_eq!(
-            exec.iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
-            vec!["kubectl", "logs", "-f", "pod"]
-        );
+    fn parses_exec_with_long_flag() {
+        let cli = Cli::try_parse_from([
+            "bin", "--profile", "stern", "--exec", "kubectl", "logs", "-f", "pod",
+        ])
+        .unwrap();
+        assert_eq!(cli.profile.as_deref(), Some("stern"));
+        assert_eq!(exec_strings(&cli), vec!["kubectl", "logs", "-f", "pod"]);
     }
 
     #[test]
-    fn extract_exec_with_short_flag() {
-        let argv = osv(&["bin", "-e", "stern", "--output", "json", "app"]);
-        let (rest, exec) = extract_exec(&argv);
-        assert_eq!(
-            rest.iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
-            vec!["bin"]
-        );
-        assert_eq!(
-            exec.unwrap()
-                .iter()
-                .map(|s| s.to_string_lossy().into_owned())
-                .collect::<Vec<_>>(),
-            vec!["stern", "--output", "json", "app"]
-        );
+    fn parses_exec_with_short_flag() {
+        let cli =
+            Cli::try_parse_from(["bin", "-e", "stern", "--output", "json", "app"]).unwrap();
+        assert_eq!(exec_strings(&cli), vec!["stern", "--output", "json", "app"]);
     }
 
     #[test]
-    fn extract_exec_with_equals_form() {
-        let argv = osv(&["bin", "--exec=foo", "bar", "baz"]);
-        let (_, exec) = extract_exec(&argv);
-        assert_eq!(
-            exec.unwrap()
-                .iter()
-                .map(|s| s.to_string_lossy().into_owned())
-                .collect::<Vec<_>>(),
-            vec!["foo", "bar", "baz"]
-        );
+    fn parses_exec_with_equals_form_single_value() {
+        // The `=` form provides exactly one value to the flag. To pass a
+        // multi-word command, use the spaced form: `--exec foo bar baz`.
+        let cli = Cli::try_parse_from(["bin", "--exec=foo"]).unwrap();
+        assert_eq!(exec_strings(&cli), vec!["foo"]);
     }
 
     #[test]
-    fn extract_exec_returns_none_when_absent() {
-        let argv = osv(&["bin", "--profile", "stern", "file.jsonl"]);
-        let (_, exec) = extract_exec(&argv);
-        assert!(exec.is_none());
+    fn exec_absent_when_not_passed() {
+        let cli = Cli::try_parse_from(["bin", "--profile", "stern", "file.jsonl"]).unwrap();
+        assert!(cli.exec.is_none());
+    }
+
+    #[test]
+    fn exec_conflicts_with_positional_path() {
+        let err = Cli::try_parse_from(["bin", "file.jsonl", "--exec", "kubectl"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn exec_requires_a_command() {
+        let err = Cli::try_parse_from(["bin", "--exec"]).unwrap_err();
+        // Either "missing required value" or similar — point is, it errors.
+        assert!(matches!(
+            err.kind(),
+            clap::error::ErrorKind::InvalidValue
+                | clap::error::ErrorKind::MissingRequiredArgument
+                | clap::error::ErrorKind::WrongNumberOfValues
+        ));
     }
 }
