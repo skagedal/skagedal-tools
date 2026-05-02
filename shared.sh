@@ -18,6 +18,7 @@ INSTALLED_RUST_TOOLS=(
     assistant
     cloudwatch-insights
     gh-pr
+    git-branch-assistant
     git-dirty-checker
     intellij-patch
     log-jsonify

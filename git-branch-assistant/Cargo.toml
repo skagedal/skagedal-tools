@@ -1,0 +1,20 @@
+[package]
+name = "git-branch-assistant"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+timings = []
+
+[dependencies]
+anyhow = "*"
+clap = { version = "*", features = ["derive"] }
+console = "*"
+dialoguer = "*"
+rayon = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+
+[dev-dependencies]
+tempfile = "*"
