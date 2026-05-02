@@ -15,6 +15,7 @@ NODE_TOOLS=(
 )
 
 INSTALLED_RUST_TOOLS=(
+    assistant
     cloudwatch-insights
     gh-pr
     git-dirty-checker

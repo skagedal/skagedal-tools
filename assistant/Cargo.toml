@@ -1,0 +1,19 @@
+[package]
+name = "assistant"
+version = "0.1.0"
+authors = [""]
+edition = "2024"
+
+[dependencies]
+clap = { version = "*", features = ["derive"] }
+clap_complete = "*"
+serde = { version = "*", features = ["derive"] }
+serde_yaml = "*"
+regex = "*"
+filetime = "*"
+chrono = "*"
+shellexpand = "*"
+dirs = "*"
+flexi_logger = "*"
+log = "*"
+once_cell = "*"

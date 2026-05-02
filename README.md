@@ -6,6 +6,7 @@ A collection of small tools.
 
 | Tool | Description |
 |------|-------------|
+| [assistant](assistant/) | Drives a daily routine by running configured tasks when they're due |
 | [git-dirty-checker](git-dirty-checker/) | Checks git repositories for uncommitted changes |
 | [git-repos-latest-activity](git-repos-latest-activity/) | Lists git repositories sorted by date of latest commit |
 | [log-jsonify](log-jsonify/) | Processes JSONL streams, wrapping non-JSON lines in JSON envelopes |
