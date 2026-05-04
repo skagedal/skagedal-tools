@@ -256,6 +256,10 @@ impl App {
             self.snoozed.remove(&repo);
         }
     }
+
+    fn all_snoozed(&self) -> bool {
+        !self.all_repos.is_empty() && self.all_repos.iter().all(|r| self.snoozed.contains_key(r))
+    }
 }
 
 fn format_snooze_remaining(expiry: &SystemTime) -> String {
@@ -322,7 +326,12 @@ fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Up | KeyCode::Char('k') => app.move_up(),
                     KeyCode::Down | KeyCode::Char('j') => app.move_down(),
                     KeyCode::Char('/') => app.mode = Mode::Search,
-                    KeyCode::Char('s') => app.snooze_selected(),
+                    KeyCode::Char('s') => {
+                        app.snooze_selected();
+                        if app.all_snoozed() {
+                            return Ok(None);
+                        }
+                    }
                     KeyCode::Char('u') => app.unsnooze_selected(),
                     _ => {}
                 },
