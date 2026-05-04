@@ -1,6 +1,23 @@
 use crate::config::{Config, FieldDef};
 use crate::entry::{Entry, fuzzy_match, kill_word_left};
 
+/// Concatenate the rendered values of every visible column for `entry`,
+/// space-separated. Mirrors `App::row_cells(entry).join(" ")` but takes
+/// `columns` directly so callers holding a `&mut App` borrow on another
+/// field (e.g. `filtered`) can still compute it.
+fn haystack_for(columns: &[ColumnState], entry: &Entry) -> String {
+    let mut out = String::new();
+    let mut first = true;
+    for c in columns.iter().filter(|c| c.visible) {
+        if !first {
+            out.push(' ');
+        }
+        first = false;
+        out.push_str(&entry.pick(&c.from));
+    }
+    out
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     List,
@@ -63,16 +80,27 @@ pub struct App {
     /// Number of body rows in the list area on the most recent draw, used as
     /// the page size for PgUp/PgDown. The UI updates this before each frame.
     pub list_page_size: usize,
+    /// Indices into `entries` that pass the current fuzzy filter, ascending.
+    /// `None` when `filter_text` is empty so we don't materialize an
+    /// identity vector for huge inputs. Maintained eagerly: rebuilt on
+    /// filter / column-visibility / column-order changes, extended in
+    /// place on append.
+    filtered: Option<Vec<usize>>,
+    /// Per-column max content width in chars seen so far, including the
+    /// header. Parallel to `columns`. Updated incrementally as entries
+    /// arrive so the renderer doesn't rescan every entry per frame.
+    column_max_widths: Vec<usize>,
 }
 
 impl App {
     pub fn new(config: &Config, source_label: String) -> Self {
-        let columns = config
+        let columns: Vec<ColumnState> = config
             .fields
             .iter()
             .cloned()
             .map(ColumnState::from)
             .collect();
+        let column_max_widths = columns.iter().map(|c| c.name.chars().count()).collect();
         Self {
             entries: Vec::new(),
             source_label,
@@ -88,6 +116,8 @@ impl App {
             filtering: false,
             color_by_field: config.color_by_field.clone(),
             list_page_size: 0,
+            filtered: None,
+            column_max_widths,
         }
     }
 
@@ -119,64 +149,124 @@ impl App {
     pub fn append_entries<I: IntoIterator<Item = Entry>>(&mut self, new: I) {
         let was_empty = self.entries.is_empty();
         for entry in new {
+            // Discover new keys and add them as hidden columns.
             for key in entry.keys() {
                 if !self.columns.iter().any(|c| c.name == key) {
+                    let header_w = key.chars().count();
                     self.columns.push(ColumnState {
                         name: key.clone(),
                         from: vec![key],
                         visible: false,
                     });
+                    self.column_max_widths.push(header_w);
+                }
+            }
+            // Update per-column max widths from this entry.
+            for i in 0..self.columns.len() {
+                let v = entry.pick(&self.columns[i].from);
+                let w = v.chars().count();
+                if w > self.column_max_widths[i] {
+                    self.column_max_widths[i] = w;
+                }
+            }
+            // If a filter is active, test the new entry incrementally.
+            let new_idx = self.entries.len();
+            if let Some(filtered) = self.filtered.as_mut() {
+                let hay = haystack_for(&self.columns, &entry);
+                if fuzzy_match(&self.filter_text, &hay) {
+                    filtered.push(new_idx);
                 }
             }
             self.entries.push(entry);
         }
-        if self.follow
-            && let Some(&last) = self.filtered_indices().last()
-        {
-            self.selected = last;
+        if self.follow {
+            if let Some(last) = self.last_displayed() {
+                self.selected = last;
+            }
         } else if was_empty && !self.entries.is_empty() {
             self.selected = 0;
         }
     }
 
-    /// Indices into `self.entries` that pass the current fuzzy filter.
-    pub fn filtered_indices(&self) -> Vec<usize> {
+    /// Rebuild the filter cache from scratch. Called whenever `filter_text`
+    /// or anything affecting `haystack_for` (column visibility / order)
+    /// changes. O(N) but only on user input — not per frame.
+    fn refresh_filter(&mut self) {
         if self.filter_text.is_empty() {
-            return (0..self.entries.len()).collect();
+            self.filtered = None;
+        } else {
+            let mut v = Vec::new();
+            for (i, e) in self.entries.iter().enumerate() {
+                let hay = haystack_for(&self.columns, e);
+                if fuzzy_match(&self.filter_text, &hay) {
+                    v.push(i);
+                }
+            }
+            self.filtered = Some(v);
         }
-        self.entries
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| fuzzy_match(&self.filter_text, &self.haystack(e)))
-            .map(|(i, _)| i)
-            .collect()
+        self.clamp_selection_to_displayed();
     }
 
-    fn haystack(&self, entry: &Entry) -> String {
-        // Match the TS tool: join the rendered values of every visible column.
-        self.row_cells(entry).join(" ")
+    /// Number of currently-displayed entries (filter applied if active).
+    pub fn displayed_count(&self) -> usize {
+        match &self.filtered {
+            Some(v) => v.len(),
+            None => self.entries.len(),
+        }
+    }
+
+    /// Entry index at displayed position `pos`, or `None` if out of range.
+    pub fn displayed_at(&self, pos: usize) -> Option<usize> {
+        match &self.filtered {
+            Some(v) => v.get(pos).copied(),
+            None => (pos < self.entries.len()).then_some(pos),
+        }
+    }
+
+    /// Position of `entry_idx` in the displayed list, or `None` if hidden.
+    pub fn position_in_displayed(&self, entry_idx: usize) -> Option<usize> {
+        match &self.filtered {
+            Some(v) => v.binary_search(&entry_idx).ok(),
+            None => (entry_idx < self.entries.len()).then_some(entry_idx),
+        }
+    }
+
+    pub fn first_displayed(&self) -> Option<usize> {
+        self.displayed_at(0)
+    }
+
+    pub fn last_displayed(&self) -> Option<usize> {
+        let n = self.displayed_count();
+        if n == 0 { None } else { self.displayed_at(n - 1) }
     }
 
     /// Cursor's position in the filtered list (0 if the selected entry isn't
     /// currently displayed).
     pub fn cursor_in_filtered(&self) -> usize {
-        let f = self.filtered_indices();
-        f.iter().position(|&i| i == self.selected).unwrap_or(0)
+        self.position_in_displayed(self.selected).unwrap_or(0)
     }
 
-    pub fn displayed_count(&self) -> usize {
-        self.filtered_indices().len()
+    /// Materialized view of `displayed_at(0..displayed_count)`. Allocates;
+    /// tests only.
+    #[cfg(test)]
+    pub fn filtered_indices(&self) -> Vec<usize> {
+        match &self.filtered {
+            Some(v) => v.clone(),
+            None => (0..self.entries.len()).collect(),
+        }
     }
 
     fn move_in_filtered(&mut self, delta: isize) {
         self.follow = false;
-        let f = self.filtered_indices();
-        if f.is_empty() {
+        let n = self.displayed_count();
+        if n == 0 {
             return;
         }
-        let pos = f.iter().position(|&i| i == self.selected).unwrap_or(0);
-        let next = (pos as isize + delta).clamp(0, (f.len() - 1) as isize) as usize;
-        self.selected = f[next];
+        let pos = self.position_in_displayed(self.selected).unwrap_or(0);
+        let next = (pos as isize + delta).clamp(0, (n - 1) as isize) as usize;
+        if let Some(idx) = self.displayed_at(next) {
+            self.selected = idx;
+        }
     }
 
     pub fn enter_filter(&mut self) {
@@ -189,39 +279,41 @@ impl App {
 
     pub fn filter_push(&mut self, c: char) {
         self.filter_text.push(c);
-        self.clamp_selection_to_filter();
+        self.refresh_filter();
     }
 
     pub fn filter_backspace(&mut self) {
         self.filter_text.pop();
-        self.clamp_selection_to_filter();
+        self.refresh_filter();
     }
 
     pub fn filter_clear(&mut self) {
         self.filter_text.clear();
         self.filtering = false;
+        self.refresh_filter();
     }
 
     pub fn filter_kill_word(&mut self) {
         let len = self.filter_text.len();
         let (next, _) = kill_word_left(&self.filter_text, len);
         self.filter_text = next;
-        self.clamp_selection_to_filter();
+        self.refresh_filter();
     }
 
     #[allow(dead_code)] // tests only — TUI uses filter_push/backspace/clear
     pub fn set_filter(&mut self, text: String) {
         self.filter_text = text;
-        self.clamp_selection_to_filter();
+        self.refresh_filter();
     }
 
-    fn clamp_selection_to_filter(&mut self) {
-        let f = self.filtered_indices();
-        if f.is_empty() {
+    fn clamp_selection_to_displayed(&mut self) {
+        if self.displayed_count() == 0 {
             return;
         }
-        if !f.contains(&self.selected) {
-            self.selected = *f.first().unwrap();
+        if self.position_in_displayed(self.selected).is_none()
+            && let Some(first) = self.first_displayed()
+        {
+            self.selected = first;
         }
     }
 
@@ -230,9 +322,21 @@ impl App {
     }
 
     pub fn row_cells(&self, entry: &Entry) -> Vec<String> {
-        self.visible_columns()
+        self.columns
             .iter()
+            .filter(|c| c.visible)
             .map(|c| entry.pick(&c.from))
+            .collect()
+    }
+
+    /// Per-visible-column max content width (chars), header included.
+    /// Sliced from the running `column_max_widths` — no per-frame scan.
+    pub fn visible_widths(&self) -> Vec<usize> {
+        self.columns
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.visible)
+            .map(|(i, _)| self.column_max_widths[i])
             .collect()
     }
 
@@ -258,14 +362,14 @@ impl App {
 
     pub fn jump_top(&mut self) {
         self.follow = false;
-        if let Some(&first) = self.filtered_indices().first() {
+        if let Some(first) = self.first_displayed() {
             self.selected = first;
         }
     }
 
     pub fn jump_bottom(&mut self) {
         self.follow = false;
-        if let Some(&last) = self.filtered_indices().last() {
+        if let Some(last) = self.last_displayed() {
             self.selected = last;
         }
     }
@@ -273,7 +377,7 @@ impl App {
     pub fn toggle_follow(&mut self) {
         self.follow = !self.follow;
         if self.follow
-            && let Some(&last) = self.filtered_indices().last()
+            && let Some(last) = self.last_displayed()
         {
             self.selected = last;
         }
@@ -324,21 +428,20 @@ impl App {
     }
 
     pub fn detail_next_entry(&mut self) {
-        let f = self.filtered_indices();
-        if let Some(pos) = f.iter().position(|&i| i == self.selected)
-            && pos + 1 < f.len()
+        if let Some(pos) = self.position_in_displayed(self.selected)
+            && let Some(next) = self.displayed_at(pos + 1)
         {
-            self.selected = f[pos + 1];
+            self.selected = next;
             self.detail.row = self.detail.row.min(self.detail_rows().saturating_sub(1));
         }
     }
 
     pub fn detail_prev_entry(&mut self) {
-        let f = self.filtered_indices();
-        if let Some(pos) = f.iter().position(|&i| i == self.selected)
+        if let Some(pos) = self.position_in_displayed(self.selected)
             && pos > 0
+            && let Some(prev) = self.displayed_at(pos - 1)
         {
-            self.selected = f[pos - 1];
+            self.selected = prev;
             self.detail.row = self.detail.row.min(self.detail_rows().saturating_sub(1));
         }
     }
@@ -364,12 +467,15 @@ impl App {
         if let Some(col) = self.columns.iter_mut().find(|c| c.name == key) {
             col.visible = !col.visible;
         } else {
+            let header_w = key.chars().count();
             self.columns.push(ColumnState {
                 name: key.clone(),
                 from: vec![key],
                 visible: true,
             });
+            self.column_max_widths.push(header_w);
         }
+        self.refresh_filter();
     }
 
     pub fn fields_menu_move(&mut self, delta: isize) {
@@ -384,6 +490,7 @@ impl App {
     pub fn fields_menu_toggle(&mut self) {
         if let Some(c) = self.columns.get_mut(self.fields_menu.cursor) {
             c.visible = !c.visible;
+            self.refresh_filter();
         }
     }
 
@@ -393,8 +500,11 @@ impl App {
         if j < 0 || j as usize >= self.columns.len() {
             return;
         }
-        self.columns.swap(i, j as usize);
-        self.fields_menu.cursor = j as usize;
+        let j = j as usize;
+        self.columns.swap(i, j);
+        self.column_max_widths.swap(i, j);
+        self.fields_menu.cursor = j;
+        self.refresh_filter();
     }
 
     pub fn quit(&mut self) {
@@ -632,5 +742,65 @@ mod tests {
         }
         let e = Entry::parse(r#"{"a":1}"#, "message");
         assert!(app.row_cells(&e).is_empty());
+    }
+
+    #[test]
+    fn column_max_widths_grow_with_appended_entries() {
+        let mut app = make(0);
+        // Add a column "msg" so we can observe its width grow.
+        app.columns.push(ColumnState {
+            name: "msg".into(),
+            from: vec!["msg".into()],
+            visible: true,
+        });
+        app.column_max_widths.push("msg".chars().count());
+        let initial = *app.column_max_widths.last().unwrap();
+        app.append_entries([Entry::parse(r#"{"msg":"hello world!"}"#, "message")]);
+        assert!(*app.column_max_widths.last().unwrap() > initial);
+        assert_eq!(*app.column_max_widths.last().unwrap(), "hello world!".len());
+    }
+
+    #[test]
+    fn column_max_widths_track_column_swaps() {
+        let mut app = make(0);
+        app.columns.clear();
+        app.column_max_widths.clear();
+        app.columns.push(ColumnState { name: "a".into(), from: vec!["a".into()], visible: true });
+        app.column_max_widths.push(1);
+        app.columns.push(ColumnState { name: "b".into(), from: vec!["b".into()], visible: true });
+        app.column_max_widths.push(2);
+        app.open_fields_menu();
+        app.fields_menu_swap(1);
+        // After swap, widths follow the columns.
+        assert_eq!(app.columns[0].name, "b");
+        assert_eq!(app.column_max_widths[0], 2);
+        assert_eq!(app.columns[1].name, "a");
+        assert_eq!(app.column_max_widths[1], 1);
+    }
+
+    #[test]
+    fn filter_cache_extends_on_append() {
+        let mut app = make(0);
+        app.append_entries([Entry::parse(r#"{"message":"alpha"}"#, "message")]);
+        app.set_filter("bet".into());
+        assert_eq!(app.displayed_count(), 0);
+        app.append_entries([Entry::parse(r#"{"message":"beta"}"#, "message")]);
+        assert_eq!(app.displayed_count(), 1);
+        assert_eq!(app.displayed_at(0), Some(1));
+    }
+
+    #[test]
+    fn position_in_displayed_uses_binary_search() {
+        let mut app = make(0);
+        for i in 0..10 {
+            app.append_entries([Entry::parse(
+                &format!(r#"{{"message":"x{i}"}}"#),
+                "message",
+            )]);
+        }
+        // Filter that matches every entry.
+        app.set_filter("x".into());
+        assert_eq!(app.position_in_displayed(7), Some(7));
+        assert_eq!(app.position_in_displayed(99), None);
     }
 }
