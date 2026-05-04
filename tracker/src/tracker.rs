@@ -312,7 +312,7 @@ impl Tracker {
         self.dirs
             .data_dir()
             .join("week-files")
-            .join(date.format("%Y-W%V.txt").to_string())
+            .join(date.format("%G-W%V.txt").to_string())
     }
 }
 
