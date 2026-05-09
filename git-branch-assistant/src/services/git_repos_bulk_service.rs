@@ -73,6 +73,7 @@ impl GitReposBulkService {
         groups.sort_by_key(|(key, _)| key.order_index());
 
         for (_key, mut group) in groups {
+            eprintln!();
             loop {
                 if group.is_empty() {
                     break;
