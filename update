@@ -6,9 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/shared.sh"
 
 main() {
-    for tool in "${RUST_TOOLS[@]}"; do
-        update-rust "$tool"
-    done
+    update-rust-workspace
     for tool in "${NODE_TOOLS[@]}"; do
         update-node "$tool"
     done

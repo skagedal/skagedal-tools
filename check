@@ -9,9 +9,7 @@ main() {
     for tool in "${NODE_TOOLS[@]}"; do
         check-node "$tool"
     done
-    for tool in "${RUST_TOOLS[@]}"; do
-        check-rust "$tool"
-    done
+    check-rust-workspace
     for tool in "${MAVEN_TOOLS[@]}"; do
         check-maven "$tool"
     done

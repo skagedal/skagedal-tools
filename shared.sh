@@ -70,6 +70,24 @@ check-rust() {
     )
 }
 
+check-rust-workspace() {
+    echo "==> Checking Rust workspace"
+    (
+        cd "$SCRIPT_DIR"
+        # Crates with embedded TS sub-packages (currently log-viewer/browser)
+        # need their own type-check / lint pass. The Rust workspace itself
+        # is checked without the `web` feature so contributors don't need
+        # GTK/webkit2gtk dev libs to run ./check.
+        for tool in "${RUST_TOOLS[@]}"; do
+            if [[ -f "$tool/browser/package.json5" ]]; then
+                (cd "$tool/browser" && pnpm install && pnpm run check)
+            fi
+        done
+        cargo clippy --workspace --all-targets -- -D warnings
+        cargo test --workspace
+    )
+}
+
 check-maven() {
     local dir="$1"
     echo "==> Checking $dir"
@@ -112,6 +130,11 @@ update-rust() {
     local dir="$1"
     echo "==> Updating $dir"
     (cd "$SCRIPT_DIR/$dir" && cargo update)
+}
+
+update-rust-workspace() {
+    echo "==> Updating Rust workspace"
+    (cd "$SCRIPT_DIR" && cargo update)
 }
 
 update-maven() {
