@@ -108,16 +108,22 @@ install-node() {
 install-rust() {
     local dir="$1"
     echo "==> Installing $dir"
+    # Reuse the workspace target/ across installs so common deps (clap,
+    # serde, tokio, …) are compiled once instead of from scratch in a
+    # fresh tmpdir for every tool. Works for both bulk install and
+    # `./install <single-tool>` — subsequent single installs are also
+    # faster because dep artifacts persist in target/release/.
+    export CARGO_TARGET_DIR="$SCRIPT_DIR/target"
     if [[ "$dir" == "log-viewer" ]]; then
         # log-viewer's --web mode embeds the React app from browser/web/dist
         # into the Rust binary via include_dir!. The crate's build.rs runs
         # `pnpm install && pnpm run build:web` in browser/ automatically when
         # the `web` feature is on, so all this special case has to do is
         # turn the feature on.
-        (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir" --features web)
+        (cd "$SCRIPT_DIR" && cargo install --path "$dir" --bin "$dir" --features web)
         return
     fi
-    (cd "$SCRIPT_DIR/$dir" && cargo install --path . --bin "$dir")
+    (cd "$SCRIPT_DIR" && cargo install --path "$dir" --bin "$dir")
 }
 
 update-node() {
