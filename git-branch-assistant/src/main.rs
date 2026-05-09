@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod bulk_picker;
 mod cache;
 mod cleaner;
 mod commands;
@@ -10,6 +11,7 @@ mod env;
 mod fs_utils;
 mod git;
 mod picker;
+mod pr_options_picker;
 mod repository;
 mod services;
 mod task_result;
@@ -51,6 +53,9 @@ enum Command {
         /// With --list, prompt to select a branch to check out
         #[arg(short, long, requires = "list")]
         interactive: bool,
+        /// Group branches by state across all repos and apply bulk actions
+        #[arg(long, conflicts_with_all = ["list", "interactive", "dry"])]
+        bulk: bool,
     },
 }
 
@@ -65,9 +70,10 @@ fn main() -> Result<()> {
             skip_dirty_repos,
             list,
             interactive,
+            bulk,
         } => {
             let exit_code =
-                commands::git_repos::run(path, dry, skip_dirty_repos, list, interactive)?;
+                commands::git_repos::run(path, dry, skip_dirty_repos, list, interactive, bulk)?;
             std::process::exit(exit_code);
         }
     }

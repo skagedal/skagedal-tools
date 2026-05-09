@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::parse_branches;
-use crate::git::{Branch, GitRepo, Upstream, UpstreamStatus};
+use crate::git::{Branch, GitRepo, PrOptions, Upstream, UpstreamStatus, pr_create_args};
 use anyhow::Result;
 use std::path::PathBuf;
 use std::process::Command;
@@ -123,4 +123,62 @@ fn test_getting_branches() -> Result<()> {
 
     assert_eq!(refnames, vec!["existing", "master"]);
     Ok(())
+}
+
+#[test]
+fn pr_create_args_default_omits_optional_flags() {
+    let args = pr_create_args("feature", "main", PrOptions::default());
+    assert_eq!(
+        args,
+        vec!["pr", "create", "--head", "feature", "--base", "main"]
+    );
+}
+
+#[test]
+fn pr_create_args_with_draft_appends_draft_and_fill() {
+    let args = pr_create_args(
+        "feature",
+        "main",
+        PrOptions {
+            draft: true,
+            web: false,
+        },
+    );
+    assert_eq!(
+        args,
+        vec![
+            "pr", "create", "--head", "feature", "--base", "main", "--draft", "--fill",
+        ]
+    );
+}
+
+#[test]
+fn pr_create_args_with_web_appends_only_web() {
+    let args = pr_create_args(
+        "feature",
+        "main",
+        PrOptions {
+            draft: false,
+            web: true,
+        },
+    );
+    assert_eq!(
+        args,
+        vec!["pr", "create", "--head", "feature", "--base", "main", "--web"]
+    );
+}
+
+#[test]
+fn pr_create_args_prefers_draft_when_both_are_set() {
+    let args = pr_create_args(
+        "feature",
+        "main",
+        PrOptions {
+            draft: true,
+            web: true,
+        },
+    );
+    assert!(args.iter().any(|a| a == "--draft"));
+    assert!(args.iter().any(|a| a == "--fill"));
+    assert!(!args.iter().any(|a| a == "--web"));
 }

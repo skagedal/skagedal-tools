@@ -3,9 +3,69 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 
-use crate::git::{Branch, GitRepo, UpstreamStatus};
+use crate::git::{Branch, GitRepo, PrOptions, UpstreamStatus};
 use crate::task_result::TaskResult;
 use crate::ui::Prompt;
+
+pub fn actions_for_branch(branch: &Branch, repo: &GitRepo) -> Vec<BranchAction> {
+    match &branch.upstream {
+        None => vec![
+            BranchAction::CreatePr,
+            BranchAction::PushCreatingOrigin,
+            BranchAction::Delete,
+            BranchAction::Log,
+            BranchAction::Shell,
+            BranchAction::Nothing,
+        ],
+        Some(upstream) => match upstream.status {
+            UpstreamStatus::Identical => Vec::new(),
+            UpstreamStatus::UpstreamIsAheadOfLocal => vec![
+                BranchAction::Rebase,
+                BranchAction::Log,
+                BranchAction::Shell,
+                BranchAction::Nothing,
+            ],
+            UpstreamStatus::LocalIsAheadOfUpstream => vec![
+                BranchAction::Push,
+                BranchAction::Log,
+                BranchAction::Shell,
+                BranchAction::Nothing,
+            ],
+            UpstreamStatus::MergeNeeded => vec![
+                BranchAction::Rebase,
+                BranchAction::Log,
+                BranchAction::Delete,
+                BranchAction::Shell,
+                BranchAction::Nothing,
+            ],
+            UpstreamStatus::UpstreamIsGone => {
+                let mut actions = vec![
+                    BranchAction::Delete,
+                    BranchAction::Log,
+                    BranchAction::Shell,
+                    BranchAction::Nothing,
+                ];
+                if branch_checked_out_elsewhere(branch, repo) {
+                    actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
+                }
+                actions
+            }
+        },
+    }
+}
+
+pub fn state_label(branch: &Branch) -> &'static str {
+    match &branch.upstream {
+        None => "Branch has no upstream",
+        Some(upstream) => match upstream.status {
+            UpstreamStatus::Identical => "Branch is identical to upstream",
+            UpstreamStatus::UpstreamIsAheadOfLocal => "Upstream is ahead of branch",
+            UpstreamStatus::LocalIsAheadOfUpstream => "Branch is ahead of upstream",
+            UpstreamStatus::MergeNeeded => "Different commits on local and upstream",
+            UpstreamStatus::UpstreamIsGone => "Upstream is set, but it is gone",
+        },
+    }
+}
 
 #[derive(Clone)]
 pub struct GitCleaner<P: Prompt> {
@@ -193,7 +253,7 @@ impl<P: Prompt> GitCleaner<P> {
         }
     }
 
-    fn perform_action(
+    pub fn perform_action(
         &self,
         repo: &GitRepo,
         branch: &Branch,
@@ -202,7 +262,8 @@ impl<P: Prompt> GitCleaner<P> {
         match action {
             BranchAction::CreatePr => {
                 repo.push_creating_origin(&branch.refname)?;
-                repo.create_pull_request(&branch.refname)?;
+                let base = repo.default_branch()?;
+                repo.create_pull_request(&branch.refname, &base, PrOptions::default())?;
                 Ok(ActionResult::Handled)
             }
             BranchAction::Push => {
@@ -261,7 +322,7 @@ impl<P: Prompt> GitCleaner<P> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum BranchAction {
+pub enum BranchAction {
     Push,
     PushCreatingOrigin,
     CreatePr,
@@ -274,12 +335,12 @@ enum BranchAction {
 }
 
 impl BranchAction {
-    fn description(&self) -> &'static str {
+    pub fn description(&self) -> &'static str {
         match self {
             BranchAction::Push => "Push to origin",
             BranchAction::PushCreatingOrigin => "Push to create origin",
             BranchAction::CreatePr => "Push and create pull request",
-            BranchAction::Rebase => "Rebase onto origin",
+            BranchAction::Rebase => "Forward",
             BranchAction::Delete => "Delete it",
             BranchAction::DeleteWorktreeAndBranch => "Delete worktree and branch",
             BranchAction::Log => "Show git log",
@@ -287,9 +348,26 @@ impl BranchAction {
             BranchAction::Nothing => "Do nothing",
         }
     }
+
+    /// Whether this action is meaningful when applied to many branches at
+    /// once. Single-branch-only actions (showing a log, dropping into a
+    /// shell with a branch checked out) are still surfaced in bulk mode but
+    /// only operate on the branch under the cursor.
+    pub fn is_bulk_safe(&self) -> bool {
+        match self {
+            BranchAction::Push
+            | BranchAction::PushCreatingOrigin
+            | BranchAction::CreatePr
+            | BranchAction::Rebase
+            | BranchAction::Delete
+            | BranchAction::DeleteWorktreeAndBranch
+            | BranchAction::Nothing => true,
+            BranchAction::Log | BranchAction::Shell => false,
+        }
+    }
 }
 
-enum ActionResult {
+pub enum ActionResult {
     Handled,
     NotHandled,
     ExitToShell(PathBuf),

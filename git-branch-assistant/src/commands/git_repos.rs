@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::repository::Repository;
+use crate::services::git_repos_bulk_service::GitReposBulkService;
 use crate::services::git_repos_list_service::GitReposListService;
 use crate::services::git_repos_service::GitReposService;
 use crate::task_result::TaskResult;
@@ -14,13 +15,17 @@ pub fn run(
     skip_dirty_repos: bool,
     list: bool,
     interactive: bool,
+    bulk: bool,
 ) -> Result<i32> {
     let path = path
         .map(Ok)
         .unwrap_or_else(env::current_dir)?
         .canonicalize()?;
 
-    let result = if list {
+    let result = if bulk {
+        let service = GitReposBulkService::new(skip_dirty_repos);
+        service.handle_all(&path)?
+    } else if list {
         let service = GitReposListService::new(interactive && !dry);
         service.list_all_branches(&path)?
     } else {
@@ -39,9 +44,7 @@ pub fn run(
         }
     };
 
-    if !dry
-        && let TaskResult::ShellActionRequired(directory) = &result
-    {
+    if !dry && let TaskResult::ShellActionRequired(directory) = &result {
         Repository::new().set_suggested_directory(directory)?;
     }
 
