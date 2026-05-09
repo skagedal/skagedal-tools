@@ -17,6 +17,9 @@ members = [
     "x-java-home",
 ]
 
+[workspace.package]
+edition = "2024"
+
 [workspace.dependencies]
 anyhow = "*"
 clap = { version = "*", features = ["derive"] }
