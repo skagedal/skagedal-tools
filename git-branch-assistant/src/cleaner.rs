@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 
-use crate::git::{Branch, GitRepo, UpstreamStatus};
+use crate::git::{Branch, GitRepo, PrOptions, UpstreamStatus};
 use crate::task_result::TaskResult;
 use crate::ui::Prompt;
 
@@ -262,7 +262,8 @@ impl<P: Prompt> GitCleaner<P> {
         match action {
             BranchAction::CreatePr => {
                 repo.push_creating_origin(&branch.refname)?;
-                repo.create_pull_request(&branch.refname)?;
+                let base = repo.default_branch()?;
+                repo.create_pull_request(&branch.refname, &base, PrOptions::default())?;
                 Ok(ActionResult::Handled)
             }
             BranchAction::Push => {

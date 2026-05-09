@@ -11,6 +11,7 @@ mod env;
 mod fs_utils;
 mod git;
 mod picker;
+mod pr_options_picker;
 mod repository;
 mod services;
 mod task_result;

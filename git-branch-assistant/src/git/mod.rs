@@ -33,6 +33,30 @@ pub struct Upstream {
     pub status: UpstreamStatus,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PrOptions {
+    pub draft: bool,
+    pub web: bool,
+}
+
+pub fn pr_create_args(refname: &str, base: &str, options: PrOptions) -> Vec<String> {
+    let mut args = vec![
+        "pr".to_string(),
+        "create".to_string(),
+        "--head".to_string(),
+        refname.to_string(),
+        "--base".to_string(),
+        base.to_string(),
+    ];
+    if options.draft {
+        args.push("--draft".to_string());
+    }
+    if options.web {
+        args.push("--web".to_string());
+    }
+    args
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpstreamStatus {
     Identical,
@@ -122,12 +146,15 @@ impl GitRepo {
         self.run_interactive_printing("git", &args)
     }
 
-    pub fn create_pull_request(&self, refname: &str) -> Result<()> {
-        let default_branch = self.default_branch()?;
-        self.run_interactive_printing(
-            "gh",
-            &["pr", "create", "--head", refname, "--base", &default_branch],
-        )
+    pub fn create_pull_request(
+        &self,
+        refname: &str,
+        base: &str,
+        options: PrOptions,
+    ) -> Result<()> {
+        let args = pr_create_args(refname, base, options);
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.run_interactive_printing("gh", &arg_refs)
     }
 
     pub fn show_log(&self, branch: &str) -> Result<()> {
@@ -150,7 +177,7 @@ impl GitRepo {
         Ok(!output.trim().is_empty())
     }
 
-    fn default_branch(&self) -> Result<String> {
+    pub fn default_branch(&self) -> Result<String> {
         let output = self.run_and_capture("gh", &["repo", "view", "--json", "defaultBranchRef"])?;
         let response: DefaultBranchResponse =
             serde_json::from_str(&output).context("failed to parse gh repo view output")?;

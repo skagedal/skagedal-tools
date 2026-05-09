@@ -7,7 +7,8 @@ use rayon::prelude::*;
 use crate::bulk_picker;
 use crate::cleaner::{ActionResult, BranchAction, GitCleaner, actions_for_branch, state_label};
 use crate::fs_utils::is_globally_ignored;
-use crate::git::{Branch, GitRepo, UpstreamStatus};
+use crate::git::{Branch, GitRepo, PrOptions, UpstreamStatus};
+use crate::pr_options_picker::{self, PendingPr, PrOptionsOutcome};
 use crate::task_result::TaskResult;
 use crate::ui::DialoguerPrompt;
 
@@ -115,6 +116,16 @@ impl GitReposBulkService {
                 }
 
                 let action = actions[action_index];
+
+                let pr_options = if matches!(action, BranchAction::CreatePr) {
+                    match self.confirm_pr_options(&group, &target_indices)? {
+                        Some(options) => Some(options),
+                        None => continue,
+                    }
+                } else {
+                    None
+                };
+
                 let cleaner = GitCleaner::new(DialoguerPrompt);
                 if action.is_bulk_safe() {
                     eprintln!(
@@ -134,7 +145,12 @@ impl GitReposBulkService {
                     let bulk_branch = &group[idx];
                     let repo = GitRepo::new(bulk_branch.repo_path.clone());
                     eprintln!("  {}: {}", bulk_branch.display(), action.description());
-                    match cleaner.perform_action(&repo, &bulk_branch.branch, action)? {
+                    let result = if let Some(options) = pr_options {
+                        run_create_pr(&repo, &bulk_branch.branch, options)?
+                    } else {
+                        cleaner.perform_action(&repo, &bulk_branch.branch, action)?
+                    };
+                    match result {
                         ActionResult::Handled => {
                             handled.insert(idx);
                         }
@@ -201,6 +217,42 @@ impl GitReposBulkService {
         Ok(result)
     }
 
+    fn confirm_pr_options(
+        &self,
+        group: &[BulkBranch],
+        target_indices: &[usize],
+    ) -> Result<Option<PrOptions>> {
+        let pending: Vec<PendingPr> = target_indices
+            .par_iter()
+            .map(|&idx| {
+                let bulk_branch = &group[idx];
+                let repo = GitRepo::new(bulk_branch.repo_path.clone());
+                let base = repo.default_branch().unwrap_or_else(|err| {
+                    eprintln!(
+                        "Could not determine default branch for {}: {err}. Falling back to 'main'.",
+                        bulk_branch.repo_name
+                    );
+                    "main".to_string()
+                });
+                PendingPr {
+                    repo_display: bulk_branch.repo_name.clone(),
+                    head: bulk_branch.branch.refname.clone(),
+                    base,
+                }
+            })
+            .collect();
+
+        if !bulk_picker::stderr_is_terminal() {
+            eprintln!("Bulk PR creation requires an interactive terminal; skipping.");
+            return Ok(None);
+        }
+
+        match pr_options_picker::run(&pending)? {
+            PrOptionsOutcome::Confirmed(options) => Ok(Some(options)),
+            PrOptionsOutcome::Cancelled => Ok(None),
+        }
+    }
+
     fn bulk_actions_for_group(&self, group: &[BulkBranch]) -> Vec<BranchAction> {
         let Some(first) = group.first() else {
             return Vec::new();
@@ -211,6 +263,13 @@ impl GitReposBulkService {
             .filter(|action| !matches!(action, BranchAction::DeleteWorktreeAndBranch))
             .collect()
     }
+}
+
+fn run_create_pr(repo: &GitRepo, branch: &Branch, options: PrOptions) -> Result<ActionResult> {
+    repo.push_creating_origin(&branch.refname)?;
+    let base = repo.default_branch()?;
+    repo.create_pull_request(&branch.refname, &base, options)?;
+    Ok(ActionResult::Handled)
 }
 
 fn group_by_state(branches: Vec<BulkBranch>) -> Vec<(GroupKey, Vec<BulkBranch>)> {

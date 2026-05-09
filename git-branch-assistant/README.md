@@ -152,6 +152,13 @@ A few actions only make sense for one branch at a time (`Show git log`,
 the checkboxes disappear and Enter applies the action to just the branch under
 the cursor. Switching back to a bulk action restores the previous selections.
 
+When `Push and create pull request` is confirmed for one or more branches, a
+second screen appears with two checkboxes — `Draft` and `Open in browser`,
+both selected by default — and a live preview of the exact `gh pr create`
+command that will run for each branch. Toggle with space, navigate with the
+arrow keys or `j`/`k`, then press Enter to actually run them, or Esc to back
+out without changing anything.
+
 After confirming, selected branches are processed in turn. If any branches were left unselected they remain in the list and the picker re-opens; otherwise the flow moves on to the next state group.
 
 ---
