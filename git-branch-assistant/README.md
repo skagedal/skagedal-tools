@@ -121,6 +121,34 @@ Add `--interactive` (`-i`) to pick a branch from the list. The selected branch i
 
 In interactive mode the listing is also cached under `$XDG_CACHE_HOME/git-branch-assistant/branches/` (or `~/.cache/...`), keyed by the directory the command was invoked from. If a fresh cache (less than an hour old) is available, the picker opens immediately on the cached data, runs a background rescan with a `Refreshing...` indicator, and updates the list in place when the rescan finishes — keeping the cursor on the same branch when it still exists, or falling back to the first entry otherwise.
 
+### Bulk actions
+
+Pass `--bulk` to group all branches across the scanned repos by their upstream state (no upstream, upstream ahead, local ahead, diverged, upstream gone) and apply actions to many branches at once.
+
+```
+$ git-branch-assistant repos --bulk
+```
+
+For each non-clean state with at least one branch, a multi-select picker opens:
+
+```
+Upstream is set, but it is gone (3/3 selected)
+  ↑/↓ j/k navigate, space toggle, a toggle all, ←/→ h/l action, Enter confirm, Esc cancel
+> [x] repo-a/old-feature
+  [x] repo-b/merged-pr
+  [x] repo-c/done
+[Delete it]   Show git log    Exit to shell    Do nothing
+```
+
+- Up/Down (or `j`/`k`): move the cursor between branches
+- Space: toggle the highlighted branch (all are selected by default)
+- `a`: toggle every branch
+- Left/Right (or `h`/`l`): switch action — listed in the same order they appear in the per-branch flow
+- Enter: apply the chosen action to every selected branch
+- Esc / `q`: skip the rest of this state group
+
+After confirming, selected branches are processed in turn. If any branches were left unselected they remain in the list and the picker re-opens; otherwise the flow moves on to the next state group.
+
 ---
 
 [^1]: See for example [myrepos](https://myrepos.branchable.com/) and its list of [related tools](https://myrepos.branchable.com/related/)
