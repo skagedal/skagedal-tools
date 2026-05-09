@@ -1,0 +1,208 @@
+{
+  "added": [
+    {
+      "name": "anstream",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.0.0"
+    },
+    {
+      "name": "anstyle",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.0.14"
+    },
+    {
+      "name": "anstyle-parse",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.0.0"
+    },
+    {
+      "name": "anstyle-query",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.1.5"
+    },
+    {
+      "name": "anstyle-wincon",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "3.0.11"
+    },
+    {
+      "name": "clap_builder",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "4.6.0"
+    },
+    {
+      "name": "colorchoice",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.0.5"
+    },
+    {
+      "name": "is_terminal_polyfill",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.70.2"
+    },
+    {
+      "name": "once_cell_polyfill",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "1.70.2"
+    },
+    {
+      "name": "utf8parse",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "to_requirement": "0.2.2"
+    }
+  ],
+  "modified": [
+    {
+      "name": "clap",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "3.2.25",
+      "to_requirement": "4.6.1"
+    },
+    {
+      "name": "clap_lex",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.2.4",
+      "to_requirement": "1.1.0"
+    },
+    {
+      "name": "strsim",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.10.0",
+      "to_requirement": "0.11.1"
+    },
+    {
+      "name": "clap",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.toml",
+      "dependency_type": "runtime",
+      "from_requirement": "3",
+      "to_requirement": "*"
+    }
+  ],
+  "removed": [
+    {
+      "name": "atty",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.2.14"
+    },
+    {
+      "name": "autocfg",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "1.5.0"
+    },
+    {
+      "name": "bitflags",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "1.3.2"
+    },
+    {
+      "name": "hashbrown",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.12.3"
+    },
+    {
+      "name": "hermit-abi",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.1.19"
+    },
+    {
+      "name": "indexmap",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "1.9.3"
+    },
+    {
+      "name": "libc",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.2.186"
+    },
+    {
+      "name": "os_str_bytes",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "6.6.1"
+    },
+    {
+      "name": "termcolor",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "1.4.1"
+    },
+    {
+      "name": "textwrap",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.16.2"
+    },
+    {
+      "name": "winapi",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.3.9"
+    },
+    {
+      "name": "winapi-i686-pc-windows-gnu",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.4.0"
+    },
+    {
+      "name": "winapi-util",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.1.11"
+    },
+    {
+      "name": "winapi-x86_64-pc-windows-gnu",
+      "ecosystem": "cargo",
+      "manifest_path": "Cargo.lock",
+      "dependency_type": "runtime",
+      "from_requirement": "0.4.0"
+    }
+  ]
+}

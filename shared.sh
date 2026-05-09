@@ -24,6 +24,7 @@ INSTALLED_RUST_TOOLS=(
     log-jsonify
     log-viewer
     package-json-merge
+    simons-misc-helpers
     sync-brewfile
     tracker
     x-java-home
