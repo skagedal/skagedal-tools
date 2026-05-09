@@ -7,11 +7,9 @@ edition.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 chrono = "*"
-# TODO: replace with etcetera
 directories = "*"
 num-traits = "*"
 regex.workspace = true
 serde.workspace = true
 temp-dir = "*"
 toml.workspace = true
-etcetera = "*"
