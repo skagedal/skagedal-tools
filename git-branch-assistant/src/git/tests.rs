@@ -128,11 +128,48 @@ fn test_getting_branches() -> Result<()> {
 #[test]
 fn pr_create_args_default_omits_optional_flags() {
     let args = pr_create_args("feature", "main", PrOptions::default());
-    assert_eq!(args, vec!["pr", "create", "--head", "feature", "--base", "main"]);
+    assert_eq!(
+        args,
+        vec!["pr", "create", "--head", "feature", "--base", "main"]
+    );
 }
 
 #[test]
-fn pr_create_args_appends_draft_and_web_when_requested() {
+fn pr_create_args_with_draft_appends_draft_and_fill() {
+    let args = pr_create_args(
+        "feature",
+        "main",
+        PrOptions {
+            draft: true,
+            web: false,
+        },
+    );
+    assert_eq!(
+        args,
+        vec![
+            "pr", "create", "--head", "feature", "--base", "main", "--draft", "--fill",
+        ]
+    );
+}
+
+#[test]
+fn pr_create_args_with_web_appends_only_web() {
+    let args = pr_create_args(
+        "feature",
+        "main",
+        PrOptions {
+            draft: false,
+            web: true,
+        },
+    );
+    assert_eq!(
+        args,
+        vec!["pr", "create", "--head", "feature", "--base", "main", "--web"]
+    );
+}
+
+#[test]
+fn pr_create_args_prefers_draft_when_both_are_set() {
     let args = pr_create_args(
         "feature",
         "main",
@@ -141,10 +178,7 @@ fn pr_create_args_appends_draft_and_web_when_requested() {
             web: true,
         },
     );
-    assert_eq!(
-        args,
-        vec![
-            "pr", "create", "--head", "feature", "--base", "main", "--draft", "--web",
-        ]
-    );
+    assert!(args.iter().any(|a| a == "--draft"));
+    assert!(args.iter().any(|a| a == "--fill"));
+    assert!(!args.iter().any(|a| a == "--web"));
 }

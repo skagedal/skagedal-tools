@@ -48,10 +48,13 @@ pub fn pr_create_args(refname: &str, base: &str, options: PrOptions) -> Vec<Stri
         "--base".to_string(),
         base.to_string(),
     ];
+    // --draft and --web are mutually exclusive in `gh pr create`. When drafting
+    // from the CLI we also pass --fill so gh derives the title and body from
+    // the commits rather than dropping into an interactive editor.
     if options.draft {
         args.push("--draft".to_string());
-    }
-    if options.web {
+        args.push("--fill".to_string());
+    } else if options.web {
         args.push("--web".to_string());
     }
     args

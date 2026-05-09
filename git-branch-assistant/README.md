@@ -153,11 +153,14 @@ the checkboxes disappear and Enter applies the action to just the branch under
 the cursor. Switching back to a bulk action restores the previous selections.
 
 When `Push and create pull request` is confirmed for one or more branches, a
-second screen appears with two checkboxes — `Draft` and `Open in browser`,
-both selected by default — and a live preview of the exact `gh pr create`
-command that will run for each branch. Toggle with space, navigate with the
-arrow keys or `j`/`k`, then press Enter to actually run them, or Esc to back
-out without changing anything.
+second screen appears with two mutually-exclusive checkboxes — `Draft` and
+`Open in browser` — and a live preview of the exact `gh pr create` command
+that will run for each branch. `Draft` is selected by default; toggling one on
+turns the other off (`gh pr create` rejects `--draft` and `--web` together).
+Picking `Draft` also passes `--fill` so `gh` derives the title and body from
+the commits instead of dropping into an editor. Toggle with space, navigate
+with the arrow keys or `j`/`k`, then press Enter to run, or Esc to back out
+without changing anything.
 
 After confirming, selected branches are processed in turn. If any branches were left unselected they remain in the list and the picker re-opens; otherwise the flow moves on to the next state group.
 

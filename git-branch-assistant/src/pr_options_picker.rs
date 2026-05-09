@@ -35,7 +35,7 @@ pub fn run(pending: &[PendingPr]) -> Result<PrOptionsOutcome> {
     let mut state = State {
         options: PrOptions {
             draft: true,
-            web: true,
+            web: false,
         },
         cursor: 0,
         rendered_rows: 0,
@@ -92,9 +92,20 @@ fn handle_key(state: &mut State, key: Key) -> KeyResult {
 }
 
 fn toggle(state: &mut State) {
+    // Draft and Web are mutually exclusive: turning one on turns the other off.
     match state.cursor {
-        0 => state.options.draft = !state.options.draft,
-        1 => state.options.web = !state.options.web,
+        0 => {
+            state.options.draft = !state.options.draft;
+            if state.options.draft {
+                state.options.web = false;
+            }
+        }
+        1 => {
+            state.options.web = !state.options.web;
+            if state.options.web {
+                state.options.draft = false;
+            }
+        }
         _ => {}
     }
 }
@@ -186,7 +197,7 @@ mod tests {
         State {
             options: PrOptions {
                 draft: true,
-                web: true,
+                web: false,
             },
             cursor: 0,
             rendered_rows: 0,
@@ -198,10 +209,27 @@ mod tests {
         let mut s = fresh_state();
         let _ = handle_key(&mut s, Key::Char(' '));
         assert!(!s.options.draft);
-        assert!(s.options.web);
+        assert!(!s.options.web);
 
         let _ = handle_key(&mut s, Key::ArrowDown);
         let _ = handle_key(&mut s, Key::Char(' '));
+        assert!(s.options.web);
+        assert!(!s.options.draft);
+    }
+
+    #[test]
+    fn enabling_web_clears_draft_and_vice_versa() {
+        let mut s = fresh_state();
+        // Default: draft on, web off. Move to web and turn it on.
+        let _ = handle_key(&mut s, Key::ArrowDown);
+        let _ = handle_key(&mut s, Key::Char(' '));
+        assert!(s.options.web);
+        assert!(!s.options.draft);
+
+        // Move back to draft and turn it on; web should clear.
+        let _ = handle_key(&mut s, Key::ArrowUp);
+        let _ = handle_key(&mut s, Key::Char(' '));
+        assert!(s.options.draft);
         assert!(!s.options.web);
     }
 
