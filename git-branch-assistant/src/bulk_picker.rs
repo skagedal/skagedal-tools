@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use anyhow::Result;
-use console::{Key, Term, style};
+use console::{Key, Term, measure_text_width, style};
 
 pub fn stderr_is_terminal() -> bool {
     Term::stderr().is_term()
@@ -140,21 +140,24 @@ fn handle_key(state: &mut State, key: Key) -> KeyResult {
 fn render(term: &mut Term, state: &mut State) -> Result<()> {
     clear_rendered(term, state.rendered_rows)?;
 
+    let (term_height, term_width) = term.size();
+    let term_height = term_height as usize;
+    let term_width = term_width as usize;
+
+    let mut lines: Vec<String> = Vec::new();
+
     let selected_count = state.checked.iter().filter(|c| **c).count();
-    writeln!(
-        term,
+    lines.push(format!(
         "{} ({}/{} selected)",
         style(&state.title).bold(),
         selected_count,
         state.entries.len()
-    )?;
-    writeln!(
-        term,
-        "  \u{2191}/\u{2193} j/k navigate, space toggle, a toggle all, \u{2190}/\u{2192} h/l action, Enter confirm, Esc cancel"
-    )?;
+    ));
+    lines.push(
+        "  \u{2191}/\u{2193} j/k navigate, space toggle, a toggle all, \u{2190}/\u{2192} h/l action, Enter confirm, Esc cancel".to_string(),
+    );
 
-    let height = term.size().0 as usize;
-    let max_visible = height.saturating_sub(5).max(1);
+    let max_visible = term_height.saturating_sub(5).max(1);
     let (top, bottom) = visible_window(state.cursor, state.entries.len(), max_visible);
 
     for idx in top..bottom {
@@ -162,9 +165,9 @@ fn render(term: &mut Term, state: &mut State) -> Result<()> {
         let check = if state.checked[idx] { "[x]" } else { "[ ]" };
         let line = format!("{cursor_marker} {check} {}", state.entries[idx]);
         if idx == state.cursor {
-            writeln!(term, "{}", style(line).reverse())?;
+            lines.push(format!("{}", style(line).reverse()));
         } else {
-            writeln!(term, "{line}")?;
+            lines.push(line);
         }
     }
 
@@ -182,10 +185,28 @@ fn render(term: &mut Term, state: &mut State) -> Result<()> {
             action_line.push_str(&format!(" {action} "));
         }
     }
-    writeln!(term, "{action_line}")?;
+    lines.push(action_line);
 
-    state.rendered_rows = 3 + (bottom - top);
+    let mut total_rows = 0;
+    for line in &lines {
+        total_rows += rows_for_line(line, term_width);
+        writeln!(term, "{line}")?;
+    }
+
+    state.rendered_rows = total_rows;
     Ok(())
+}
+
+fn rows_for_line(line: &str, term_width: usize) -> usize {
+    if term_width == 0 {
+        return 1;
+    }
+    let width = measure_text_width(line);
+    if width == 0 {
+        1
+    } else {
+        width.div_ceil(term_width)
+    }
 }
 
 fn visible_window(selected: usize, total: usize, max_visible: usize) -> (usize, usize) {
@@ -290,6 +311,24 @@ mod tests {
     fn escape_yields_cancel() {
         let mut s = state(2, 2);
         assert!(matches!(handle_key(&mut s, Key::Escape), KeyResult::Cancel));
+    }
+
+    #[test]
+    fn rows_for_line_counts_wraps() {
+        assert_eq!(rows_for_line("", 80), 1);
+        assert_eq!(rows_for_line("hello", 80), 1);
+        assert_eq!(rows_for_line(&"a".repeat(80), 80), 1);
+        assert_eq!(rows_for_line(&"a".repeat(81), 80), 2);
+        assert_eq!(rows_for_line(&"a".repeat(160), 80), 2);
+        assert_eq!(rows_for_line(&"a".repeat(161), 80), 3);
+    }
+
+    #[test]
+    fn rows_for_line_ignores_ansi_escapes() {
+        let plain = "Push to create origin";
+        let styled = format!("{}", style(plain).reverse().bold().force_styling(true));
+        assert!(styled.len() > plain.len());
+        assert_eq!(rows_for_line(&styled, 80), 1);
     }
 
     #[test]
