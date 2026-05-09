@@ -5,11 +5,11 @@ authors = [""]
 edition = "2024"
 
 [dependencies]
-clap = { version = "*", features = ["derive"] }
-clap_complete = "*"
-serde = { version = "*", features = ["derive"] }
+clap.workspace = true
+clap_complete.workspace = true
+serde.workspace = true
 serde_yaml = "*"
-regex = "*"
+regex.workspace = true
 filetime = "*"
 chrono = "*"
 shellexpand = "*"

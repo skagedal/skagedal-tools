@@ -12,9 +12,9 @@ name = "simons_misc_helpers"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "*"
-clap = { version = "*", features = ["derive"] }
-crossterm = "*"
+anyhow.workspace = true
+clap.workspace = true
+crossterm.workspace = true
 semver = "*"
-serde = { version = "*", features = ["derive"] }
-serde_json = "*"
+serde.workspace = true
+serde_json.workspace = true

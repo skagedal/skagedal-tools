@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "assistant",
+    "cloudwatch-insights",
+    "gh-pr",
+    "git-branch-assistant",
+    "git-dirty-checker",
+    "intellij-patch",
+    "log-jsonify",
+    "log-viewer",
+    "package-json-merge",
+    "protobuf-text-to-json",
+    "simons-misc-helpers",
+    "sync-brewfile",
+    "tracker",
+    "x-java-home",
+]
+
+[workspace.dependencies]
+anyhow = "*"
+clap = { version = "*", features = ["derive"] }
+clap_complete = "*"
+crossterm = "*"
+regex = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+tempfile = "*"
+toml = "*"

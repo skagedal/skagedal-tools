@@ -17,15 +17,15 @@ default = []
 web = ["dep:include_dir", "dep:tao", "dep:wry"]
 
 [dependencies]
-anyhow = "1"
+anyhow.workspace = true
 base64 = "0.22"
-clap = { version = "4", features = ["derive"] }
-crossterm = "0.28"
+clap.workspace = true
+crossterm.workspace = true
 include_dir = { version = "0.7", optional = true }
 ratatui = "0.29"
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 shell-escape = "0.1"
 tao = { version = "0.35", optional = true }
-toml = "0.8"
+toml.workspace = true
 wry = { version = "0.55", optional = true }

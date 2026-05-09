@@ -8,13 +8,13 @@ default = []
 timings = []
 
 [dependencies]
-anyhow = "*"
-clap = { version = "*", features = ["derive"] }
+anyhow.workspace = true
+clap.workspace = true
 console = "*"
 dialoguer = "*"
 rayon = "*"
-serde = { version = "*", features = ["derive"] }
-serde_json = "*"
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
-tempfile = "*"
+tempfile.workspace = true

@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "*", features = ["derive"] }
+clap.workspace = true
 rayon = "1.10"
 ratatui = "0.29"
-crossterm = "0.28"
+crossterm.workspace = true
 filetime = "0.2"
 dirs = "5.0"

@@ -16,8 +16,8 @@ name = "mock-git"
 path = "src/bin/mock-git.rs"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap.workspace = true
 opener = "0.7"
 
 [dev-dependencies]
-tempfile = "3"
+tempfile.workspace = true

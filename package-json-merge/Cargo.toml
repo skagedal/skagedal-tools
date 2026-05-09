@@ -8,11 +8,11 @@ name = "package-json-merge"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1"
-clap = { version = "4", features = ["derive"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 node-semver = "2"
 
 [dev-dependencies]
-tempfile = "3"
+tempfile.workspace = true

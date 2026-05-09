@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "*", features = ["derive"] }
-clap_complete = "*"
+clap.workspace = true
+clap_complete.workspace = true
 chrono = "*"
 # TODO: replace with etcetera
 directories = "*"
 num-traits = "*"
-regex = "*"
-serde = { version = "*", features = ["derive"] }
+regex.workspace = true
+serde.workspace = true
 temp-dir = "*"
-toml = "*"
+toml.workspace = true
 etcetera = "*"
