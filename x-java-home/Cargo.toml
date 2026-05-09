@@ -4,8 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-plist = "1.7"
-serde.workspace = true
-serde_json.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+plist.workspace = true
+serde.workspace = true
+serde_json.workspace = true

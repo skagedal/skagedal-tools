@@ -4,15 +4,15 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+chrono.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
-serde.workspace = true
-serde_yaml_ng = "*"
+dirs.workspace = true
+filetime.workspace = true
+flexi_logger.workspace = true
+log.workspace = true
+once_cell.workspace = true
 regex.workspace = true
-filetime = "*"
-chrono = "*"
-shellexpand = "*"
-dirs = "*"
-flexi_logger = "*"
-log = "*"
-once_cell = "*"
+serde.workspace = true
+serde_yaml_ng.workspace = true
+shellexpand.workspace = true

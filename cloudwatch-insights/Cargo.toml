@@ -10,18 +10,18 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-cloudwatchlogs = "1"
-aws-sdk-sts = "1"
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+aws-config.workspace = true
+aws-sdk-cloudwatchlogs.workspace = true
+aws-sdk-sts.workspace = true
+chrono.workspace = true
 clap.workspace = true
-dirs = "5"
-indexmap = { version = "2", features = ["serde"] }
+dirs.workspace = true
+indexmap.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
-thiserror = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "io-util", "io-std", "time"] }
+thiserror.workspace = true
+tokio.workspace = true
 toml = { workspace = true, features = ["preserve_order"] }
 
 [dev-dependencies]

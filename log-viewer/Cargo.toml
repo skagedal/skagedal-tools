@@ -18,14 +18,14 @@ web = ["dep:include_dir", "dep:tao", "dep:wry"]
 
 [dependencies]
 anyhow.workspace = true
-base64 = "0.22"
+base64.workspace = true
 clap.workspace = true
 crossterm.workspace = true
-include_dir = { version = "0.7", optional = true }
+include_dir = { workspace = true, optional = true }
 ratatui.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
-shell-escape = "0.1"
-tao = { version = "0.35", optional = true }
+shell-escape.workspace = true
+tao = { workspace = true, optional = true }
 toml.workspace = true
-wry = { version = "0.55", optional = true }
+wry = { workspace = true, optional = true }

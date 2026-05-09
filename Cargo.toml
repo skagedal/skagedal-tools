@@ -20,14 +20,49 @@ members = [
 [workspace.package]
 edition = "2024"
 
+# Every dep used by any member is declared here so this file doubles as
+# an inventory of what's used across all the tools. Members opt in via
+# `dep.workspace = true` in their own [dependencies] — that's what
+# determines the per-crate dep graph and binary size; entries listed
+# here but unused by every member don't get compiled.
 [workspace.dependencies]
 anyhow = "*"
+aws-config = { version = "*", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatchlogs = "*"
+aws-sdk-sts = "*"
+base64 = "*"
+chrono = { version = "*", default-features = false, features = ["clock", "serde"] }
 clap = { version = "*", features = ["derive"] }
 clap_complete = "*"
+console = "*"
 crossterm = "*"
+dialoguer = "*"
+directories = "*"
+dirs = "*"
+filetime = "*"
+flexi_logger = "*"
+include_dir = "*"
+indexmap = { version = "*", features = ["serde"] }
+log = "*"
+node-semver = "*"
+num-traits = "*"
+once_cell = "*"
+opener = "*"
+plist = "*"
 ratatui = "*"
+rayon = "*"
 regex = "*"
+semver = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+serde_yaml_ng = "*"
+shell-escape = "*"
+shellexpand = "*"
+tao = "*"
+temp-dir = "*"
 tempfile = "*"
+thiserror = "*"
+tokio = { version = "*", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "io-util", "io-std", "time"] }
 toml = "*"
+wry = "*"
+xmltree = { version = "*", features = ["attribute-order"] }

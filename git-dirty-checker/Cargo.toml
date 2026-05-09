@@ -5,8 +5,8 @@ edition.workspace = true
 
 [dependencies]
 clap.workspace = true
-rayon = "1.10"
-ratatui.workspace = true
 crossterm.workspace = true
-filetime = "0.2"
-dirs = "5.0"
+dirs.workspace = true
+filetime.workspace = true
+ratatui.workspace = true
+rayon.workspace = true

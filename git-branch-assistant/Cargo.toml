@@ -10,9 +10,9 @@ timings = []
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
-console = "*"
-dialoguer = "*"
-rayon = "*"
+console.workspace = true
+dialoguer.workspace = true
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -17,7 +17,7 @@ path = "src/bin/mock-git.rs"
 
 [dependencies]
 clap.workspace = true
-opener = "0.7"
+opener.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
