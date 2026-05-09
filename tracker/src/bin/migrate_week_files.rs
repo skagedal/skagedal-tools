@@ -23,6 +23,9 @@ use std::fs;
 use std::path::PathBuf;
 use tracker::paths::TrackerDirs;
 
+/// A pending rename: (old path, new path, old filename, new filename).
+type Migration = (PathBuf, PathBuf, String, String);
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let dry_run = args.len() > 1 && args[1] == "--dry-run";
@@ -81,21 +84,21 @@ fn main() {
         };
 
         // Parse filename: YYYY-WWW.txt (old format with %W)
-        if let Some((year, week_w)) = parse_old_format(filename) {
-            if let Some(target_date) = representative_date(year, week_w) {
-                // Format with %G (ISO week year) and %V (ISO week) so the year and week stay
-                // consistent across year boundaries.
-                let new_filename = target_date.format("%G-W%V.txt").to_string();
-                let new_path = week_files_dir.join(&new_filename);
+        if let Some((year, week_w)) = parse_old_format(filename)
+            && let Some(target_date) = representative_date(year, week_w)
+        {
+            // Format with %G (ISO week year) and %V (ISO week) so the year and week stay
+            // consistent across year boundaries.
+            let new_filename = target_date.format("%G-W%V.txt").to_string();
+            let new_path = week_files_dir.join(&new_filename);
 
-                if filename != new_filename {
-                    migrations.push((
-                        path.clone(),
-                        new_path,
-                        filename.to_string(),
-                        new_filename,
-                    ));
-                }
+            if filename != new_filename {
+                migrations.push((
+                    path.clone(),
+                    new_path,
+                    filename.to_string(),
+                    new_filename,
+                ));
             }
         }
     }
@@ -262,8 +265,8 @@ fn parse_old_format(filename: &str) -> Option<(i32, u32)> {
 /// Topologically order renames so we never rename onto a file that's still a pending source.
 /// Returns Err with the names of files in a cycle if one exists (no valid order possible).
 fn order_migrations(
-    migrations: Vec<(PathBuf, PathBuf, String, String)>,
-) -> Result<Vec<(PathBuf, PathBuf, String, String)>, Vec<String>> {
+    migrations: Vec<Migration>,
+) -> Result<Vec<Migration>, Vec<String>> {
     let mut remaining = migrations;
     let mut ordered = Vec::with_capacity(remaining.len());
 
