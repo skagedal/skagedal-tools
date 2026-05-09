@@ -1,14 +1,13 @@
 [package]
 name = "assistant"
 version = "0.1.0"
-authors = [""]
 edition.workspace = true
 
 [dependencies]
 clap.workspace = true
 clap_complete.workspace = true
 serde.workspace = true
-serde_yaml = "*"
+serde_yaml_ng = "*"
 regex.workspace = true
 filetime = "*"
 chrono = "*"

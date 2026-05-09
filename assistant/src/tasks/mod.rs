@@ -13,5 +13,5 @@ pub struct Task {
 
 pub fn read_tasks(tasks_file: PathBuf) -> Vec<Task> {
     let file = std::fs::File::open(tasks_file).expect("Could not open tasks.yml");
-    serde_yaml::from_reader(file).expect("Could not read tasks.yml")
+    serde_yaml_ng::from_reader(file).expect("Could not read tasks.yml")
 }
