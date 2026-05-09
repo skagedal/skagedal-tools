@@ -339,12 +339,29 @@ impl BranchAction {
             BranchAction::Push => "Push to origin",
             BranchAction::PushCreatingOrigin => "Push to create origin",
             BranchAction::CreatePr => "Push and create pull request",
-            BranchAction::Rebase => "Rebase onto origin",
+            BranchAction::Rebase => "Forward",
             BranchAction::Delete => "Delete it",
             BranchAction::DeleteWorktreeAndBranch => "Delete worktree and branch",
             BranchAction::Log => "Show git log",
             BranchAction::Shell => "Exit to shell with branch checked out",
             BranchAction::Nothing => "Do nothing",
+        }
+    }
+
+    /// Whether this action is meaningful when applied to many branches at
+    /// once. Single-branch-only actions (showing a log, dropping into a
+    /// shell with a branch checked out) are still surfaced in bulk mode but
+    /// only operate on the branch under the cursor.
+    pub fn is_bulk_safe(&self) -> bool {
+        match self {
+            BranchAction::Push
+            | BranchAction::PushCreatingOrigin
+            | BranchAction::CreatePr
+            | BranchAction::Rebase
+            | BranchAction::Delete
+            | BranchAction::DeleteWorktreeAndBranch
+            | BranchAction::Nothing => true,
+            BranchAction::Log | BranchAction::Shell => false,
         }
     }
 }

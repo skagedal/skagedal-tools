@@ -91,46 +91,63 @@ impl GitReposBulkService {
 
                 let title = state_label(&group[0].branch);
                 let entries: Vec<String> = group.iter().map(|b| b.display()).collect();
-                let action_labels: Vec<String> = actions
+                let action_specs: Vec<bulk_picker::ActionSpec> = actions
                     .iter()
-                    .map(|a| a.description().to_string())
+                    .map(|a| bulk_picker::ActionSpec {
+                        label: a.description().to_string(),
+                        bulk_safe: a.is_bulk_safe(),
+                    })
                     .collect();
 
-                let outcome = bulk_picker::run(title, &entries, &action_labels)?;
-                let (selected_indices, action_index) = match outcome {
+                let outcome = bulk_picker::run(title, &entries, &action_specs)?;
+                let (target_indices, action_index) = match outcome {
                     bulk_picker::BulkOutcome::Cancelled => break,
                     bulk_picker::BulkOutcome::Confirmed {
-                        selected_indices,
+                        target_indices,
                         action_index,
-                    } => (selected_indices, action_index),
+                    } => (target_indices, action_index),
                 };
 
-                if selected_indices.is_empty() {
+                if target_indices.is_empty() {
                     eprintln!("No branches selected; skipping group.");
                     break;
                 }
 
                 let action = actions[action_index];
                 let cleaner = GitCleaner::new(DialoguerPrompt);
+                if action.is_bulk_safe() {
+                    eprintln!(
+                        "Applying \"{}\" to {} branch{}...",
+                        action.description(),
+                        target_indices.len(),
+                        if target_indices.len() == 1 { "" } else { "es" }
+                    );
+                } else {
+                    let bulk_branch = &group[target_indices[0]];
+                    eprintln!("{} on {}...", action.description(), bulk_branch.display());
+                }
 
-                for &idx in &selected_indices {
+                let mut handled: std::collections::HashSet<usize> =
+                    std::collections::HashSet::new();
+                for &idx in &target_indices {
                     let bulk_branch = &group[idx];
                     let repo = GitRepo::new(bulk_branch.repo_path.clone());
-                    eprintln!("{}: {}", bulk_branch.display(), action.description());
+                    eprintln!("  {}: {}", bulk_branch.display(), action.description());
                     match cleaner.perform_action(&repo, &bulk_branch.branch, action)? {
-                        ActionResult::Handled | ActionResult::NotHandled => {}
+                        ActionResult::Handled => {
+                            handled.insert(idx);
+                        }
+                        ActionResult::NotHandled => {}
                         ActionResult::ExitToShell(path) => {
                             return Ok(TaskResult::ShellActionRequired(path));
                         }
                     }
                 }
 
-                let selected_set: std::collections::HashSet<usize> =
-                    selected_indices.into_iter().collect();
                 group = group
                     .into_iter()
                     .enumerate()
-                    .filter(|(idx, _)| !selected_set.contains(idx))
+                    .filter(|(idx, _)| !handled.contains(idx))
                     .map(|(_, b)| b)
                     .collect();
             }

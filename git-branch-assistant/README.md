@@ -147,6 +147,11 @@ Upstream is set, but it is gone (3/3 selected)
 - Enter: apply the chosen action to every selected branch
 - Esc / `q`: skip the rest of this state group
 
+A few actions only make sense for one branch at a time (`Show git log`,
+`Exit to shell with branch checked out`). When such an action is highlighted,
+the checkboxes disappear and Enter applies the action to just the branch under
+the cursor. Switching back to a bulk action restores the previous selections.
+
 After confirming, selected branches are processed in turn. If any branches were left unselected they remain in the list and the picker re-opens; otherwise the flow moves on to the next state group.
 
 ---

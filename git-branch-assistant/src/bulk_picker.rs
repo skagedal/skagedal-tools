@@ -1,6 +1,4 @@
 use std::io::Write;
-use std::sync::mpsc;
-use std::thread;
 
 use anyhow::Result;
 use console::{Key, Term, measure_text_width, style};
@@ -9,9 +7,15 @@ pub fn stderr_is_terminal() -> bool {
     Term::stderr().is_term()
 }
 
+#[derive(Clone)]
+pub struct ActionSpec {
+    pub label: String,
+    pub bulk_safe: bool,
+}
+
 pub enum BulkOutcome {
     Confirmed {
-        selected_indices: Vec<usize>,
+        target_indices: Vec<usize>,
         action_index: usize,
     },
     Cancelled,
@@ -20,28 +24,28 @@ pub enum BulkOutcome {
 struct State {
     title: String,
     entries: Vec<String>,
-    actions: Vec<String>,
+    actions: Vec<ActionSpec>,
     checked: Vec<bool>,
     cursor: usize,
     action_index: usize,
     rendered_rows: usize,
 }
 
-pub fn run(title: &str, entries: &[String], actions: &[String]) -> Result<BulkOutcome> {
+impl State {
+    fn current_is_bulk(&self) -> bool {
+        self.actions
+            .get(self.action_index)
+            .map(|a| a.bulk_safe)
+            .unwrap_or(true)
+    }
+}
+
+pub fn run(title: &str, entries: &[String], actions: &[ActionSpec]) -> Result<BulkOutcome> {
     if entries.is_empty() || actions.is_empty() {
         return Ok(BulkOutcome::Cancelled);
     }
 
     let mut term = Term::stderr();
-    let (tx, rx) = mpsc::channel::<Key>();
-    let key_term = Term::stderr();
-    let handle = thread::spawn(move || {
-        while let Ok(key) = key_term.read_key() {
-            if tx.send(key).is_err() {
-                break;
-            }
-        }
-    });
 
     let mut state = State {
         title: title.to_string(),
@@ -57,21 +61,25 @@ pub fn run(title: &str, entries: &[String], actions: &[String]) -> Result<BulkOu
 
     let outcome = loop {
         render(&mut term, &mut state)?;
-        let key = match rx.recv() {
+        let key = match term.read_key() {
             Ok(key) => key,
             Err(_) => break BulkOutcome::Cancelled,
         };
         match handle_key(&mut state, key) {
             KeyResult::Continue => {}
             KeyResult::Confirm => {
-                let selected_indices: Vec<usize> = state
-                    .checked
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, &checked)| if checked { Some(idx) } else { None })
-                    .collect();
+                let target_indices = if state.current_is_bulk() {
+                    state
+                        .checked
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(idx, &checked)| if checked { Some(idx) } else { None })
+                        .collect()
+                } else {
+                    vec![state.cursor]
+                };
                 break BulkOutcome::Confirmed {
-                    selected_indices,
+                    target_indices,
                     action_index: state.action_index,
                 };
             }
@@ -81,8 +89,6 @@ pub fn run(title: &str, entries: &[String], actions: &[String]) -> Result<BulkOu
 
     clear_rendered(&mut term, state.rendered_rows)?;
     let _ = term.show_cursor();
-    drop(rx);
-    let _ = handle.join();
     Ok(outcome)
 }
 
@@ -119,15 +125,19 @@ fn handle_key(state: &mut State, key: Key) -> KeyResult {
             KeyResult::Continue
         }
         Key::Char(' ') => {
-            if let Some(slot) = state.checked.get_mut(state.cursor) {
+            if state.current_is_bulk()
+                && let Some(slot) = state.checked.get_mut(state.cursor)
+            {
                 *slot = !*slot;
             }
             KeyResult::Continue
         }
         Key::Char('a') => {
-            let all_selected = state.checked.iter().all(|c| *c);
-            for c in state.checked.iter_mut() {
-                *c = !all_selected;
+            if state.current_is_bulk() {
+                let all_selected = state.checked.iter().all(|c| *c);
+                for c in state.checked.iter_mut() {
+                    *c = !all_selected;
+                }
             }
             KeyResult::Continue
         }
@@ -146,24 +156,41 @@ fn render(term: &mut Term, state: &mut State) -> Result<()> {
 
     let mut lines: Vec<String> = Vec::new();
 
-    let selected_count = state.checked.iter().filter(|c| **c).count();
-    lines.push(format!(
-        "{} ({}/{} selected)",
-        style(&state.title).bold(),
-        selected_count,
-        state.entries.len()
-    ));
-    lines.push(
-        "  \u{2191}/\u{2193} j/k navigate, space toggle, a toggle all, \u{2190}/\u{2192} h/l action, Enter confirm, Esc cancel".to_string(),
-    );
+    let bulk = state.current_is_bulk();
+    let header = if bulk {
+        let selected_count = state.checked.iter().filter(|c| **c).count();
+        format!(
+            "{} ({}/{} selected)",
+            style(&state.title).bold(),
+            selected_count,
+            state.entries.len()
+        )
+    } else {
+        format!(
+            "{} ({}, applies to branch under cursor)",
+            style(&state.title).bold(),
+            state.entries.len()
+        )
+    };
+    lines.push(header);
+    let hint = if bulk {
+        "  \u{2191}/\u{2193} j/k navigate, space toggle, a toggle all, \u{2190}/\u{2192} h/l action, Enter confirm, Esc cancel"
+    } else {
+        "  \u{2191}/\u{2193} j/k navigate, \u{2190}/\u{2192} h/l action, Enter confirm, Esc cancel"
+    };
+    lines.push(hint.to_string());
 
     let max_visible = term_height.saturating_sub(5).max(1);
     let (top, bottom) = visible_window(state.cursor, state.entries.len(), max_visible);
 
     for idx in top..bottom {
         let cursor_marker = if idx == state.cursor { ">" } else { " " };
-        let check = if state.checked[idx] { "[x]" } else { "[ ]" };
-        let line = format!("{cursor_marker} {check} {}", state.entries[idx]);
+        let line = if bulk {
+            let check = if state.checked[idx] { "[x]" } else { "[ ]" };
+            format!("{cursor_marker} {check} {}", state.entries[idx])
+        } else {
+            format!("{cursor_marker} {}", state.entries[idx])
+        };
         if idx == state.cursor {
             lines.push(format!("{}", style(line).reverse()));
         } else {
@@ -179,10 +206,10 @@ fn render(term: &mut Term, state: &mut State) -> Result<()> {
         if idx == state.action_index {
             action_line.push_str(&format!(
                 "{}",
-                style(format!("[{action}]")).reverse().bold()
+                style(format!("[{}]", action.label)).reverse().bold()
             ));
         } else {
-            action_line.push_str(&format!(" {action} "));
+            action_line.push_str(&format!(" {} ", action.label));
         }
     }
     lines.push(action_line);
@@ -236,10 +263,21 @@ mod tests {
     use super::*;
 
     fn state(entries: usize, actions: usize) -> State {
+        state_with_bulk(entries, vec![true; actions])
+    }
+
+    fn state_with_bulk(entries: usize, bulk_flags: Vec<bool>) -> State {
         State {
             title: "test".into(),
             entries: (0..entries).map(|i| format!("entry-{i}")).collect(),
-            actions: (0..actions).map(|i| format!("action-{i}")).collect(),
+            actions: bulk_flags
+                .into_iter()
+                .enumerate()
+                .map(|(i, bulk_safe)| ActionSpec {
+                    label: format!("action-{i}"),
+                    bulk_safe,
+                })
+                .collect(),
             checked: vec![true; entries],
             cursor: 0,
             action_index: 0,
@@ -311,6 +349,41 @@ mod tests {
     fn escape_yields_cancel() {
         let mut s = state(2, 2);
         assert!(matches!(handle_key(&mut s, Key::Escape), KeyResult::Cancel));
+    }
+
+    #[test]
+    fn space_is_ignored_when_action_is_single_branch() {
+        let mut s = state_with_bulk(3, vec![true, false]);
+        s.action_index = 1;
+        assert!(s.checked[0]);
+        let _ = handle_key(&mut s, Key::Char(' '));
+        assert!(s.checked[0]);
+    }
+
+    #[test]
+    fn toggle_all_is_ignored_when_action_is_single_branch() {
+        let mut s = state_with_bulk(3, vec![true, false]);
+        s.action_index = 1;
+        let _ = handle_key(&mut s, Key::Char('a'));
+        assert!(s.checked.iter().all(|c| *c));
+    }
+
+    #[test]
+    fn switching_to_bulk_action_preserves_selections() {
+        let mut s = state_with_bulk(3, vec![true, false, true]);
+        let _ = handle_key(&mut s, Key::Char(' '));
+        assert!(!s.checked[0]);
+        let _ = handle_key(&mut s, Key::ArrowRight);
+        assert!(!s.current_is_bulk());
+        let _ = handle_key(&mut s, Key::Char(' '));
+        assert!(!s.checked[0]);
+        let _ = handle_key(&mut s, Key::Char('a'));
+        assert!(!s.checked[0]);
+        let _ = handle_key(&mut s, Key::ArrowRight);
+        assert!(s.current_is_bulk());
+        assert!(!s.checked[0]);
+        assert!(s.checked[1]);
+        assert!(s.checked[2]);
     }
 
     #[test]
