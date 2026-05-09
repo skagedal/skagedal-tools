@@ -22,7 +22,7 @@ base64 = "0.22"
 clap.workspace = true
 crossterm.workspace = true
 include_dir = { version = "0.7", optional = true }
-ratatui = "0.29"
+ratatui.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 shell-escape = "0.1"

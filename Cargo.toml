@@ -22,6 +22,7 @@ anyhow = "*"
 clap = { version = "*", features = ["derive"] }
 clap_complete = "*"
 crossterm = "*"
+ratatui = "*"
 regex = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"

@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 clap.workspace = true
 rayon = "1.10"
-ratatui = "0.29"
+ratatui.workspace = true
 crossterm.workspace = true
 filetime = "0.2"
 dirs = "5.0"

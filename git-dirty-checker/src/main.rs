@@ -307,8 +307,8 @@ fn run_interactive(repos: Vec<PathBuf>) -> Option<PathBuf> {
     result.ok().flatten()
 }
 
-fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
 ) -> io::Result<Option<PathBuf>> {
     loop {
