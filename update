@@ -15,7 +15,35 @@ main() {
     for tool in "${MAVEN_TOOLS[@]}"; do
         update-maven "$tool"
     done
+    echo "==> Dependency changes"
+    show-dependency-changes
     echo "==> Done"
+}
+
+# Capture git-pkgs output sequentially, then feed it into the formatter only
+# if we got JSON. Avoids two failure modes:
+#   * Piping directly runs both processes concurrently, so a `git pkgs diff`
+#     failure surfaces alongside a confusing JSON-parse error from the
+#     formatter (pipefail acts on exit status, not on stderr ordering).
+#   * `git pkgs diff` doesn't currently resolve refs in git worktrees and
+#     also prints "No dependency changes." as plain text even with
+#     --format=json, so neither case should reach the formatter.
+#
+# Once https://github.com/git-pkgs/git-pkgs/pull/194 lands, the worktree
+# branch of this can be dropped and we can go back to a simple pipe.
+show-dependency-changes() {
+    cd "$SCRIPT_DIR"
+    local diff_json
+    if ! diff_json="$(git pkgs diff --format=json 2>&1)"; then
+        echo "(git pkgs diff failed — skipping)"
+        printf '%s\n' "$diff_json" | sed 's/^/  /'
+        return 0
+    fi
+    if [[ "$diff_json" == "{"* ]]; then
+        printf '%s\n' "$diff_json" | simons-misc-helpers format-dependency-changes
+    else
+        printf '%s\n' "$diff_json"
+    fi
 }
 
 main "$@"
