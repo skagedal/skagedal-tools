@@ -18,6 +18,8 @@ path = "src/bin/mock-git.rs"
 [dependencies]
 clap.workspace = true
 opener.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile.workspace = true

@@ -1,4 +1,5 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use serde_json::Value;
 use std::io::IsTerminal;
 use std::process::{Command, Stdio, exit};
 
@@ -30,17 +31,37 @@ struct DefaultArgs {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Print the raw JSON of the PR's issue comments from the GitHub API
-    Comments,
+    /// Print the PR's comments (both conversation and inline review comments).
+    Comments(CommentsArgs),
     /// Mark the PR as ready for review
     MarkReady,
+}
+
+#[derive(Args)]
+struct CommentsArgs {
+    /// Output format. Text is human/agent-readable; json dumps the raw API
+    /// responses in a single container object.
+    #[arg(long, value_enum, default_value_t = CommentsFormat::Text)]
+    format: CommentsFormat,
+
+    /// Include comments belonging to resolved review threads (hidden by
+    /// default in text format). Has no effect on --format json, which always
+    /// includes everything.
+    #[arg(long)]
+    resolved: bool,
+}
+
+#[derive(ValueEnum, Clone, Copy)]
+enum CommentsFormat {
+    Text,
+    Json,
 }
 
 fn main() {
     let cli = Cli::parse();
     match cli.command {
         None => default_command(cli.default_args),
-        Some(Commands::Comments) => comments_command(),
+        Some(Commands::Comments(args)) => comments_command(args),
         Some(Commands::MarkReady) => mark_ready_command(),
     }
 }
@@ -146,7 +167,7 @@ fn default_branch() -> Option<String> {
     if name.is_empty() { None } else { Some(name) }
 }
 
-fn comments_command() {
+fn comments_command(args: CommentsArgs) {
     let number = match find_pr_number() {
         Some(n) => n,
         None => {
@@ -155,18 +176,222 @@ fn comments_command() {
         }
     };
 
-    let path = format!("repos/{{owner}}/{{repo}}/issues/{}/comments", number);
-    let api_args = ["api", path.as_str()];
-    echo_gh(&api_args);
-    let status = Command::new("gh")
-        .args(api_args)
-        .status()
+    // One GraphQL call returns both conversation comments and review
+    // threads (the latter pre-grouped, with their `isResolved` state). The
+    // REST endpoints `/issues/N/comments` and `/pulls/N/comments` would
+    // each return half of this, with no resolved state — so GraphQL is
+    // both simpler and more complete.
+    let response = fetch_pr_comments(number);
+
+    match args.format {
+        CommentsFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&response).unwrap_or_else(|e| {
+                    eprintln!("Failed to serialize JSON: {}", e);
+                    exit(1);
+                })
+            );
+        }
+        CommentsFormat::Text => {
+            print_text(&response, args.resolved);
+        }
+    }
+}
+
+fn fetch_pr_comments(number: u64) -> Value {
+    // first: 100 is GitHub's GraphQL max page size. We don't paginate — PRs
+    // with more comments are vanishingly rare; bump if that changes.
+    let query = "query($owner: String!, $repo: String!, $number: Int!) { \
+        repository(owner: $owner, name: $repo) { \
+            pullRequest(number: $number) { \
+                comments(first: 100) { \
+                    nodes { \
+                        databaseId \
+                        author { login } \
+                        createdAt \
+                        body \
+                    } \
+                } \
+                reviewThreads(first: 100) { \
+                    nodes { \
+                        isResolved \
+                        isOutdated \
+                        path \
+                        line \
+                        originalLine \
+                        comments(first: 100) { \
+                            nodes { \
+                                databaseId \
+                                author { login } \
+                                createdAt \
+                                body \
+                            } \
+                        } \
+                    } \
+                } \
+            } \
+        } \
+    }";
+
+    let name_with_owner = match name_with_owner() {
+        Some(s) => s,
+        None => {
+            eprintln!("Failed to determine repository owner/name");
+            exit(1);
+        }
+    };
+    let (owner, repo) = match name_with_owner.split_once('/') {
+        Some((o, r)) => (o.to_string(), r.to_string()),
+        None => {
+            eprintln!("Unexpected nameWithOwner format: {}", name_with_owner);
+            exit(1);
+        }
+    };
+
+    let owner_arg = format!("owner={}", owner);
+    let repo_arg = format!("repo={}", repo);
+    let number_arg = format!("number={}", number);
+    let query_arg = format!("query={}", query);
+    fetch_json(&[
+        "api",
+        "graphql",
+        "-f",
+        &owner_arg,
+        "-f",
+        &repo_arg,
+        "-F",
+        &number_arg,
+        "-f",
+        &query_arg,
+    ])
+}
+
+fn name_with_owner() -> Option<String> {
+    let output = run_gh(
+        &[
+            "repo",
+            "view",
+            "--json",
+            "nameWithOwner",
+            "--jq",
+            ".nameWithOwner",
+        ],
+        true,
+    )?;
+    if !output.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
+fn fetch_json(args: &[&str]) -> Value {
+    echo_gh(args);
+    let output = Command::new("gh")
+        .args(args)
+        .stderr(Stdio::inherit())
+        .output()
         .unwrap_or_else(|e| {
             eprintln!("Failed to run gh: {}", e);
             exit(1);
         });
-    if !status.success() {
+    if !output.status.success() {
+        exit(output.status.code().unwrap_or(1));
+    }
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
+        eprintln!("Failed to parse JSON from gh: {}", e);
         exit(1);
+    })
+}
+
+fn print_text(response: &Value, show_resolved: bool) {
+    let empty: Vec<Value> = Vec::new();
+    let convo = response
+        .pointer("/data/repository/pullRequest/comments/nodes")
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
+    let threads = response
+        .pointer("/data/repository/pullRequest/reviewThreads/nodes")
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
+
+    println!("=== Conversation comments ({}) ===", convo.len());
+    if convo.is_empty() {
+        println!();
+        println!("(none)");
+    }
+    for c in convo {
+        println!();
+        print_comment_header(c, "", false);
+        print_body(c, "");
+    }
+
+    println!();
+
+    let is_resolved = |t: &Value| t.get("isResolved").and_then(Value::as_bool).unwrap_or(false);
+    let visible: Vec<&Value> = threads
+        .iter()
+        .filter(|t| show_resolved || !is_resolved(t))
+        .collect();
+    let hidden = threads.len() - visible.len();
+
+    let suffix = if hidden > 0 && !show_resolved {
+        format!(", {} resolved hidden", hidden)
+    } else {
+        String::new()
+    };
+    println!("=== Review threads ({}{}) ===", visible.len(), suffix);
+
+    if visible.is_empty() {
+        println!();
+        println!("(none)");
+    }
+
+    for thread in &visible {
+        let path = thread.get("path").and_then(Value::as_str).unwrap_or("?");
+        let line = thread
+            .get("line")
+            .and_then(Value::as_i64)
+            .or_else(|| thread.get("originalLine").and_then(Value::as_i64));
+        let location = match line {
+            Some(l) => format!("{}:{}", path, l),
+            None => path.to_string(),
+        };
+        let res_tag = if is_resolved(thread) { " [RESOLVED]" } else { "" };
+
+        println!();
+        println!("— {}{}", location, res_tag);
+
+        let comments = thread
+            .pointer("/comments/nodes")
+            .and_then(Value::as_array)
+            .unwrap_or(&empty);
+        for (i, c) in comments.iter().enumerate() {
+            if i > 0 {
+                println!();
+            }
+            let indent = if i == 0 { "" } else { "  " };
+            print_comment_header(c, indent, i > 0);
+            print_body(c, indent);
+        }
+    }
+}
+
+fn print_comment_header(c: &Value, indent: &str, is_reply: bool) {
+    let author = c
+        .pointer("/author/login")
+        .and_then(Value::as_str)
+        .unwrap_or("ghost");
+    let created = c.get("createdAt").and_then(Value::as_str).unwrap_or("?");
+    let suffix = if is_reply { " (reply)" } else { "" };
+    println!("{}[{}] @{}{}:", indent, created, author, suffix);
+}
+
+fn print_body(c: &Value, indent: &str) {
+    let body = c.get("body").and_then(Value::as_str).unwrap_or("");
+    for line in body.lines() {
+        println!("{}{}", indent, line);
     }
 }
 

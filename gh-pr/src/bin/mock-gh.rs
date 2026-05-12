@@ -13,7 +13,10 @@
 //! - `MOCK_GH_CREATE_URL`     — URL printed by `gh pr create`. Defaults to a
 //!   placeholder if unset.
 //! - `MOCK_GH_CREATE_FAIL`    — if set, `gh pr create` exits non-zero.
-//! - `MOCK_GH_COMMENTS_JSON`  — body returned by `gh api`. Defaults to `[]`.
+//! - `MOCK_GH_NAME_WITH_OWNER` — `gh repo view --json nameWithOwner --jq
+//!   .nameWithOwner` prints this. Defaults to `me/repo`.
+//! - `MOCK_GH_PR_COMMENTS_JSON` — body returned by `gh api graphql` for the
+//!   PR-comments query. Defaults to an empty result envelope.
 
 use std::env;
 use std::fs::OpenOptions;
@@ -93,6 +96,10 @@ fn repo_view(args: &[String]) {
                 exit(1);
             }
         },
+        Some(".nameWithOwner") => {
+            let name = env::var("MOCK_GH_NAME_WITH_OWNER").unwrap_or_else(|_| "me/repo".to_string());
+            println!("{}", name);
+        }
         other => {
             eprintln!("mock-gh: unsupported --jq for `repo view`: {:?}", other);
             exit(2);
@@ -101,11 +108,24 @@ fn repo_view(args: &[String]) {
 }
 
 fn api(args: &[String]) {
-    if args.get(1).is_none() {
+    let path = args
+        .iter()
+        .skip(1)
+        .find(|a| !a.starts_with('-'))
+        .map(String::as_str)
+        .unwrap_or("");
+    if path.is_empty() {
         eprintln!("mock-gh: `api` requires a path argument");
         exit(2);
     }
-    let body = env::var("MOCK_GH_COMMENTS_JSON").unwrap_or_else(|_| "[]".to_string());
+    let body = if path == "graphql" {
+        env::var("MOCK_GH_PR_COMMENTS_JSON").unwrap_or_else(|_| {
+            r#"{"data":{"repository":{"pullRequest":{"comments":{"nodes":[]},"reviewThreads":{"nodes":[]}}}}}"#.to_string()
+        })
+    } else {
+        eprintln!("mock-gh: unsupported api path: {}", path);
+        exit(2);
+    };
     println!("{}", body);
 }
 

@@ -204,26 +204,121 @@ fn create_skipped_when_pr_already_exists() {
     assert!(!log.contains("pr create"), "log: {log}");
 }
 
+const SAMPLE_PR_COMMENTS_JSON: &str = r#"{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "comments": {
+          "nodes": [
+            {"databaseId": 1, "author": {"login": "alice"}, "createdAt": "2026-05-01T14:23:00Z", "body": "LGTM"}
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "src/foo.rs",
+              "line": 42,
+              "originalLine": 42,
+              "comments": {"nodes": [
+                {"databaseId": 100, "author": {"login": "bob"}, "createdAt": "2026-05-02T10:00:00Z", "body": "nit: rename this"}
+              ]}
+            },
+            {
+              "isResolved": true,
+              "isOutdated": false,
+              "path": "src/bar.rs",
+              "line": 7,
+              "originalLine": 7,
+              "comments": {"nodes": [
+                {"databaseId": 200, "author": {"login": "carol"}, "createdAt": "2026-05-02T11:00:00Z", "body": "old concern"}
+              ]}
+            }
+          ]
+        }
+      }
+    }
+  }
+}"#;
+
 #[test]
-fn comments_prints_api_response_for_correct_path() {
+fn comments_text_format_calls_graphql_and_hides_resolved() {
     let h = Harness::new();
     let out = h.run(
         &["comments"],
         &[
             ("MOCK_GH_PR_NUMBER", "42"),
-            ("MOCK_GH_COMMENTS_JSON", r#"[{"id":1,"body":"hi"}]"#),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_COMMENTS_JSON", SAMPLE_PR_COMMENTS_JSON),
         ],
     );
     assert_success(&out);
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout).trim(),
-        r#"[{"id":1,"body":"hi"}]"#
-    );
-    let log = h.log();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Conversation comments (1)"), "stdout: {stdout}");
+    assert!(stdout.contains("@alice"), "stdout: {stdout}");
+    assert!(stdout.contains("LGTM"), "stdout: {stdout}");
     assert!(
-        log.contains("api repos/{owner}/{repo}/issues/42/comments"),
-        "log: {log}"
+        stdout.contains("Review threads (1, 1 resolved hidden)"),
+        "stdout: {stdout}"
     );
+    assert!(stdout.contains("src/foo.rs:42"), "stdout: {stdout}");
+    assert!(stdout.contains("@bob"), "stdout: {stdout}");
+    assert!(!stdout.contains("src/bar.rs"), "stdout: {stdout}");
+    assert!(!stdout.contains("@carol"), "stdout: {stdout}");
+
+    let log = h.log();
+    assert!(log.contains("api graphql"), "log: {log}");
+    assert!(log.contains("-F number=42"), "log: {log}");
+    assert!(log.contains("-f owner=me"), "log: {log}");
+    assert!(log.contains("-f repo=repo"), "log: {log}");
+}
+
+#[test]
+fn comments_resolved_flag_shows_resolved_threads() {
+    let h = Harness::new();
+    let out = h.run(
+        &["comments", "--resolved"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_COMMENTS_JSON", SAMPLE_PR_COMMENTS_JSON),
+        ],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Review threads (2)"), "stdout: {stdout}");
+    assert!(stdout.contains("src/bar.rs:7 [RESOLVED]"), "stdout: {stdout}");
+    assert!(stdout.contains("@carol"), "stdout: {stdout}");
+}
+
+#[test]
+fn comments_json_format_emits_full_raw_response() {
+    let h = Harness::new();
+    let out = h.run(
+        &["comments", "--format", "json"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_COMMENTS_JSON", SAMPLE_PR_COMMENTS_JSON),
+        ],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("invalid JSON: {e}\n{stdout}"));
+    // Both the resolved and unresolved threads must be present — JSON is
+    // unfiltered regardless of --resolved.
+    let threads = parsed
+        .pointer("/data/repository/pullRequest/reviewThreads/nodes")
+        .and_then(serde_json::Value::as_array)
+        .expect("review threads array");
+    assert_eq!(threads.len(), 2);
+    let convo = parsed
+        .pointer("/data/repository/pullRequest/comments/nodes")
+        .and_then(serde_json::Value::as_array)
+        .expect("conversation comments array");
+    assert_eq!(convo.len(), 1);
 }
 
 #[test]

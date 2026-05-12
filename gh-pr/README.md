@@ -46,9 +46,22 @@ gh-pr --create --open
 
 ### `gh-pr comments`
 
-Prints the raw JSON returned by
-`GET /repos/{owner}/{repo}/issues/{number}/comments` for the PR. Useful for
-agents that want to consume comment data programmatically.
+Prints all comments on the PR — both the top-level conversation comments
+and the inline review comments grouped into threads. By default, comments
+in resolved review threads are hidden.
+
+Uses a single GraphQL query against `pullRequest.comments` and
+`pullRequest.reviewThreads`. (Going via REST would require two endpoints —
+`/issues/{n}/comments` for the conversation, `/pulls/{n}/comments` for
+inline comments — and resolved state still wouldn't be available, since
+the REST API doesn't expose it.)
+
+Flags:
+
+- `--format <text|json>` — defaults to `text`, a layout readable by both
+  humans and agents. `json` emits the raw GraphQL response unmodified.
+- `--resolved` — include comments belonging to resolved review threads.
+  Has no effect on `--format json`, which is always unfiltered.
 
 ### `gh-pr mark-ready`
 
