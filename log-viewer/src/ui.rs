@@ -52,6 +52,7 @@ fn event_loop(
 ) -> Result<()> {
     let mut table_state = TableState::default();
     let mut menu_state = ListState::default();
+    let mut needs_redraw = true;
     while !app.should_quit {
         // Drain new entries from the producer thread, run triggers on each.
         let new = stream.drain();
@@ -62,17 +63,27 @@ fn event_loop(
                 }
             }
             app.append_entries(new);
+            needs_redraw = true;
         }
 
-        table_state.select(Some(app.cursor_in_filtered()));
-        menu_state.select(Some(app.fields_menu.cursor));
-        terminal.draw(|f| draw(f, app, &mut table_state, &mut menu_state))?;
+        if needs_redraw {
+            table_state.select(Some(app.cursor_in_filtered()));
+            menu_state.select(Some(app.fields_menu.cursor));
+            terminal.draw(|f| draw(f, app, &mut table_state, &mut menu_state))?;
+            needs_redraw = false;
+        }
 
-        if event::poll(Duration::from_millis(100))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            handle_key(app, key);
+        if event::poll(Duration::from_millis(100))? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    handle_key(app, key);
+                    needs_redraw = true;
+                }
+                Event::Resize(_, _) => {
+                    needs_redraw = true;
+                }
+                _ => {}
+            }
         }
     }
     Ok(())
@@ -235,9 +246,9 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
         .chain(cols.iter().map(|c| Cell::from(c.name.clone())))
         .collect();
     let header = Row::new(header_cells).style(Style::default().add_modifier(Modifier::BOLD));
-    let displayed = app.filtered_indices();
-    let measured = measured_widths(app, &cols, &displayed);
-    let rows = displayed.iter().map(|&i| {
+    let measured = app.visible_widths();
+    let count = app.displayed_count();
+    let rows = (0..count).filter_map(|pos| app.displayed_at(pos)).map(|i| {
         let entry = &app.entries[i];
         let body = app.row_cells(entry).into_iter().map(Cell::from);
         let cells: Vec<Cell> = if show_gutter {
@@ -283,26 +294,6 @@ fn gutter_cell(app: &App, entry: &crate::entry::Entry) -> Cell<'static> {
         .map(|k| hash_color(&k))
         .unwrap_or(Color::Reset);
     Cell::from("█").style(Style::default().fg(color).bg(color))
-}
-
-/// Maximum content width per visible column, including the header name.
-/// One pass over the displayed entries; one entry = `entry.row_cells(...)`.
-fn measured_widths(
-    app: &App,
-    cols: &[&crate::app::ColumnState],
-    displayed: &[usize],
-) -> Vec<usize> {
-    let mut widths: Vec<usize> = cols.iter().map(|c| c.name.chars().count()).collect();
-    for &i in displayed {
-        let cells = app.row_cells(&app.entries[i]);
-        for (j, cell) in cells.iter().enumerate() {
-            let w = cell.chars().count();
-            if w > widths[j] {
-                widths[j] = w;
-            }
-        }
-    }
-    widths
 }
 
 /// Auto-size each visible column to fit its widest content (header or any
