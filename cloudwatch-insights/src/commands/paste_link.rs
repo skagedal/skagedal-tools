@@ -104,21 +104,29 @@ fn time_from_query_detail(detail: &indexmap::IndexMap<String, RisonValue>) -> Re
         return Ok(format_relative_duration(seconds));
     }
     if time_type == "ABSOLUTE" {
-        let start = detail
-            .get("start")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| anyhow::anyhow!("ABSOLUTE time has non-numeric start/end"))?;
-        let end = detail
-            .get("end")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| anyhow::anyhow!("ABSOLUTE time has non-numeric start/end"))?;
-        return Ok(format!(
-            "{}/{}",
-            ms_to_iso(start as i64),
-            ms_to_iso(end as i64)
-        ));
+        let start = absolute_bound_ms(detail.get("start"), "start")?;
+        let end = absolute_bound_ms(detail.get("end"), "end")?;
+        return Ok(format!("{}/{}", ms_to_iso(start), ms_to_iso(end)));
     }
     Err(anyhow::anyhow!(format!("unknown timeType: {time_type:?}")))
+}
+
+fn absolute_bound_ms(value: Option<&RisonValue>, field: &str) -> Result<i64> {
+    let value = value.ok_or_else(|| anyhow::anyhow!(format!("ABSOLUTE time is missing {field}")))?;
+    if let Some(n) = value.as_f64() {
+        return Ok(n as i64);
+    }
+    if let Some(s) = value.as_str() {
+        let dt = chrono::DateTime::parse_from_rfc3339(s).map_err(|e| {
+            anyhow::anyhow!(format!(
+                "ABSOLUTE time {field} is not a number or RFC 3339 string ({s:?}): {e}"
+            ))
+        })?;
+        return Ok(dt.timestamp_millis());
+    }
+    Err(anyhow::anyhow!(format!(
+        "ABSOLUTE time {field} is not a number or string"
+    )))
 }
 
 fn ms_to_iso(ms: i64) -> String {
@@ -337,6 +345,25 @@ mod tests {
         let start_iso = ms_to_iso(1700000000000);
         let end_iso = ms_to_iso(1700003600000);
         assert_eq!(state.time, format!("{start_iso}/{end_iso}"));
+    }
+
+    #[test]
+    fn parse_link_absolute_accepts_iso_string_bounds() {
+        // The AWS Console sometimes encodes ABSOLUTE start/end as ISO-8601
+        // strings instead of epoch-ms numbers. Make sure we accept that form.
+        let url = "https://eu-north-1.console.aws.amazon.com/cloudwatch/home?region=eu-north-1\
+            #logsV2:logs-insights$3FqueryDetail$3D~(end~'2026-05-22T11*3a33*3a14.813Z\
+            ~start~'2026-05-22T05*3a45*3a58.722Z~timeType~'ABSOLUTE~tz~'UTC\
+            ~editorString~'fields*20*40timestamp\
+            ~source~(~'arn*3aaws*3alogs*3aeu-north-1*3a1*3alog-group*3a*2fx)\
+            ~lang~'CWLI~logClass~'STANDARD~queryBy~'logGroupName)";
+        let state = parse_link_to_state(url).unwrap();
+        assert_eq!(state.region, "eu-north-1");
+        assert_eq!(state.log_groups, vec!["/x".to_string()]);
+        assert_eq!(
+            state.time,
+            "2026-05-22T05:45:58.722Z/2026-05-22T11:33:14.813Z"
+        );
     }
 
     #[test]
