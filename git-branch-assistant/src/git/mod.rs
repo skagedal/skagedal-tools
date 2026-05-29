@@ -207,7 +207,13 @@ impl GitRepo {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-            .with_context(|| format!("failed to run {}", format_command(program, args)))?;
+            .with_context(|| {
+                format!(
+                    "failed to run {} in {}",
+                    format_command(program, args),
+                    self.dir.display()
+                )
+            })?;
 
         if output.status.success() {
             Ok(String::from_utf8(output.stdout).context("command output was not valid UTF-8")?)
@@ -215,8 +221,9 @@ impl GitRepo {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             Err(anyhow!(
-                "{} failed (stdout: {}, stderr: {})",
+                "{} in {} failed (stdout: {}, stderr: {})",
                 format_command(program, args),
+                self.dir.display(),
                 stdout.trim(),
                 stderr.trim()
             ))
@@ -228,14 +235,21 @@ impl GitRepo {
             .command(program)
             .args(args)
             .status()
-            .with_context(|| format!("failed to run {}", format_command(program, args)))?;
+            .with_context(|| {
+                format!(
+                    "failed to run {} in {}",
+                    format_command(program, args),
+                    self.dir.display()
+                )
+            })?;
 
         if status.success() {
             Ok(())
         } else {
             Err(anyhow!(
-                "{} exited with status {}",
+                "{} in {} exited with status {}",
                 format_command(program, args),
+                self.dir.display(),
                 status
             ))
         }
