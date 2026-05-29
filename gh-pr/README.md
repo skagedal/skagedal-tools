@@ -46,15 +46,21 @@ gh-pr --create --open
 
 ### `gh-pr comments`
 
-Prints all comments on the PR — both the top-level conversation comments
-and the inline review comments grouped into threads. By default, comments
-in resolved review threads are hidden.
+Prints all comments on the PR:
 
-Uses a single GraphQL query against `pullRequest.comments` and
-`pullRequest.reviewThreads`. (Going via REST would require two endpoints —
-`/issues/{n}/comments` for the conversation, `/pulls/{n}/comments` for
-inline comments — and resolved state still wouldn't be available, since
-the REST API doesn't expose it.)
+- top-level conversation comments
+- review summaries — the body a reviewer typed when submitting a review
+  (e.g. an `APPROVED` or `CHANGES_REQUESTED` review with a message), shown
+  with the review state
+- inline review comments grouped into threads
+
+By default, comments in resolved review threads are hidden.
+
+Uses a single GraphQL query against `pullRequest.comments`,
+`pullRequest.reviews`, and `pullRequest.reviewThreads`. (Going via REST
+would require three endpoints — `/issues/{n}/comments`,
+`/pulls/{n}/reviews`, `/pulls/{n}/comments` — and resolved state still
+wouldn't be available, since the REST API doesn't expose it.)
 
 Flags:
 

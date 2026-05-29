@@ -213,6 +213,15 @@ fn fetch_pr_comments(number: u64) -> Value {
                         body \
                     } \
                 } \
+                reviews(first: 100) { \
+                    nodes { \
+                        databaseId \
+                        author { login } \
+                        submittedAt \
+                        state \
+                        body \
+                    } \
+                } \
                 reviewThreads(first: 100) { \
                     nodes { \
                         isResolved \
@@ -311,6 +320,10 @@ fn print_text(response: &Value, show_resolved: bool) {
         .pointer("/data/repository/pullRequest/comments/nodes")
         .and_then(Value::as_array)
         .unwrap_or(&empty);
+    let reviews = response
+        .pointer("/data/repository/pullRequest/reviews/nodes")
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
     let threads = response
         .pointer("/data/repository/pullRequest/reviewThreads/nodes")
         .and_then(Value::as_array)
@@ -325,6 +338,33 @@ fn print_text(response: &Value, show_resolved: bool) {
         println!();
         print_comment_header(c, "", false);
         print_body(c, "");
+    }
+
+    println!();
+
+    // Review summaries: a review's `body` is the top-level message the reviewer
+    // typed when submitting (e.g. "Looks good but please address X"). Inline
+    // comments belonging to the same review live under `reviewThreads` and are
+    // rendered there. Reviews with an empty body are skipped — they contributed
+    // only inline comments, already shown below.
+    let review_summaries: Vec<&Value> = reviews
+        .iter()
+        .filter(|r| {
+            let body = r.get("body").and_then(Value::as_str).unwrap_or("");
+            let state = r.get("state").and_then(Value::as_str).unwrap_or("");
+            !body.is_empty() && state != "PENDING"
+        })
+        .collect();
+
+    println!("=== Review summaries ({}) ===", review_summaries.len());
+    if review_summaries.is_empty() {
+        println!();
+        println!("(none)");
+    }
+    for r in &review_summaries {
+        println!();
+        print_review_summary_header(r);
+        print_body(r, "");
     }
 
     println!();
@@ -376,6 +416,19 @@ fn print_text(response: &Value, show_resolved: bool) {
             print_body(c, indent);
         }
     }
+}
+
+fn print_review_summary_header(r: &Value) {
+    let author = r
+        .pointer("/author/login")
+        .and_then(Value::as_str)
+        .unwrap_or("ghost");
+    let submitted = r
+        .get("submittedAt")
+        .and_then(Value::as_str)
+        .unwrap_or("?");
+    let state = r.get("state").and_then(Value::as_str).unwrap_or("?");
+    println!("[{}] @{} ({}):", submitted, author, state);
 }
 
 fn print_comment_header(c: &Value, indent: &str, is_reply: bool) {

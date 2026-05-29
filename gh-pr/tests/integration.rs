@@ -213,6 +213,12 @@ const SAMPLE_PR_COMMENTS_JSON: &str = r#"{
             {"databaseId": 1, "author": {"login": "alice"}, "createdAt": "2026-05-01T14:23:00Z", "body": "LGTM"}
           ]
         },
+        "reviews": {
+          "nodes": [
+            {"databaseId": 500, "author": {"login": "dave"}, "submittedAt": "2026-05-02T09:30:00Z", "state": "CHANGES_REQUESTED", "body": "please fix the proto annotation"},
+            {"databaseId": 501, "author": {"login": "bob"}, "submittedAt": "2026-05-02T10:00:00Z", "state": "COMMENTED", "body": ""}
+          ]
+        },
         "reviewThreads": {
           "nodes": [
             {
@@ -258,6 +264,9 @@ fn comments_text_format_calls_graphql_and_hides_resolved() {
     assert!(stdout.contains("Conversation comments (1)"), "stdout: {stdout}");
     assert!(stdout.contains("@alice"), "stdout: {stdout}");
     assert!(stdout.contains("LGTM"), "stdout: {stdout}");
+    assert!(stdout.contains("Review summaries (1)"), "stdout: {stdout}");
+    assert!(stdout.contains("@dave (CHANGES_REQUESTED)"), "stdout: {stdout}");
+    assert!(stdout.contains("please fix the proto annotation"), "stdout: {stdout}");
     assert!(
         stdout.contains("Review threads (1, 1 resolved hidden)"),
         "stdout: {stdout}"
@@ -319,6 +328,11 @@ fn comments_json_format_emits_full_raw_response() {
         .and_then(serde_json::Value::as_array)
         .expect("conversation comments array");
     assert_eq!(convo.len(), 1);
+    let reviews = parsed
+        .pointer("/data/repository/pullRequest/reviews/nodes")
+        .and_then(serde_json::Value::as_array)
+        .expect("reviews array");
+    assert_eq!(reviews.len(), 2);
 }
 
 #[test]
