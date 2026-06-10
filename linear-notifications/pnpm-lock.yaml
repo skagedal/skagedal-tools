@@ -14,13 +14,13 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 25.9.1
+        version: 25.9.2
       '@types/terminal-kit':
         specifier: latest
         version: 2.5.7
       tsx:
         specifier: latest
-        version: 4.22.3
+        version: 4.22.4
       typescript:
         specifier: latest
         version: 6.0.3
@@ -189,8 +189,8 @@ packages:
   '@types/nextgen-events@1.1.4':
     resolution: {integrity: sha512-YczHp+887i3MpHUOCOztk7y10SklNZ3aQlToKnu0LON0ZdFpgwq8POtnATAoFz8V1IxyR6d8pp8ZyYkUIy26Cw==}
 
-  '@types/node@25.9.1':
-    resolution: {integrity: sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==}
+  '@types/node@25.9.2':
+    resolution: {integrity: sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw==}
 
   '@types/terminal-kit@2.5.7':
     resolution: {integrity: sha512-IpbCBFSb3OqCEZBZlk368tGftqss88eNQaJdD9msEShRbksEiVahEqroONi60ppUt9/arLM6IDrHMx9jpzzCOw==}
@@ -264,8 +264,8 @@ packages:
     resolution: {integrity: sha512-mwuV3lHL+utI9z7vxah/27wrMJprx925xhkw1N4KuGa1dqIi0DLHWfXJpHEyR+ZI0Ij80zN58ztiGp3KlH0wtw==}
     engines: {node: '>=16.13.0'}
 
-  tsx@4.22.3:
-    resolution: {integrity: sha512-mdoNxBC/cSQObGGVQ5Bpn5i+yv7j68gk3Nfm3wFjcJg3Z0Mix9jzAFfP12prmm5eVGmDKtp0yyArrs0Q+8gZHg==}
+  tsx@4.22.4:
+    resolution: {integrity: sha512-X8EX+XV4QR5xCsrgxaED954zTDfY8KqlDtskKEL0cHhyS/P8b4IFOvGDQpsC9Q1XnLq915wEfwwY/zzskCtmhg==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -371,7 +371,7 @@ snapshots:
 
   '@types/nextgen-events@1.1.4': {}
 
-  '@types/node@25.9.1':
+  '@types/node@25.9.2':
     dependencies:
       undici-types: 7.24.6
 
@@ -464,7 +464,7 @@ snapshots:
 
   tree-kit@0.8.10: {}
 
-  tsx@4.22.3:
+  tsx@4.22.4:
     dependencies:
       esbuild: 0.28.0
     optionalDependencies:
