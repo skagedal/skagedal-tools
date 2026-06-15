@@ -7,7 +7,7 @@ use crate::git::{Branch, GitRepo, PrOptions, UpstreamStatus};
 use crate::task_result::TaskResult;
 use crate::ui::Prompt;
 
-pub fn actions_for_branch(branch: &Branch, repo: &GitRepo) -> Vec<BranchAction> {
+pub fn actions_for_branch(branch: &Branch) -> Vec<BranchAction> {
     match &branch.upstream {
         None => vec![
             BranchAction::CreatePr,
@@ -38,18 +38,12 @@ pub fn actions_for_branch(branch: &Branch, repo: &GitRepo) -> Vec<BranchAction> 
                 BranchAction::Shell,
                 BranchAction::Nothing,
             ],
-            UpstreamStatus::UpstreamIsGone => {
-                let mut actions = vec![
-                    BranchAction::Delete,
-                    BranchAction::Log,
-                    BranchAction::Shell,
-                    BranchAction::Nothing,
-                ];
-                if branch_checked_out_elsewhere(branch, repo) {
-                    actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
-                }
-                actions
-            }
+            UpstreamStatus::UpstreamIsGone => vec![
+                BranchAction::Delete,
+                BranchAction::Log,
+                BranchAction::Shell,
+                BranchAction::Nothing,
+            ],
         },
     }
 }
@@ -173,20 +167,16 @@ impl<P: Prompt> GitCleaner<P> {
                         );
                         Ok(TaskResult::Proceed)
                     } else {
-                        let mut actions = vec![
-                            BranchAction::Delete,
-                            BranchAction::Log,
-                            BranchAction::Shell,
-                            BranchAction::Nothing,
-                        ];
-                        if branch_checked_out_elsewhere(branch, repo) {
-                            actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
-                        }
                         self.select_action(
                             repo,
                             branch,
                             "Upstream is set, but it is gone",
-                            &actions,
+                            &[
+                                BranchAction::Delete,
+                                BranchAction::Log,
+                                BranchAction::Shell,
+                                BranchAction::Nothing,
+                            ],
                         )
                     }
                 }
@@ -288,19 +278,14 @@ impl<P: Prompt> GitCleaner<P> {
             }
             BranchAction::Delete => {
                 if let Some(path) = worktree_elsewhere_path(branch, repo) {
-                    print_worktree_redirect(branch, &path);
-                    return Ok(ActionResult::ExitToShell(path));
+                    // The branch is checked out in a separate worktree, which
+                    // pins the ref and prevents deletion. Remove the worktree
+                    // first; `git worktree remove` refuses if it is dirty, so
+                    // uncommitted work is not silently discarded.
+                    repo.delete_worktree(&path)?;
+                } else {
+                    repo.checkout_default_branch()?;
                 }
-                repo.checkout_default_branch()?;
-                repo.delete_branch_forcefully(&branch.refname)?;
-                Ok(ActionResult::Handled)
-            }
-            BranchAction::DeleteWorktreeAndBranch => {
-                let path = branch
-                    .worktree_path
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("branch has no associated worktree to delete"))?;
-                repo.delete_worktree(path)?;
                 repo.delete_branch_forcefully(&branch.refname)?;
                 Ok(ActionResult::Handled)
             }
@@ -328,7 +313,6 @@ pub enum BranchAction {
     CreatePr,
     Rebase,
     Delete,
-    DeleteWorktreeAndBranch,
     Log,
     Shell,
     Nothing,
@@ -342,7 +326,6 @@ impl BranchAction {
             BranchAction::CreatePr => "Push and create pull request",
             BranchAction::Rebase => "Forward",
             BranchAction::Delete => "Delete it",
-            BranchAction::DeleteWorktreeAndBranch => "Delete worktree and branch",
             BranchAction::Log => "Show git log",
             BranchAction::Shell => "Exit to shell with branch checked out",
             BranchAction::Nothing => "Do nothing",
@@ -360,7 +343,6 @@ impl BranchAction {
             | BranchAction::CreatePr
             | BranchAction::Rebase
             | BranchAction::Delete
-            | BranchAction::DeleteWorktreeAndBranch
             | BranchAction::Nothing => true,
             BranchAction::Log | BranchAction::Shell => false,
         }
@@ -560,6 +542,66 @@ mod tests {
         };
 
         assert!(branch_checked_out_elsewhere(&branch, &repo));
+        Ok(())
+    }
+
+    fn git(dir: &Path, args: &[&str]) -> Result<()> {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_AUTHOR_NAME", "Test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_NAME", "Test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .status()?;
+        if !status.success() {
+            return Err(anyhow!("git {:?} failed", args));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn delete_removes_worktree_when_branch_checked_out_elsewhere() -> Result<()> {
+        let repo_dir = tempdir()?;
+        git(repo_dir.path(), &["init", "-b", "main"])?;
+        fs::write(repo_dir.path().join("file.txt"), "hello")?;
+        git(repo_dir.path(), &["add", "."])?;
+        git(repo_dir.path(), &["commit", "-m", "init"])?;
+        git(repo_dir.path(), &["branch", "feature"])?;
+
+        let worktree_dir = tempdir()?;
+        let worktree_path = worktree_dir.path().join("feature");
+        git(
+            repo_dir.path(),
+            &[
+                "worktree",
+                "add",
+                worktree_path.to_str().unwrap(),
+                "feature",
+            ],
+        )?;
+        assert!(worktree_path.exists());
+
+        let repo = GitRepo::new(repo_dir.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: None,
+            worktree_path: Some(worktree_path.clone()),
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.perform_action(&repo, &branch, BranchAction::Delete)?;
+        assert!(matches!(result, ActionResult::Handled));
+        assert!(!worktree_path.exists(), "worktree should be removed");
+
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", "feature"])
+            .current_dir(repo_dir.path())
+            .output()?;
+        assert!(
+            branches.stdout.is_empty(),
+            "branch 'feature' should be deleted"
+        );
         Ok(())
     }
 }

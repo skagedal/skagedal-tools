@@ -80,8 +80,10 @@ The cleaner handles branches based on their state:
 
 The tool is worktree-aware:
 - Tracks which worktree each branch is checked out in
-- Redirects to the worktree directory when actions require it
-- Offers to delete both worktree and branch when upstream is gone
+- Redirects to the worktree directory when actions require it (e.g. rebase, exit to shell)
+- When "Delete it" targets a branch checked out in a separate worktree, it removes
+  that worktree first (`git worktree remove`, which refuses if the worktree is dirty)
+  and then deletes the branch
 
 ### External Tools
 

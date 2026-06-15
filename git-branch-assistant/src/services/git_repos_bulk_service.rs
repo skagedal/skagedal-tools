@@ -257,11 +257,7 @@ impl GitReposBulkService {
         let Some(first) = group.first() else {
             return Vec::new();
         };
-        let repo = GitRepo::new(first.repo_path.clone());
-        actions_for_branch(&first.branch, &repo)
-            .into_iter()
-            .filter(|action| !matches!(action, BranchAction::DeleteWorktreeAndBranch))
-            .collect()
+        actions_for_branch(&first.branch)
     }
 }
 
@@ -323,19 +319,6 @@ mod tests {
             .find(|(k, _)| *k == GroupKey::UpstreamIsGone)
             .unwrap();
         assert_eq!(gone_group.1.len(), 2);
-    }
-
-    #[test]
-    fn bulk_actions_excludes_delete_worktree_and_branch() {
-        let service = GitReposBulkService::new(false);
-        let group = vec![bb("a", "x", Some(UpstreamStatus::UpstreamIsGone))];
-        let actions = service.bulk_actions_for_group(&group);
-        assert!(!actions.is_empty());
-        assert!(
-            !actions
-                .iter()
-                .any(|a| matches!(a, BranchAction::DeleteWorktreeAndBranch))
-        );
     }
 
     #[test]
