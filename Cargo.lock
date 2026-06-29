@@ -1891,6 +1891,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "opener",
+ "regex",
  "serde_json",
  "tempfile",
 ]

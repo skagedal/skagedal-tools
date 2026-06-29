@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use regex::Regex;
 use serde_json::Value;
 use std::io::IsTerminal;
 use std::process::{Command, Stdio, exit};
@@ -33,8 +34,24 @@ struct DefaultArgs {
 enum Commands {
     /// Print the PR's comments (both conversation and inline review comments).
     Comments(CommentsArgs),
+    /// Mark files in the PR as "Viewed" for the current user.
+    MarkViewed(MarkViewedArgs),
     /// Mark the PR as ready for review
     MarkReady,
+}
+
+#[derive(Args)]
+struct MarkViewedArgs {
+    /// By default these are exact file paths (as they appear in the diff) to
+    /// mark as viewed. With --regex, they are treated as regular expressions
+    /// matched against every changed file in the PR.
+    #[arg(value_name = "FILE", required = true)]
+    files: Vec<String>,
+
+    /// Treat the arguments as regular expressions and mark every changed file
+    /// in the PR whose path matches any of them.
+    #[arg(short, long)]
+    regex: bool,
 }
 
 #[derive(Args)]
@@ -62,6 +79,7 @@ fn main() {
     match cli.command {
         None => default_command(cli.default_args),
         Some(Commands::Comments(args)) => comments_command(args),
+        Some(Commands::MarkViewed(args)) => mark_viewed_command(args),
         Some(Commands::MarkReady) => mark_ready_command(),
     }
 }
@@ -454,6 +472,119 @@ fn find_pr_number() -> Option<u64> {
         return None;
     }
     String::from_utf8_lossy(&output.stdout).trim().parse().ok()
+}
+
+fn mark_viewed_command(args: MarkViewedArgs) {
+    let (pr_id, number) = match find_pr_id_and_number() {
+        Some(pair) => pair,
+        None => {
+            eprintln!("No pull request found for the current branch");
+            exit(1);
+        }
+    };
+
+    let paths: Vec<String> = if args.regex {
+        let regexes: Vec<Regex> = args
+            .files
+            .iter()
+            .map(|p| {
+                Regex::new(p).unwrap_or_else(|e| {
+                    eprintln!("Invalid regex {:?}: {}", p, e);
+                    exit(2);
+                })
+            })
+            .collect();
+
+        let matched: Vec<String> = fetch_pr_files(number)
+            .into_iter()
+            .filter(|f| regexes.iter().any(|re| re.is_match(f)))
+            .collect();
+
+        if matched.is_empty() {
+            eprintln!("No changed files in the PR matched the given pattern(s)");
+            exit(1);
+        }
+        matched
+    } else {
+        args.files
+    };
+
+    let mut failures = 0;
+    for path in &paths {
+        if mark_file_viewed(&pr_id, path) {
+            println!("Viewed: {}", path);
+        } else {
+            failures += 1;
+        }
+    }
+    if failures > 0 {
+        exit(1);
+    }
+}
+
+/// Fetch the PR's node ID (needed for the GraphQL mutation) and number in a
+/// single `gh` call. Returns None when there's no PR for the current branch.
+fn find_pr_id_and_number() -> Option<(String, u64)> {
+    let output = run_gh(&["pr", "view", "--json", "id,number"], true)?;
+    if !output.status.success() {
+        return None;
+    }
+    let value: Value = serde_json::from_slice(&output.stdout).ok()?;
+    let id = value.get("id")?.as_str()?.to_string();
+    let number = value.get("number")?.as_u64()?;
+    Some((id, number))
+}
+
+/// All changed file paths in the PR, across every page. Uses the REST
+/// `pulls/{n}/files` endpoint with `--paginate` (which merges the array pages
+/// into one), so it isn't capped at GitHub's 100-per-page limit — generated
+/// directories can easily exceed that.
+fn fetch_pr_files(number: u64) -> Vec<String> {
+    let name_with_owner = match name_with_owner() {
+        Some(s) => s,
+        None => {
+            eprintln!("Failed to determine repository owner/name");
+            exit(1);
+        }
+    };
+    let path = format!("repos/{}/pulls/{}/files", name_with_owner, number);
+    let response = fetch_json(&["api", "--paginate", &path]);
+    response
+        .as_array()
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(|f| f.get("filename").and_then(Value::as_str).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Mark a single file as viewed via the `markFileAsViewed` GraphQL mutation.
+/// Returns false (and lets gh print its error) rather than exiting, so a bad
+/// path among several doesn't abort the rest.
+fn mark_file_viewed(pr_id: &str, path: &str) -> bool {
+    let query = "mutation($pullRequestId: ID!, $path: String!) { \
+        markFileAsViewed(input: { pullRequestId: $pullRequestId, path: $path }) { \
+            pullRequest { id } \
+        } \
+    }";
+    let pr_arg = format!("pullRequestId={}", pr_id);
+    let path_arg = format!("path={}", path);
+    let query_arg = format!("query={}", query);
+    let args = [
+        "api", "graphql", "-f", &pr_arg, "-f", &path_arg, "-f", &query_arg,
+    ];
+    echo_gh(&args);
+    let output = Command::new("gh")
+        .args(args)
+        .stderr(Stdio::inherit())
+        .output()
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to run gh: {}", e);
+            exit(1);
+        });
+    output.status.success()
 }
 
 fn mark_ready_command() {

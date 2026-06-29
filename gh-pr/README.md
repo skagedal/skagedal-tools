@@ -69,6 +69,30 @@ Flags:
 - `--resolved` — include comments belonging to resolved review threads.
   Has no effect on `--format json`, which is always unfiltered.
 
+### `gh-pr mark-viewed`
+
+Marks files in the PR as "Viewed" for the authenticated user — the same
+per-file checkbox you'd tick in the GitHub web UI.
+
+```bash
+gh-pr mark-viewed src/foo.rs db/generated/schema.sql   # exact paths
+gh-pr mark-viewed --regex 'db/generated/'              # everything matching
+gh-pr mark-viewed -r '\.snap$' '^vendor/'              # multiple patterns
+```
+
+By default the arguments are exact file paths as they appear in the diff. With
+`--regex` (`-r`) they're treated as regular expressions, and every changed file
+in the PR whose path matches *any* of them is marked. This is handy for
+generated or vendored directories you don't want to review by hand.
+
+Each file is set with the `markFileAsViewed` GraphQL mutation. In `--regex`
+mode the changed-file list comes from the REST `pulls/{n}/files` endpoint with
+`--paginate`, so it isn't capped at 100 files.
+
+Note that GitHub clears a file's "Viewed" flag automatically whenever that file
+changes in a later push, so this is a per-push convenience rather than a
+permanent setting.
+
 ### `gh-pr mark-ready`
 
 Marks the PR for the current branch as ready for review (i.e. takes it out of

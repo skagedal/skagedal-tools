@@ -348,6 +348,107 @@ fn comments_exits_1_when_no_pr() {
 }
 
 #[test]
+fn mark_viewed_with_literal_filenames_marks_each() {
+    let h = Harness::new();
+    let out = h.run(
+        &["mark-viewed", "src/foo.rs", "db/generated/schema.sql"],
+        &[("MOCK_GH_PR_NUMBER", "42"), ("MOCK_GH_PR_NODE_ID", "PR_abc")],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Viewed: src/foo.rs"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("Viewed: db/generated/schema.sql"),
+        "stdout: {stdout}"
+    );
+
+    let log = h.log();
+    // One mutation per file, each carrying the node id and the path. The
+    // file list is NOT fetched in literal mode.
+    assert_eq!(log.matches("markFileAsViewed").count(), 2, "log: {log}");
+    assert!(log.contains("-f pullRequestId=PR_abc"), "log: {log}");
+    assert!(log.contains("-f path=src/foo.rs"), "log: {log}");
+    assert!(
+        log.contains("-f path=db/generated/schema.sql"),
+        "log: {log}"
+    );
+    assert!(!log.contains("/files"), "should not list files: {log}");
+}
+
+const SAMPLE_PR_FILES_JSON: &str = r#"[
+  {"filename": "src/foo.rs"},
+  {"filename": "db/generated/schema.sql"},
+  {"filename": "db/generated/seed.sql"},
+  {"filename": "README.md"}
+]"#;
+
+#[test]
+fn mark_viewed_regex_marks_only_matching_files() {
+    let h = Harness::new();
+    let out = h.run(
+        &["mark-viewed", "--regex", "db/generated/"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_PR_NODE_ID", "PR_abc"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_FILES_JSON", SAMPLE_PR_FILES_JSON),
+        ],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Viewed: db/generated/schema.sql"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("Viewed: db/generated/seed.sql"),
+        "stdout: {stdout}"
+    );
+    assert!(!stdout.contains("src/foo.rs"), "stdout: {stdout}");
+    assert!(!stdout.contains("README.md"), "stdout: {stdout}");
+
+    let log = h.log();
+    assert!(
+        log.contains("api --paginate repos/me/repo/pulls/42/files"),
+        "log: {log}"
+    );
+    assert!(
+        log.contains("-f path=db/generated/schema.sql"),
+        "log: {log}"
+    );
+    assert!(!log.contains("-f path=src/foo.rs"), "log: {log}");
+}
+
+#[test]
+fn mark_viewed_regex_exits_1_when_nothing_matches() {
+    let h = Harness::new();
+    let out = h.run(
+        &["mark-viewed", "--regex", "no/such/path"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_PR_NODE_ID", "PR_abc"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_FILES_JSON", SAMPLE_PR_FILES_JSON),
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("matched"), "stderr: {stderr}");
+}
+
+#[test]
+fn mark_viewed_exits_1_when_no_pr() {
+    let h = Harness::new();
+    let out = h.run(&["mark-viewed", "src/foo.rs"], &[]);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("No pull request"),
+        "unexpected stderr: {stderr}"
+    );
+}
+
+#[test]
 fn mark_ready_invokes_gh_pr_ready() {
     let h = Harness::new();
     let out = h.run(&["mark-ready"], &[]);

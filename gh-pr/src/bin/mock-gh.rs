@@ -17,6 +17,10 @@
 //!   .nameWithOwner` prints this. Defaults to `me/repo`.
 //! - `MOCK_GH_PR_COMMENTS_JSON` — body returned by `gh api graphql` for the
 //!   PR-comments query. Defaults to an empty result envelope.
+//! - `MOCK_GH_PR_NODE_ID`       — `id` returned by `gh pr view --json
+//!   id,number`. Defaults to `PR_node`.
+//! - `MOCK_GH_PR_FILES_JSON`    — body returned by `gh api .../pulls/N/files`.
+//!   Defaults to an empty array.
 
 use std::env;
 use std::fs::OpenOptions;
@@ -54,6 +58,18 @@ fn log_invocation(args: &[String]) {
 }
 
 fn pr_view(args: &[String]) {
+    // `mark-viewed` fetches id + number together without a --jq filter.
+    if arg_value(args, "--jq").is_none() && arg_value(args, "--json").as_deref() == Some("id,number")
+    {
+        match env_nonempty("MOCK_GH_PR_NUMBER") {
+            Some(number) => {
+                let id = env::var("MOCK_GH_PR_NODE_ID").unwrap_or_else(|_| "PR_node".to_string());
+                println!(r#"{{"id":"{}","number":{}}}"#, id, number);
+            }
+            None => no_pr(),
+        }
+        return;
+    }
     match arg_value(args, "--jq").as_deref() {
         Some(".url") => match env_nonempty("MOCK_GH_PR_URL") {
             Some(url) => println!("{}", url),
@@ -119,9 +135,15 @@ fn api(args: &[String]) {
         exit(2);
     }
     let body = if path == "graphql" {
-        env::var("MOCK_GH_PR_COMMENTS_JSON").unwrap_or_else(|_| {
-            r#"{"data":{"repository":{"pullRequest":{"comments":{"nodes":[]},"reviewThreads":{"nodes":[]}}}}}"#.to_string()
-        })
+        if args.iter().any(|a| a.contains("markFileAsViewed")) {
+            r#"{"data":{"markFileAsViewed":{"pullRequest":{"id":"PR_node"}}}}"#.to_string()
+        } else {
+            env::var("MOCK_GH_PR_COMMENTS_JSON").unwrap_or_else(|_| {
+                r#"{"data":{"repository":{"pullRequest":{"comments":{"nodes":[]},"reviewThreads":{"nodes":[]}}}}}"#.to_string()
+            })
+        }
+    } else if path.starts_with("repos/") && path.ends_with("/files") {
+        env::var("MOCK_GH_PR_FILES_JSON").unwrap_or_else(|_| "[]".to_string())
     } else {
         eprintln!("mock-gh: unsupported api path: {}", path);
         exit(2);
