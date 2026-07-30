@@ -17,6 +17,11 @@ pub struct Config {
     /// because this host is spawned by Chrome with a minimal PATH that
     /// won't find it otherwise (see `cli.rs`).
     pub obsidian_binary: String,
+    /// Whether to append every incoming message to host.log. Off by
+    /// default since every page visit would otherwise write to a log file
+    /// that's never trimmed or rotated.
+    #[serde(default)]
+    pub debug: bool,
 }
 
 fn default_folder() -> String {

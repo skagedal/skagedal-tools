@@ -123,12 +123,15 @@ fn main() {
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
     let cfg = config::load();
+    let debug = cfg.as_ref().map(|c| c.debug).unwrap_or(false);
 
     loop {
         match read_message(&mut stdin) {
             Ok(Some(value)) => {
-                let timestamp = chrono::Utc::now().to_rfc3339();
-                let _ = log_line(&format!("{timestamp} {value}"));
+                if debug {
+                    let timestamp = chrono::Utc::now().to_rfc3339();
+                    let _ = log_line(&format!("{timestamp} {value}"));
+                }
 
                 let response = match serde_json::from_value::<Request>(value) {
                     Ok(request) => handle(request, &cfg),
@@ -138,8 +141,10 @@ fn main() {
             }
             Ok(None) => break,
             Err(e) => {
-                let timestamp = chrono::Utc::now().to_rfc3339();
-                let _ = log_line(&format!("{timestamp} error: {e}"));
+                if debug {
+                    let timestamp = chrono::Utc::now().to_rfc3339();
+                    let _ = log_line(&format!("{timestamp} error: {e}"));
+                }
                 break;
             }
         }

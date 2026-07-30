@@ -70,12 +70,19 @@ The host reads `~/.skagedal-tools/chrome-page-notes/config.toml` (or
 vault = "obsidian-notes"                       # required — must match a vault `obsidian vaults` knows about
 obsidian_binary = "/opt/homebrew/bin/obsidian"  # required — must be an absolute path
 folder = "webnotes"                             # optional, defaults to "webnotes"
+debug = false                                   # optional, defaults to false
 ```
 
 `obsidian_binary` must be absolute (not just `"obsidian"`) because Chrome
 spawns this host with a minimal PATH that doesn't include Homebrew's bin
 directories — a bare command name would fail to resolve even though it
 works fine from a terminal.
+
+`debug` controls whether every incoming message is appended to
+`host.log` (see below). It's off by default — every page visit sends a
+message, and the log is never trimmed or rotated, so leaving it on
+indefinitely just grows the file unboundedly. Turn it on temporarily
+when you actually need to watch what's happening.
 
 ### Note path scheme
 
@@ -89,6 +96,8 @@ fragment aren't part of the path, so e.g. `?tab=readme` and `?tab=files` on
 the same page collapse to the same note.
 
 ### Trying it out
+
+Set `debug = true` in `config.toml` first (see above), then:
 
 ```bash
 tail -f ~/.skagedal-tools/chrome-page-notes/host.log
