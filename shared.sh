@@ -129,7 +129,7 @@ install-rust() {
 update-node() {
     local dir="$1"
     echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && pnpm update)
+    (cd "$SCRIPT_DIR/$dir" && pnpm update --no-save)
 }
 
 update-rust() {
