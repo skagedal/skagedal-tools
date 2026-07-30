@@ -1,4 +1,4 @@
-const HOST_NAME = "com.skagedal.chrome_page_notes_host";
+const HOST_NAME = "tech.skagedal.chrome_page_notes_host";
 const BADGE_COLOR = "#8b5cf6";
 
 function sendToHost(message) {

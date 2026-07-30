@@ -13,7 +13,7 @@ WORKSPACE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # extension to this ID regardless of which machine/path it's loaded
 # unpacked from.
 EXTENSION_ID="jbgofjilflakfjbenbgpppajapiffphn"
-HOST_NAME="com.skagedal.chrome_page_notes_host"
+HOST_NAME="tech.skagedal.chrome_page_notes_host"
 
 echo "Building $HOST_NAME..."
 (cd "$WORKSPACE_DIR" && cargo build --release -p chrome-page-notes-host)
