@@ -58,15 +58,14 @@ impl Parser {
         let mut ident = String::new();
 
         // First character must be letter or underscore
-        if let Some(ch) = self.peek() {
+        {
+            let ch = self.peek()?;
             if ch.is_alphabetic() || ch == '_' {
                 ident.push(ch);
                 self.advance();
             } else {
                 return None;
             }
-        } else {
-            return None;
         }
 
         // Subsequent characters can be alphanumeric, underscore, or dot (for extensions)
