@@ -9,10 +9,12 @@ files in an Obsidian vault:
 
 - Clicking the toolbar icon opens a popup for the current tab. If a note
   already exists for that URL, its content is shown inline (as plain text,
-  not rendered) with an "Open in Obsidian" button. Otherwise, a "Create
-  note" button creates one.
-- A background service worker also reports every URL any tab navigates to,
-  purely for logging — it doesn't look up or create notes.
+  not rendered) with an "Open in Obsidian" button — which also brings the
+  Obsidian app to the foreground, since the CLI navigates to the note
+  without activating the app window. Otherwise, a "Create note" button
+  creates one.
+- The toolbar icon shows a ✓ badge whenever the current tab has a note, kept
+  up to date by a background service worker as you navigate or switch tabs.
 
 All of this is done via the `obsidian` CLI, run from the native messaging
 host described below — Chrome's extension APIs have no direct file system
@@ -28,7 +30,7 @@ the two stay in sync without per-machine edits.
 1. Go to `chrome://extensions`
 2. Enable "Developer mode" (top right)
 3. Click "Load unpacked" and select this directory
-4. Click the extension's icon in the toolbar — a popup should show "Hello, world!"
+4. Click the extension's icon in the toolbar — a popup should show whether the current page has a note
 
 ## Reloading after changes
 
@@ -94,3 +96,10 @@ tail -f ~/.skagedal-tools/chrome-page-notes/host.log
 
 Then click the extension's toolbar icon, or navigate to a new page in any
 tab — a new line, including the URL, should appear in the log each time.
+
+## Icon
+
+`icons/icon.svg` is the source; `icons/icon{16,32,48,128}.png` are rasterized
+from it (`convert -background none icon.svg -resize <N>x<N> icon<N>.png`,
+from ImageMagick) and are what's actually referenced in `manifest.json`.
+Regenerate them if the SVG changes.

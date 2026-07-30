@@ -4,7 +4,7 @@
 use anyhow::{Result, bail};
 use percent_encoding::percent_decode_str;
 
-use crate::cli::run;
+use crate::cli::{activate_app, run};
 
 pub struct Note {
     pub path: String,
@@ -94,6 +94,7 @@ pub fn open(binary: &str, vault: &str, path: &str) -> Result<()> {
     if is_error(&out) {
         bail!("obsidian open failed: {}", out.trim());
     }
+    activate_app();
     Ok(())
 }
 

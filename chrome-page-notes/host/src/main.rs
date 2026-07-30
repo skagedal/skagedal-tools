@@ -23,7 +23,9 @@ use serde_json::json;
 enum Request {
     /// Popup opened for this tab: log it, and report whether a note exists.
     Activated { url: String },
-    /// Background service worker saw a tab navigate to a new URL: log only.
+    /// Background service worker saw a tab navigate to (or focus on) a URL:
+    /// log it, and report whether a note exists (used to set the toolbar
+    /// badge for that tab).
     UrlVisited { url: String },
     /// "Create note" button in the popup.
     CreateNote { url: String },
@@ -101,7 +103,7 @@ fn note_response(cfg: &Result<config::Config>, url: &str, create_if_missing: boo
 
 fn handle(request: Request, cfg: &Result<config::Config>) -> serde_json::Value {
     match request {
-        Request::UrlVisited { .. } => json!({"status": "ok"}),
+        Request::UrlVisited { url } => note_response(cfg, &url, false),
         Request::Activated { url } => note_response(cfg, &url, false),
         Request::CreateNote { url } => note_response(cfg, &url, true),
         Request::OpenNote { path } => {

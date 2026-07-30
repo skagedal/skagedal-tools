@@ -1,17 +1,3 @@
-const HOST_NAME = "com.skagedal.chrome_page_notes_host";
-
-function sendToHost(message) {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendNativeMessage(HOST_NAME, message, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      resolve(response);
-    });
-  });
-}
-
 function clear(container) {
   container.textContent = "";
 }
@@ -53,17 +39,26 @@ function render(url, response) {
     createButton.textContent = "Create note";
     createButton.addEventListener("click", () => {
       sendToHost({ action: "create_note", url })
-        .then((createResponse) => render(url, createResponse))
+        .then((createResponse) => {
+          render(url, createResponse);
+          updateBadge(tabId, createResponse.note);
+        })
         .catch((error) => console.error("Failed to create note:", error));
     });
     container.appendChild(createButton);
   }
 }
 
+let tabId;
+
 chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+  tabId = tab?.id;
   const url = tab?.url;
   sendToHost({ action: "activated", url })
-    .then((response) => render(url, response))
+    .then((response) => {
+      render(url, response);
+      updateBadge(tabId, response.note);
+    })
     .catch((error) => {
       document.getElementById("note").textContent = `Error: ${error.message}`;
     });

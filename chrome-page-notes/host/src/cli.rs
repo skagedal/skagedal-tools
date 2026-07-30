@@ -17,3 +17,12 @@ pub fn run(binary: &str, args: &[String]) -> Result<String> {
         .with_context(|| format!("failed to run the obsidian CLI at \"{binary}\""))?;
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
+
+/// Brings the Obsidian app to the foreground. `obsidian open`/`obsidian
+/// create` navigate to the note within the app but don't activate its
+/// window, so this uses macOS's `open -a` to do that separately. Best
+/// effort: failures here shouldn't fail the surrounding request, since the
+/// note action itself already succeeded.
+pub fn activate_app() {
+    let _ = Command::new("open").args(["-a", "Obsidian"]).output();
+}
