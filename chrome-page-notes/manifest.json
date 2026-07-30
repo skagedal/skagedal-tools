@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Page Notes",
+  "version": "0.1.0",
+  "description": "Attach your own notes to a page.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzqeyGTQNmSWZ1RjjwZNEVdDHWEKh0EKWsSVKFgeA125fUS9Z6LVZF2+Ju/n8FqF5u8YuG9QhvEt88C+Swazned0IjTPa9vEVV1ZD7gksfXwgwxDBkSVR+dwpBnRYdWxosTsZVNrm5B4lvJTgp/mx6pX+oN1VPC8vxlEJeLlRwmcyXPF9ejBxxL4LdCxWfBswRoOGtzIWLUz9aN3EEAoXbkI7iKbN1A2sLxtRtswST9tWo9du+Btoj+8C1EDplQLjoBFygLpEJiHF6PIJRzpS/FcBIQGOG60on9kqecC9QGpFS8P2W+3tuBzg36vwFb+ZU2COlq994UHG/Y36HYivDQIDAQAB",
+  "permissions": ["nativeMessaging", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

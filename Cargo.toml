@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "assistant",
+    "chrome-page-notes/host",
     "cloudwatch-insights",
     "gh-pr",
     "git-branch-assistant",
@@ -48,6 +49,7 @@ node-semver = "*"
 num-traits = "*"
 once_cell = "*"
 opener = "*"
+percent-encoding = "*"
 plist = "*"
 ratatui = "*"
 rayon = "*"
@@ -64,5 +66,6 @@ tempfile = "*"
 thiserror = "*"
 tokio = { version = "*", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "io-util", "io-std", "time"] }
 toml = "*"
+url = "*"
 wry = "*"
 xmltree = { version = "*", features = ["attribute-order"] }
