@@ -9,7 +9,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 
-use crate::cli::{activate_app, open_url};
+use crate::cli::open_url;
 
 pub struct Note {
     pub path: String,
@@ -89,8 +89,8 @@ pub fn create(vault_path: &Path, path: &str, content: &str) -> Result<Note> {
 }
 
 /// Opens a note in the Obsidian app via its `obsidian://` URL scheme, which
-/// (unlike the CLI) resolves the vault by name correctly and auto-launches
-/// the app if it isn't running.
+/// (unlike the CLI) resolves the vault by name correctly, auto-launches the
+/// app if it isn't running, and brings it to the foreground either way.
 pub fn open(vault_name: &str, path: &str) -> Result<()> {
     let file = path.strip_suffix(".md").unwrap_or(path);
     let url = format!(
@@ -98,9 +98,7 @@ pub fn open(vault_name: &str, path: &str) -> Result<()> {
         utf8_percent_encode(vault_name, NON_ALPHANUMERIC),
         utf8_percent_encode(file, NON_ALPHANUMERIC),
     );
-    open_url(&url)?;
-    activate_app();
-    Ok(())
+    open_url(&url)
 }
 
 #[cfg(test)]
