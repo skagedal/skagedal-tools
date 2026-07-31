@@ -5,8 +5,11 @@ function checkAndBadge(tabId, url) {
     return;
   }
   sendToHost({ action: "url_visited", url })
-    .then((response) => updateBadge(tabId, response.note))
-    .catch((error) => console.error("Native messaging failed:", error));
+    .then((response) => updateBadge(tabId, response))
+    .catch((error) => {
+      console.error("Native messaging failed:", error);
+      updateBadge(tabId, null);
+    });
 }
 
 // changeInfo.url is only set when the URL actually changes, so a reload of

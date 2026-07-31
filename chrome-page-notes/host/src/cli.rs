@@ -8,13 +8,25 @@
 
 use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
+/// Runs the `obsidian` CLI and returns its stdout.
+///
+/// A nonzero exit is treated as a hard error (distinct from the CLI's habit
+/// of exiting 0 and printing `Error: ...` to stdout for things like "file
+/// not found") — e.g. when the Obsidian app itself isn't running, the CLI
+/// exits 1 and writes "The CLI is unable to find Obsidian..." to stderr.
 pub fn run(binary: &str, args: &[String]) -> Result<String> {
     let output = Command::new(binary)
         .args(args)
         .output()
         .with_context(|| format!("failed to run the obsidian CLI at \"{binary}\""))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("obsidian CLI failed: {}", stderr.trim());
+    }
+
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 

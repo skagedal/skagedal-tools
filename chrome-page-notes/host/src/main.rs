@@ -31,6 +31,10 @@ enum Request {
     CreateNote { url: String },
     /// "Open in Obsidian" button in the popup.
     OpenNote { path: String },
+    /// "Open Obsidian" button shown in the popup on error: launches (or
+    /// foregrounds) the app directly, bypassing the CLI, since the CLI
+    /// itself requires the app to already be running.
+    OpenApp,
 }
 
 fn log_path() -> PathBuf {
@@ -115,6 +119,10 @@ fn handle(request: Request, cfg: &Result<config::Config>) -> serde_json::Value {
                 Ok(()) => json!({"status": "ok"}),
                 Err(e) => json!({"status": "error", "message": e.to_string()}),
             }
+        }
+        Request::OpenApp => {
+            cli::activate_app();
+            json!({"status": "ok"})
         }
     }
 }

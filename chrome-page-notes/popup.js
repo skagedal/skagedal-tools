@@ -7,7 +7,18 @@ function render(url, response) {
   clear(container);
 
   if (response.status === "error") {
-    container.textContent = `Error: ${response.message}`;
+    const message = document.createElement("p");
+    message.textContent = `Error: ${response.message}`;
+    container.appendChild(message);
+
+    const openAppButton = document.createElement("button");
+    openAppButton.textContent = "Open Obsidian";
+    openAppButton.addEventListener("click", () => {
+      openAppButton.disabled = true;
+      openAppButton.textContent = "Opening Obsidian…";
+      sendToHost({ action: "open_app" }).catch((error) => console.error("Failed to open Obsidian:", error));
+    });
+    container.appendChild(openAppButton);
     return;
   }
 
@@ -41,7 +52,7 @@ function render(url, response) {
       sendToHost({ action: "create_note", url })
         .then((createResponse) => {
           render(url, createResponse);
-          updateBadge(tabId, createResponse.note);
+          updateBadge(tabId, createResponse);
         })
         .catch((error) => console.error("Failed to create note:", error));
     });
@@ -57,9 +68,10 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   sendToHost({ action: "activated", url })
     .then((response) => {
       render(url, response);
-      updateBadge(tabId, response.note);
+      updateBadge(tabId, response);
     })
     .catch((error) => {
-      document.getElementById("note").textContent = `Error: ${error.message}`;
+      render(url, { status: "error", message: error.message });
+      updateBadge(tabId, null);
     });
 });

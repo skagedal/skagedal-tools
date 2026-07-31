@@ -15,10 +15,16 @@ files in an Obsidian vault:
   creates one.
 - The toolbar icon shows a ✓ badge whenever the current tab has a note, kept
   up to date by a background service worker as you navigate or switch tabs.
+  If the host couldn't be reached, it shows a ❌ badge instead.
 
 All of this is done via the `obsidian` CLI, run from the native messaging
 host described below — Chrome's extension APIs have no direct file system
 access, so the host is what actually talks to Obsidian.
+
+The `obsidian` CLI only works while the Obsidian app itself is running — if
+it's not, every request fails and the popup shows the error along with an
+"Open Obsidian" button (which launches/foregrounds the app directly,
+bypassing the CLI).
 
 The extension's `manifest.json` has a fixed `"key"` field, which pins its
 extension ID to `jbgofjilflakfjbenbgpppajapiffphn` no matter where it's
