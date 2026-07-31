@@ -19,7 +19,9 @@ function sendToHost(message) {
 // reached at all, so there's no response to inspect).
 function updateBadge(tabId, response) {
   if (!response || response.status === "error") {
-    chrome.action.setBadgeText({ tabId, text: "❌" });
+    // Badge text renders in a tiny monochrome font, and multi-color emoji
+    // like "❌" don't render legibly there — a plain glyph does.
+    chrome.action.setBadgeText({ tabId, text: "!" });
     chrome.action.setBadgeBackgroundColor({ tabId, color: ERROR_BADGE_COLOR });
     return;
   }
