@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- Two colors (page purple / white) and bold strokes throughout: at
-       16px, subtle color contrasts (e.g. a darker purple fold) and thin
-       lines (e.g. a 6-unit stroke on a 128 canvas is under 1px) disappear
-       into a solid blob, so everything here is sized to survive an 8x
-       downscale. -->
+  <!-- Just the page + folded corner, in two high-contrast colors: at 16px,
+       subtle color contrasts (e.g. a darker purple fold) and thin details
+       disappear into a solid blob. No other decoration - the toolbar badge
+       (see common.js) is what signals note state, so baking a checkmark
+       into the icon itself read as a second, redundant badge. -->
   <path d="M 26 14
            L 84 14
            L 106 36
@@ -15,10 +15,4 @@
            Q 20 14 26 14
            Z" fill="#8b5cf6"/>
   <path d="M 84 14 L 106 36 L 84 36 Z" fill="#ffffff"/>
-  <!-- Checkmark as two filled parallelograms rather than a stroked path:
-       ImageMagick falls back to its minimal built-in SVG renderer when
-       rsvg-convert isn't installed, and that renderer silently drops
-       stroke-only paths. -->
-  <path d="M 45 69 L 61 85 L 51 95 L 35 79 Z" fill="#ffffff"/>
-  <path d="M 50 86 L 86 38 L 98 46 L 62 94 Z" fill="#ffffff"/>
 </svg>
