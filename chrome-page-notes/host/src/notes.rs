@@ -1,10 +1,15 @@
-//! URL-to-note-path normalization, and a thin wrapper around the `obsidian`
-//! CLI for looking up, creating, and opening notes.
+//! URL-to-note-path normalization, and reading/writing notes directly in an
+//! Obsidian vault's folder on disk (see `cli.rs` for why this doesn't go
+//! through the `obsidian` CLI).
 
-use anyhow::{Result, bail};
-use percent_encoding::percent_decode_str;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::Path;
 
-use crate::cli::{activate_app, run};
+use anyhow::{Context, Result};
+use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
+
+use crate::cli::{activate_app, open_url};
 
 pub struct Note {
     pub path: String,
@@ -56,50 +61,46 @@ pub fn initial_content(url: &str) -> String {
     format!("---\nurl: {url}\ncreated: {timestamp}\n---\n\n")
 }
 
-pub fn lookup(binary: &str, vault: &str, path: &str) -> Result<Note> {
-    let info = run(binary, &["file".to_string(), format!("path={path}"), format!("vault={vault}")])?;
-    if is_error(&info) {
-        return Ok(Note { path: path.to_string(), exists: false, content: None });
+pub fn lookup(vault_path: &Path, path: &str) -> Result<Note> {
+    let full_path = vault_path.join(path);
+    match fs::read_to_string(&full_path) {
+        Ok(content) => Ok(Note { path: path.to_string(), exists: true, content: Some(content) }),
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            Ok(Note { path: path.to_string(), exists: false, content: None })
+        }
+        Err(e) => Err(e).with_context(|| format!("could not read {}", full_path.display())),
     }
-    let content = run(binary, &["read".to_string(), format!("path={path}"), format!("vault={vault}")])?;
-    Ok(Note { path: path.to_string(), exists: true, content: Some(content) })
 }
 
 /// Idempotent: if the note already exists, returns it as-is rather than
-/// calling `obsidian create` again (which would create a numbered
-/// duplicate like `foo 1.md` instead of erroring or overwriting).
-pub fn create(binary: &str, vault: &str, path: &str, content: &str) -> Result<Note> {
-    let existing = lookup(binary, vault, path)?;
+/// overwriting it.
+pub fn create(vault_path: &Path, path: &str, content: &str) -> Result<Note> {
+    let existing = lookup(vault_path, path)?;
     if existing.exists {
         return Ok(existing);
     }
 
-    let out = run(
-        binary,
-        &[
-            "create".to_string(),
-            format!("path={path}"),
-            format!("content={content}"),
-            format!("vault={vault}"),
-        ],
-    )?;
-    if is_error(&out) {
-        bail!("obsidian create failed: {}", out.trim());
+    let full_path = vault_path.join(path);
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("could not create directory {}", parent.display()))?;
     }
+    fs::write(&full_path, content).with_context(|| format!("could not write {}", full_path.display()))?;
     Ok(Note { path: path.to_string(), exists: true, content: Some(content.to_string()) })
 }
 
-pub fn open(binary: &str, vault: &str, path: &str) -> Result<()> {
-    let out = run(binary, &["open".to_string(), format!("path={path}"), format!("vault={vault}")])?;
-    if is_error(&out) {
-        bail!("obsidian open failed: {}", out.trim());
-    }
+/// Opens a note in the Obsidian app via its `obsidian://` URL scheme, which
+/// (unlike the CLI) resolves the vault by name correctly and auto-launches
+/// the app if it isn't running.
+pub fn open(vault_name: &str, path: &str) -> Result<()> {
+    let file = path.strip_suffix(".md").unwrap_or(path);
+    let url = format!(
+        "obsidian://open?vault={}&file={}",
+        utf8_percent_encode(vault_name, NON_ALPHANUMERIC),
+        utf8_percent_encode(file, NON_ALPHANUMERIC),
+    );
+    open_url(&url)?;
     activate_app();
     Ok(())
-}
-
-fn is_error(cli_stdout: &str) -> bool {
-    cli_stdout.trim_start().starts_with("Error:")
 }
 
 #[cfg(test)]

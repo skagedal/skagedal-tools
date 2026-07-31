@@ -10,21 +10,27 @@ files in an Obsidian vault:
 - Clicking the toolbar icon opens a popup for the current tab. If a note
   already exists for that URL, its content is shown inline (as plain text,
   not rendered) with an "Open in Obsidian" button — which also brings the
-  Obsidian app to the foreground, since the CLI navigates to the note
-  without activating the app window. Otherwise, a "Create note" button
-  creates one.
+  Obsidian app to the foreground. Otherwise, a "Create note" button creates
+  one.
 - The toolbar icon shows a ✓ badge whenever the current tab has a note, kept
   up to date by a background service worker as you navigate or switch tabs.
-  If the host couldn't be reached, it shows a ❌ badge instead.
+  If a request fails, it shows a "!" badge instead, and the popup offers an
+  "Open Obsidian" button.
 
-All of this is done via the `obsidian` CLI, run from the native messaging
-host described below — Chrome's extension APIs have no direct file system
-access, so the host is what actually talks to Obsidian.
+Chrome's extension APIs have no direct file system access, so this is all
+done from the native messaging host described below. Looking up and
+creating notes reads and writes files directly in the vault folder on
+disk — no dependency on the `obsidian` CLI or the app being open at all.
+The one exception is "Open in Obsidian", which does need the app: it goes
+through the `obsidian://open?vault=...&file=...` URL scheme (handled by the
+app itself), which launches the app if needed and reliably lands on the
+right vault and note.
 
-The `obsidian` CLI only works while the Obsidian app itself is running — if
-it's not, every request fails and the popup shows the error along with an
-"Open Obsidian" button (which launches/foregrounds the app directly,
-bypassing the CLI).
+(An earlier version shelled out to the [`obsidian`
+CLI](https://obsidian.md/plugins?id=cli) for everything, but its `vault=`
+targeting option turned out to be silently ignored — every command actually
+operated on whichever vault window happened to be focused, which both
+under-reported notes and once created a note in the wrong vault entirely.)
 
 The extension's `manifest.json` has a fixed `"key"` field, which pins its
 extension ID to `jbgofjilflakfjbenbgpppajapiffphn` no matter where it's
@@ -52,9 +58,9 @@ be active.
 repo's Cargo workspace) that the browser extension talks to over stdin/stdout
 using Chrome's [native messaging
 protocol](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging).
-Every message it receives is logged, and it shells out to the
-[`obsidian` CLI](https://obsidian.md) (bundled with the Obsidian app, e.g.
-`brew install --cask obsidian`) to look up, create, and open notes.
+It reads and writes note files directly in the configured vault folder, and
+opens notes in Obsidian (installed e.g. via `brew install --cask obsidian`)
+through its `obsidian://` URL scheme.
 
 Register it with Chrome (builds the release binary and writes the host
 manifest to `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`):
@@ -73,16 +79,16 @@ The host reads `~/.skagedal-tools/chrome-page-notes/config.toml` (or
 [convention](../AGENTS.md#per-tool-config-and-state-directories):
 
 ```toml
-vault = "obsidian-notes"                       # required — must match a vault `obsidian vaults` knows about
-obsidian_binary = "/opt/homebrew/bin/obsidian"  # required — must be an absolute path
+vault_path = "/Users/you/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian-notes"  # required — absolute path to the vault folder
 folder = "webnotes"                             # optional, defaults to "webnotes"
 debug = false                                   # optional, defaults to false
 ```
 
-`obsidian_binary` must be absolute (not just `"obsidian"`) because Chrome
-spawns this host with a minimal PATH that doesn't include Homebrew's bin
-directories — a bare command name would fail to resolve even though it
-works fine from a terminal.
+`vault_path` must point directly at the vault's folder on disk (find it via
+Obsidian's own "Open another vault" list, or `obsidian vaults verbose` if
+you have the CLI installed) — the vault's name, used for the `obsidian://`
+URL scheme when opening a note, is derived from this path's last component,
+so the folder name must match the vault's name as shown in Obsidian.
 
 `debug` controls whether every incoming message is appended to
 `host.log` (see below). It's off by default — every page visit sends a

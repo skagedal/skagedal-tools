@@ -32,8 +32,7 @@ enum Request {
     /// "Open in Obsidian" button in the popup.
     OpenNote { path: String },
     /// "Open Obsidian" button shown in the popup on error: launches (or
-    /// foregrounds) the app directly, bypassing the CLI, since the CLI
-    /// itself requires the app to already be running.
+    /// foregrounds) the app directly.
     OpenApp,
 }
 
@@ -91,9 +90,9 @@ fn note_response(cfg: &Result<config::Config>, url: &str, create_if_missing: boo
     };
 
     let result = if create_if_missing {
-        notes::create(&cfg.obsidian_binary, &cfg.vault, &path, &notes::initial_content(url))
+        notes::create(&cfg.vault_path, &path, &notes::initial_content(url))
     } else {
-        notes::lookup(&cfg.obsidian_binary, &cfg.vault, &path)
+        notes::lookup(&cfg.vault_path, &path)
     };
 
     match result {
@@ -115,7 +114,16 @@ fn handle(request: Request, cfg: &Result<config::Config>) -> serde_json::Value {
                 Ok(cfg) => cfg,
                 Err(e) => return json!({"status": "error", "message": e.to_string()}),
             };
-            match notes::open(&cfg.obsidian_binary, &cfg.vault, &path) {
+            let vault_name = match cfg.vault_path.file_name().and_then(|n| n.to_str()) {
+                Some(name) => name,
+                None => {
+                    return json!({
+                        "status": "error",
+                        "message": format!("could not determine vault name from vault_path \"{}\"", cfg.vault_path.display()),
+                    });
+                }
+            };
+            match notes::open(vault_name, &path) {
                 Ok(()) => json!({"status": "ok"}),
                 Err(e) => json!({"status": "error", "message": e.to_string()}),
             }

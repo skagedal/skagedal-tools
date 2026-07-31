@@ -1,40 +1,34 @@
-//! Thin wrapper for invoking the `obsidian` CLI.
+//! macOS-specific helpers for interacting with the Obsidian app.
 //!
-//! Chrome launches this host with a minimal PATH that doesn't include
-//! Homebrew's bin directories, so a bare `Command::new("obsidian")` fails
-//! even though it works fine from a terminal. Rather than guessing at
-//! install locations, the binary's absolute path comes from config (see
-//! `config::Config::obsidian_binary`).
+//! Looking up and creating notes doesn't need any of this - see `notes.rs`,
+//! which reads/writes the vault folder directly. This module is only for
+//! the one action that genuinely needs the app: opening a note in it. That
+//! goes through the `obsidian://` URL scheme rather than the `obsidian`
+//! CLI, because the CLI requires the app to already be running, and its
+//! `vault=` option turned out to be silently ignored - every command
+//! operated on whichever vault window happened to be focused, regardless
+//! of what `vault=` was passed.
 
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-/// Runs the `obsidian` CLI and returns its stdout.
-///
-/// A nonzero exit is treated as a hard error (distinct from the CLI's habit
-/// of exiting 0 and printing `Error: ...` to stdout for things like "file
-/// not found") — e.g. when the Obsidian app itself isn't running, the CLI
-/// exits 1 and writes "The CLI is unable to find Obsidian..." to stderr.
-pub fn run(binary: &str, args: &[String]) -> Result<String> {
-    let output = Command::new(binary)
-        .args(args)
-        .output()
-        .with_context(|| format!("failed to run the obsidian CLI at \"{binary}\""))?;
+/// Opens a URL via macOS's `open`. Used for `obsidian://` URIs, which
+/// Obsidian's own URL scheme handler resolves by vault name correctly, and
+/// which auto-launches the app if it's not already running.
+pub fn open_url(url: &str) -> Result<()> {
+    let output = Command::new("open").arg(url).output().context("failed to run `open`")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("obsidian CLI failed: {}", stderr.trim());
+        bail!("`open` failed: {}", stderr.trim());
     }
 
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    Ok(())
 }
 
-/// Brings the Obsidian app to the foreground. `obsidian open`/`obsidian
-/// create` navigate to the note within the app but don't activate its
-/// window, so this uses macOS's `open -a` to do that separately. Best
-/// effort: failures here shouldn't fail the surrounding request, since the
-/// note action itself already succeeded.
+/// Brings the Obsidian app to the foreground (or launches it). Best
+/// effort: failures here shouldn't fail the surrounding request.
 pub fn activate_app() {
     let _ = Command::new("open").args(["-a", "Obsidian"]).output();
 }
