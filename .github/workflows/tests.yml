@@ -25,5 +25,9 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
       - name: ./check
         run: ./check

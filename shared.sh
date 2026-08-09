@@ -43,6 +43,12 @@ MAVEN_TOOLS=(
     git-repos-latest-activity
 )
 
+# Flutter apps. Not installable — they get built onto a phone, not into
+# ~/.cargo/bin — so they only show up in ./check and ./update.
+FLUTTER_TOOLS=(
+    jikido
+)
+
 check-node() {
     local dir="$1"
     echo "==> Checking $dir"
@@ -92,6 +98,17 @@ check-maven() {
     local dir="$1"
     echo "==> Checking $dir"
     (cd "$SCRIPT_DIR/$dir" && mvn --batch-mode test)
+}
+
+check-flutter() {
+    local dir="$1"
+    echo "==> Checking $dir"
+    (
+        cd "$SCRIPT_DIR/$dir"
+        flutter pub get
+        flutter analyze
+        flutter test
+    )
 }
 
 install-node() {
@@ -147,5 +164,11 @@ update-maven() {
     local dir="$1"
     echo "==> Updating $dir"
     (cd "$SCRIPT_DIR/$dir" && mvn versions:use-latest-releases)
+}
+
+update-flutter() {
+    local dir="$1"
+    echo "==> Updating $dir"
+    (cd "$SCRIPT_DIR/$dir" && flutter pub upgrade)
 }
 

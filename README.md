@@ -25,3 +25,4 @@ A collection of small tools.
 | [simons-misc-helpers](simons-misc-helpers/) | Miscellaneous helpers; currently formats the JSON output of `git pkgs diff --format=json` with colors |
 | [tracker](tracker/) | Tracks weekly work hours in a simple per-week text file with start/stop/report commands |
 | [chrome-page-notes](chrome-page-notes/) | Chrome extension for attaching your own notes to a page |
+| [jikido](jikido/) | Zazen timer for iOS and Android: three strikes of the bell, a silent period, three strikes again |
