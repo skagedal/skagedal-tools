@@ -65,6 +65,7 @@ check-rust() {
         if [[ -f browser/package.json5 ]]; then
             (cd browser && pnpm install && pnpm run check)
         fi
+        cargo fmt --check
         cargo clippy --all-targets -- -D warnings
         cargo test
     )
@@ -83,6 +84,7 @@ check-rust-workspace() {
                 (cd "$tool/browser" && pnpm install && pnpm run check)
             fi
         done
+        cargo fmt --all --check
         cargo clippy --workspace --all-targets -- -D warnings
         cargo test --workspace
     )

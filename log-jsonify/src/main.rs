@@ -1,5 +1,5 @@
+use serde_json::{Value, json};
 use std::io::{self, BufRead, Write};
-use serde_json::{json, Value};
 
 fn jsonify_line(line: &str) -> String {
     match serde_json::from_str::<Value>(line) {

@@ -11,13 +11,25 @@ const DRIVER_COMMAND: &str = "package-json-merge merge %O %A %B %P";
 const ATTRIBUTES_LINE: &str = "package.json merge=skagedal-package-json";
 
 pub fn install(global: bool) -> Result<()> {
-    set_git_config(&format!("merge.{DRIVER_NAME}.name"), DRIVER_DESCRIPTION, global)?;
-    set_git_config(&format!("merge.{DRIVER_NAME}.driver"), DRIVER_COMMAND, global)?;
+    set_git_config(
+        &format!("merge.{DRIVER_NAME}.name"),
+        DRIVER_DESCRIPTION,
+        global,
+    )?;
+    set_git_config(
+        &format!("merge.{DRIVER_NAME}.driver"),
+        DRIVER_COMMAND,
+        global,
+    )?;
 
     let attributes_path = resolve_attributes_path(global)?;
     ensure_line_in_file(&attributes_path, ATTRIBUTES_LINE)?;
 
-    let scope = if global { "globally" } else { "in this repository" };
+    let scope = if global {
+        "globally"
+    } else {
+        "in this repository"
+    };
     eprintln!("Installed merge driver \"{DRIVER_NAME}\" {scope}.");
     eprintln!("  attributes: {}", attributes_path.display());
     Ok(())
@@ -29,7 +41,11 @@ pub fn uninstall(global: bool) -> Result<()> {
     let attributes_path = resolve_attributes_path(global)?;
     remove_line_from_file(&attributes_path, ATTRIBUTES_LINE)?;
 
-    let scope = if global { "globally" } else { "from this repository" };
+    let scope = if global {
+        "globally"
+    } else {
+        "from this repository"
+    };
     eprintln!("Removed merge driver \"{DRIVER_NAME}\" {scope}.");
     Ok(())
 }
@@ -123,8 +139,7 @@ fn expand_home(path: &str) -> PathBuf {
 
 fn ensure_line_in_file(path: &Path, line: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("creating {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
     let existing = fs::read_to_string(path).unwrap_or_default();
     if existing.lines().any(|l| l.trim() == line) {

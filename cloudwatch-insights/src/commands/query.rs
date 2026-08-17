@@ -10,24 +10,26 @@ use chrono::{Local, Utc};
 use crate::cli::QueryArgs;
 use crate::commands::fail;
 use crate::config::{
-    is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults, RepoConfig,
+    RepoConfig, is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults,
+};
+use crate::console_link::{
+    ConsoleLinkInput, QueryDetailInput, TimeSpec, build_console_link, build_query_detail,
 };
 use crate::editor::open_editor;
 use crate::flatten::flatten_row;
-use crate::console_link::{
-    build_console_link, build_query_detail, ConsoleLinkInput, QueryDetailInput, TimeSpec,
-};
-use crate::insights::{run_insights_query, ProgressCallback, QueryProgress, RunQueryOptions};
-use crate::progress::{ProgressReporter, HEADER_COLUMN_WIDTH};
-use crate::terminal::{colorize, styled_link, Color, ColorOptions};
+use crate::insights::{ProgressCallback, QueryProgress, RunQueryOptions, run_insights_query};
 use crate::output::{update_latest_symlink, write_results};
 use crate::paths;
+use crate::progress::{HEADER_COLUMN_WIDTH, ProgressReporter};
 use crate::query_file::{
-    ensure_current_insights, load_query_file, parse_query_file, reset_current_insights,
-    run_timestamp, FrontMatter, LogGroupValue, SeedFrontMatter, SeedOptions,
+    FrontMatter, LogGroupValue, SeedFrontMatter, SeedOptions, ensure_current_insights,
+    load_query_file, parse_query_file, reset_current_insights, run_timestamp,
 };
 use crate::template::expand_template;
-use crate::time_range::{parse_time_range, try_parse_relative_duration_seconds, TimeRange, TimeRangeParseError};
+use crate::terminal::{Color, ColorOptions, colorize, styled_link};
+use crate::time_range::{
+    TimeRange, TimeRangeParseError, parse_time_range, try_parse_relative_duration_seconds,
+};
 
 pub async fn run(args: QueryArgs) -> Result<()> {
     if args.query.is_some() && args.query_file.is_some() {
@@ -41,7 +43,8 @@ pub async fn run(args: QueryArgs) -> Result<()> {
 
     let cli_environment = validate_environment_arg(args.environment.as_deref(), "--environment")?;
 
-    let (query_body, front_matter) = resolve_query_source(&args, &defaults, cli_environment.as_deref()).await?;
+    let (query_body, front_matter) =
+        resolve_query_source(&args, &defaults, cli_environment.as_deref()).await?;
 
     let environment = match cli_environment {
         Some(e) => Some(e),
@@ -75,8 +78,8 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         section_name.as_deref(),
     )?;
 
-    let expanded_query = expand_template(&query_body, &template_vars)
-        .map_err(|e| fail(2, e.to_string()))?;
+    let expanded_query =
+        expand_template(&query_body, &template_vars).map_err(|e| fail(2, e.to_string()))?;
 
     let env_config = match environment.as_deref() {
         Some(e) => resolve_env_config(&settings, section_name.as_deref(), e),
@@ -107,7 +110,13 @@ pub async fn run(args: QueryArgs) -> Result<()> {
         print_header(region.as_deref(), &log_groups, &time_expr);
     }
 
-    let console_url = build_query_console_url(region.as_deref(), &log_groups, &expanded_query, &time_expr, &range);
+    let console_url = build_query_console_url(
+        region.as_deref(),
+        &log_groups,
+        &expanded_query,
+        &time_expr,
+        &range,
+    );
 
     if front_matter.dry == Some(true) {
         if !args.quiet {
@@ -169,7 +178,13 @@ fn print_header(region: Option<&str>, log_groups: &[String], time_expr: &str) {
 }
 
 fn print_header_line(label: &str, value: &str) {
-    let bold = colorize(label, ColorOptions { bold: true, ..Default::default() });
+    let bold = colorize(
+        label,
+        ColorOptions {
+            bold: true,
+            ..Default::default()
+        },
+    );
     let pad = " ".repeat(HEADER_COLUMN_WIDTH.saturating_sub(label.len()));
     eprintln!("{bold}{pad}{value}");
 }
@@ -229,7 +244,9 @@ fn build_query_console_url(
 
 fn pick_time_spec(time_expr: &str, range: &TimeRange) -> TimeSpec {
     if let Some(seconds) = try_parse_relative_duration_seconds(time_expr) {
-        return TimeSpec::Relative { seconds_back: seconds };
+        return TimeSpec::Relative {
+            seconds_back: seconds,
+        };
     }
     TimeSpec::Absolute {
         start_ms: range.start.timestamp_millis(),
@@ -343,7 +360,8 @@ async fn resolve_query_source(
             eprintln!("Reset {} to default template", path.display());
         }
     } else {
-        let seeded = ensure_current_insights(&path, &seed).map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let seeded =
+            ensure_current_insights(&path, &seed).map_err(|e| anyhow::anyhow!(e.to_string()))?;
         if seeded && !args.quiet {
             eprintln!("Seeded {}", path.display());
         }

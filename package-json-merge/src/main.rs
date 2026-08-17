@@ -45,7 +45,12 @@ enum Cmd {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Cmd::Merge { base, ours, theirs, path: _ } => {
+        Cmd::Merge {
+            base,
+            ours,
+            theirs,
+            path: _,
+        } => {
             let outcome = merge::run_merge(&base, &ours, &theirs)?;
             for r in &outcome.resolutions {
                 eprintln!(

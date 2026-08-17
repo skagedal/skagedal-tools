@@ -248,10 +248,7 @@ mod tests {
     fn enter_confirms_and_escape_cancels() {
         let mut s = fresh_state();
         assert!(matches!(handle_key(&mut s, Key::Enter), KeyResult::Confirm));
-        assert!(matches!(
-            handle_key(&mut s, Key::Escape),
-            KeyResult::Cancel
-        ));
+        assert!(matches!(handle_key(&mut s, Key::Escape), KeyResult::Cancel));
     }
 
     #[test]

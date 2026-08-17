@@ -1,7 +1,6 @@
 use clap::{Args, Parser, Subcommand as ClapSubcommand};
 
-const TIME_DESCRIPTION: &str =
-    "time range. Examples: 5h, 30m, 500ms, 13.00-13.01, \
+const TIME_DESCRIPTION: &str = "time range. Examples: 5h, 30m, 500ms, 13.00-13.01, \
      09:15:00.000-09:15:00.500, \"yesterday 17-18\", \
      2026-04-22T13:00:00Z/2026-04-22T14:00:00Z. \
      Defaults to the front-matter `time` if present, otherwise 1h.";

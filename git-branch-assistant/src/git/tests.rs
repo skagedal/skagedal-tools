@@ -91,7 +91,10 @@ local-only||||
         branches.iter().map(|b| (b.refname.as_str(), b)).collect();
 
     let main = by_name["main"];
-    assert_eq!(main.upstream.as_ref().map(|u| u.status), Some(UpstreamStatus::Identical));
+    assert_eq!(
+        main.upstream.as_ref().map(|u| u.status),
+        Some(UpstreamStatus::Identical)
+    );
     assert_eq!(main.worktree_path, Some(PathBuf::from("/repo")));
 
     assert_eq!(
@@ -164,7 +167,9 @@ fn pr_create_args_with_web_appends_only_web() {
     );
     assert_eq!(
         args,
-        vec!["pr", "create", "--head", "feature", "--base", "main", "--web"]
+        vec![
+            "pr", "create", "--head", "feature", "--base", "main", "--web"
+        ]
     );
 }
 

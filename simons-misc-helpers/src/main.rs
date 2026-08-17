@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use simons_misc_helpers::format_dependency_changes::{
-    DependencyChanges, write_dependency_changes,
-};
+use simons_misc_helpers::format_dependency_changes::{DependencyChanges, write_dependency_changes};
 use std::io::{self, IsTerminal, Read};
 
 /// Simon's miscellaneous helpers.

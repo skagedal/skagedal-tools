@@ -67,7 +67,9 @@ fn is_identifier(s: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn vars(pairs: &[(&'static str, &'static str)]) -> BTreeMap<&'static str, Option<&'static str>> {
+    fn vars(
+        pairs: &[(&'static str, &'static str)],
+    ) -> BTreeMap<&'static str, Option<&'static str>> {
         pairs.iter().map(|(k, v)| (*k, Some(*v))).collect()
     }
 
@@ -86,7 +88,11 @@ mod tests {
             "/uat/uat"
         );
         assert_eq!(
-            expand_template("/{{ env }}/{{ app }}", &vars(&[("env", "prod"), ("app", "svc")])).unwrap(),
+            expand_template(
+                "/{{ env }}/{{ app }}",
+                &vars(&[("env", "prod"), ("app", "svc")])
+            )
+            .unwrap(),
             "/prod/svc"
         );
     }

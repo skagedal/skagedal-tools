@@ -76,5 +76,4 @@ mod tests {
         assert_eq!(level_color(""), None);
         assert_eq!(level_color("audit"), None);
     }
-
 }

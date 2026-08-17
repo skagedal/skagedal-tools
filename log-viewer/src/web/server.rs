@@ -319,7 +319,10 @@ mod tests {
     #[test]
     fn guess_mime_for_common_extensions() {
         assert_eq!(guess_mime("index.html"), "text/html; charset=utf-8");
-        assert_eq!(guess_mime("main.js"), "application/javascript; charset=utf-8");
+        assert_eq!(
+            guess_mime("main.js"),
+            "application/javascript; charset=utf-8"
+        );
         assert_eq!(guess_mime("app.css"), "text/css; charset=utf-8");
         assert_eq!(guess_mime("logo.svg"), "image/svg+xml");
         assert_eq!(guess_mime("unknown"), "application/octet-stream");
@@ -338,4 +341,3 @@ mod tests {
         assert_eq!(v1["id"], 1);
     }
 }
-

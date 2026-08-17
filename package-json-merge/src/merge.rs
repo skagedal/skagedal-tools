@@ -37,7 +37,12 @@ pub fn run_merge(base_path: &Path, ours_path: &Path, theirs_path: &Path) -> Resu
     let theirs_raw = fs::read_to_string(theirs_path).ok();
 
     let (Some(base_raw), Some(theirs_raw)) = (base_raw, theirs_raw) else {
-        return Ok(fallback(base_path, ours_path, theirs_path, "missing base or theirs file"));
+        return Ok(fallback(
+            base_path,
+            ours_path,
+            theirs_path,
+            "missing base or theirs file",
+        ));
     };
 
     let base = match serde_json::from_str::<Value>(&base_raw) {
@@ -127,13 +132,22 @@ fn merge_value(
     resolutions: &mut Vec<Resolution>,
 ) -> ValueResult {
     if ours == theirs {
-        return ValueResult { value: ours.clone(), conflicted: false };
+        return ValueResult {
+            value: ours.clone(),
+            conflicted: false,
+        };
     }
     if base == Some(ours) {
-        return ValueResult { value: theirs.clone(), conflicted: false };
+        return ValueResult {
+            value: theirs.clone(),
+            conflicted: false,
+        };
     }
     if base == Some(theirs) {
-        return ValueResult { value: ours.clone(), conflicted: false };
+        return ValueResult {
+            value: ours.clone(),
+            conflicted: false,
+        };
     }
 
     if let (Value::Object(o), Value::Object(t)) = (ours, theirs) {
@@ -156,7 +170,10 @@ fn merge_value(
         };
     }
 
-    ValueResult { value: ours.clone(), conflicted: true }
+    ValueResult {
+        value: ours.clone(),
+        conflicted: true,
+    }
 }
 
 fn merge_object(
@@ -204,7 +221,10 @@ fn merge_object(
         }
     }
 
-    ObjectResult { value: merged, conflicted }
+    ObjectResult {
+        value: merged,
+        conflicted,
+    }
 }
 
 fn merge_deps(
@@ -266,7 +286,10 @@ fn merge_deps(
         }
     }
 
-    ObjectResult { value: merged, conflicted }
+    ObjectResult {
+        value: merged,
+        conflicted,
+    }
 }
 
 pub fn pick_higher_range(a: &str, b: &str) -> Option<String> {
@@ -299,7 +322,10 @@ fn union_keys(a: &Map<String, Value>, b: &Map<String, Value>) -> Vec<String> {
 
 fn detect_indent(content: &str) -> String {
     for line in content.lines().skip(1) {
-        let ws: String = line.chars().take_while(|c| *c == ' ' || *c == '\t').collect();
+        let ws: String = line
+            .chars()
+            .take_while(|c| *c == ' ' || *c == '\t')
+            .collect();
         if !ws.is_empty() && line.trim_start().starts_with('"') {
             if ws.contains('\t') {
                 return "  ".to_string();
@@ -338,14 +364,26 @@ mod tests {
 
     #[test]
     fn higher_caret_wins() {
-        assert_eq!(pick_higher_range("^1.2.3", "^1.5.0").as_deref(), Some("^1.5.0"));
-        assert_eq!(pick_higher_range("^2.0.0", "^1.9.9").as_deref(), Some("^2.0.0"));
+        assert_eq!(
+            pick_higher_range("^1.2.3", "^1.5.0").as_deref(),
+            Some("^1.5.0")
+        );
+        assert_eq!(
+            pick_higher_range("^2.0.0", "^1.9.9").as_deref(),
+            Some("^2.0.0")
+        );
     }
 
     #[test]
     fn tilde_and_exact() {
-        assert_eq!(pick_higher_range("~1.2.3", "1.2.4").as_deref(), Some("1.2.4"));
-        assert_eq!(pick_higher_range("1.0.0", "1.0.0").as_deref(), Some("1.0.0"));
+        assert_eq!(
+            pick_higher_range("~1.2.3", "1.2.4").as_deref(),
+            Some("1.2.4")
+        );
+        assert_eq!(
+            pick_higher_range("1.0.0", "1.0.0").as_deref(),
+            Some("1.0.0")
+        );
     }
 
     #[test]

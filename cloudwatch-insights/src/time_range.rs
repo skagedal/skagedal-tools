@@ -27,7 +27,10 @@ pub struct TimeRangeParseError(pub String);
 const DAY_KEYWORDS: &[&str] = &["today", "yesterday"];
 
 /// Parse a time-range expression. `now` is used as the reference instant.
-pub fn parse_time_range(input: &str, now: DateTime<Local>) -> Result<TimeRange, TimeRangeParseError> {
+pub fn parse_time_range(
+    input: &str,
+    now: DateTime<Local>,
+) -> Result<TimeRange, TimeRangeParseError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err(TimeRangeParseError("empty time range".into()));
@@ -71,7 +74,10 @@ fn try_parse_duration(input: &str, now: DateTime<Local>) -> Option<TimeRange> {
     let ms = amount_ms(amount, unit)?;
     let now_utc = now.with_timezone(&Utc);
     let start = now_utc - Duration::milliseconds(ms);
-    Some(TimeRange { start, end: now_utc })
+    Some(TimeRange {
+        start,
+        end: now_utc,
+    })
 }
 
 /// Split a string like "5h" into (5.0, "h"). Accepts decimal amounts.
@@ -81,9 +87,7 @@ fn split_duration(input: &str) -> Option<(f64, &str)> {
         return None;
     }
     let mut i = 0;
-    while i < bytes.len()
-        && (bytes[i].is_ascii_digit() || bytes[i] == b'.')
-    {
+    while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
         i += 1;
     }
     if i == 0 || i == bytes.len() {
@@ -242,13 +246,15 @@ fn parse_instant(input: &str, now: DateTime<Local>) -> Result<DateTime<Utc>, Tim
     }
 
     // "YYYY-MM-DD HH:MM[:SS[.mmm]]" → swap space for T.
-    let normalized = if input.len() >= 11 && &input[4..5] == "-" && &input[7..8] == "-" && &input[10..11] == " " {
-        let mut s = input.to_string();
-        s.replace_range(10..11, "T");
-        s
-    } else {
-        input.to_string()
-    };
+    let normalized =
+        if input.len() >= 11 && &input[4..5] == "-" && &input[7..8] == "-" && &input[10..11] == " "
+        {
+            let mut s = input.to_string();
+            s.replace_range(10..11, "T");
+            s
+        } else {
+            input.to_string()
+        };
 
     // Try RFC3339 (with timezone).
     if let Ok(dt) = DateTime::parse_from_rfc3339(&normalized) {
@@ -267,10 +273,7 @@ fn parse_instant(input: &str, now: DateTime<Local>) -> Result<DateTime<Utc>, Tim
     }
     // Try ISO date (interpret as local-time start of day).
     if let Ok(date) = NaiveDate::parse_from_str(&normalized, "%Y-%m-%d") {
-        let naive = NaiveDateTime::new(
-            date,
-            NaiveTime::from_hms_opt(0, 0, 0).expect("00:00:00"),
-        );
+        let naive = NaiveDateTime::new(date, NaiveTime::from_hms_opt(0, 0, 0).expect("00:00:00"));
         return Ok(local_to_utc(naive, now));
     }
 
@@ -290,10 +293,7 @@ fn local_to_utc(naive: NaiveDateTime, now: DateTime<Local>) -> DateTime<Utc> {
 
 fn start_of_day(now: DateTime<Local>) -> DateTime<Utc> {
     let date = now.date_naive();
-    let naive = NaiveDateTime::new(
-        date,
-        NaiveTime::from_hms_opt(0, 0, 0).expect("00:00:00"),
-    );
+    let naive = NaiveDateTime::new(date, NaiveTime::from_hms_opt(0, 0, 0).expect("00:00:00"));
     local_to_utc(naive, now)
 }
 
@@ -320,10 +320,7 @@ mod tests {
     }
 
     fn local_dt(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32, ms: u32) -> DateTime<Utc> {
-        let local = Local
-            .with_ymd_and_hms(y, mo, d, h, mi, s)
-            .single()
-            .unwrap()
+        let local = Local.with_ymd_and_hms(y, mo, d, h, mi, s).single().unwrap()
             + Duration::milliseconds(ms as i64);
         local.with_timezone(&Utc)
     }
@@ -412,11 +409,7 @@ mod tests {
 
     #[test]
     fn explicit_iso_range_slash() {
-        let r = parse_time_range(
-            "2026-04-22T13:00:00Z/2026-04-22T14:00:00Z",
-            now(),
-        )
-        .unwrap();
+        let r = parse_time_range("2026-04-22T13:00:00Z/2026-04-22T14:00:00Z", now()).unwrap();
         assert_eq!(
             r.start.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             "2026-04-22T13:00:00.000Z"

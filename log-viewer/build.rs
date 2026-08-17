@@ -34,7 +34,12 @@ fn main() {
         run("pnpm", &["install"], &browser, "pnpm install");
     }
 
-    run("pnpm", &["run", "build:web"], &browser, "pnpm run build:web");
+    run(
+        "pnpm",
+        &["run", "build:web"],
+        &browser,
+        "pnpm run build:web",
+    );
 
     let dist_index = browser.join("web/dist/index.html");
     if !dist_index.exists() {

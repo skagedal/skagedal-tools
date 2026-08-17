@@ -490,10 +490,7 @@ mod tests {
     #[test]
     fn repeated_messages_become_array() {
         let got = parse(r#"phone { number: "1" } phone { number: "2" }"#);
-        assert_eq!(
-            got,
-            json!({"phone": [{"number": "1"}, {"number": "2"}]})
-        );
+        assert_eq!(got, json!({"phone": [{"number": "1"}, {"number": "2"}]}));
     }
 
     #[test]

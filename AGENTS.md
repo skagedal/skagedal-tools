@@ -119,3 +119,6 @@ All Rust projects in this repository must follow these guidelines:
   `cargo clippy --all-targets -- -D warnings && cargo test` per crate, so any
   clippy lint becomes a CI failure. Fix the lint at the source rather than
   reaching for `#[allow(...)]`.
+- Code must be rustfmt-clean. `./check` also runs `cargo fmt --all --check`, so
+  unformatted code is a CI failure. Run `cargo fmt` before committing. Don't
+  hand-format around rustfmt or scatter `#[rustfmt::skip]`.

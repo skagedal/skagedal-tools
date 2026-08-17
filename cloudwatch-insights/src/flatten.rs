@@ -44,7 +44,10 @@ mod tests {
     use super::*;
 
     fn row(pairs: &[(&str, &str)]) -> IndexMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     #[test]
@@ -54,7 +57,10 @@ mod tests {
             ("@message", r#"{"foo": "bar", "baz": "frotz"}"#),
         ]);
         let out = flatten_row(&r, &["@message".into()]);
-        assert_eq!(out.get("@timestamp").unwrap().as_str().unwrap(), "2026-04-25T12:00:00Z");
+        assert_eq!(
+            out.get("@timestamp").unwrap().as_str().unwrap(),
+            "2026-04-25T12:00:00Z"
+        );
         assert_eq!(out.get("foo").unwrap().as_str().unwrap(), "bar");
         assert_eq!(out.get("baz").unwrap().as_str().unwrap(), "frotz");
         assert!(!out.contains_key("@message"));
@@ -64,14 +70,20 @@ mod tests {
     fn leaves_field_when_not_json() {
         let r = row(&[("@message", "not json at all")]);
         let out = flatten_row(&r, &["@message".into()]);
-        assert_eq!(out.get("@message").unwrap().as_str().unwrap(), "not json at all");
+        assert_eq!(
+            out.get("@message").unwrap().as_str().unwrap(),
+            "not json at all"
+        );
     }
 
     #[test]
     fn leaves_field_when_json_not_object() {
         let r = row(&[("@message", r#"["a", "b"]"#)]);
         let out = flatten_row(&r, &["@message".into()]);
-        assert_eq!(out.get("@message").unwrap().as_str().unwrap(), r#"["a", "b"]"#);
+        assert_eq!(
+            out.get("@message").unwrap().as_str().unwrap(),
+            r#"["a", "b"]"#
+        );
     }
 
     #[test]
@@ -80,10 +92,7 @@ mod tests {
         let out = flatten_row(&r, &["@message".into()]);
         assert_eq!(out.get("n").unwrap(), &Value::Number(1.into()));
         assert_eq!(out.get("ok").unwrap(), &Value::Bool(true));
-        assert_eq!(
-            out.get("ctx").unwrap(),
-            &serde_json::json!({"id": "x"})
-        );
+        assert_eq!(out.get("ctx").unwrap(), &serde_json::json!({"id": "x"}));
     }
 
     #[test]
@@ -103,10 +112,7 @@ mod tests {
 
     #[test]
     fn flattened_keys_overwrite_collisions() {
-        let r = row(&[
-            ("foo", "outer"),
-            ("@message", r#"{"foo": "inner"}"#),
-        ]);
+        let r = row(&[("foo", "outer"), ("@message", r#"{"foo": "inner"}"#)]);
         let out = flatten_row(&r, &["@message".into()]);
         assert_eq!(out.get("foo").unwrap().as_str().unwrap(), "inner");
         assert!(!out.contains_key("@message"));
