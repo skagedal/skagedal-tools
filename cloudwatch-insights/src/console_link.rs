@@ -129,7 +129,10 @@ pub enum ConsoleLinkError {
 
 /// Inverse of [`encode_rison`].
 pub fn decode_rison(input: &str) -> Result<RisonValue, ConsoleLinkError> {
-    let mut parser = RisonParser { src: input.as_bytes(), pos: 0 };
+    let mut parser = RisonParser {
+        src: input.as_bytes(),
+        pos: 0,
+    };
     let value = parser.parse_value()?;
     if parser.pos != parser.src.len() {
         return Err(ConsoleLinkError::Decode(format!(
@@ -148,7 +151,9 @@ struct RisonParser<'a> {
 
 impl<'a> RisonParser<'a> {
     fn parse_value(&mut self) -> Result<RisonValue, ConsoleLinkError> {
-        let c = self.peek().ok_or_else(|| ConsoleLinkError::Decode("unexpected end of input".into()))?;
+        let c = self
+            .peek()
+            .ok_or_else(|| ConsoleLinkError::Decode("unexpected end of input".into()))?;
         if c == b'(' {
             self.pos += 1;
             if self.peek() == Some(b'~') {
@@ -292,7 +297,10 @@ pub fn build_query_detail(input: &QueryDetailInput<'_>) -> IndexMap<String, Riso
             detail.insert("unit".into(), RisonValue::String("milliseconds".into()));
         }
     }
-    detail.insert("editorString".into(), RisonValue::String(input.query.into()));
+    detail.insert(
+        "editorString".into(),
+        RisonValue::String(input.query.into()),
+    );
     if let Some(qid) = input.query_id {
         detail.insert("queryId".into(), RisonValue::String(qid.into()));
     }
@@ -374,8 +382,9 @@ pub fn parse_console_link(url: &str) -> Result<ParsedConsoleLink, ConsoleLinkErr
     let query_str = &trimmed[..hash_idx];
     let fragment = &trimmed[hash_idx + 1..];
 
-    let region = extract_region(query_str)
-        .ok_or_else(|| ConsoleLinkError::Parse("URL is missing the ?region=... query parameter".into()))?;
+    let region = extract_region(query_str).ok_or_else(|| {
+        ConsoleLinkError::Parse("URL is missing the ?region=... query parameter".into())
+    })?;
 
     let mut normalized = percent_decode_lossy(fragment);
     normalized = normalized.replace("$3F", "?").replace("$3D", "=");
@@ -384,7 +393,9 @@ pub fn parse_console_link(url: &str) -> Result<ParsedConsoleLink, ConsoleLinkErr
         .ok_or_else(|| ConsoleLinkError::Parse("fragment is missing queryDetail=...".into()))?;
     let detail = decode_rison(&detail_str)?;
     let RisonValue::Object(map) = detail else {
-        return Err(ConsoleLinkError::Parse("queryDetail is not a Rison object".into()));
+        return Err(ConsoleLinkError::Parse(
+            "queryDetail is not a Rison object".into(),
+        ));
     };
     Ok(ParsedConsoleLink {
         region,
@@ -426,10 +437,9 @@ fn percent_decode_lossy(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(b) = u8::from_str_radix(
-                std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""),
-                16,
-            ) {
+            if let Ok(b) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
+            {
                 out.push(b);
                 i += 3;
                 continue;
@@ -540,13 +550,12 @@ mod tests {
             "editorString".into(),
             s("fields @timestamp, @message\n| sort @timestamp desc\n| filter app = 'my-service'\n| limit 200"),
         );
-        detail.insert(
-            "queryId".into(),
-            s("dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb"),
-        );
+        detail.insert("queryId".into(), s("dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb"));
         detail.insert(
             "source".into(),
-            RisonValue::Array(vec![s("arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs")]),
+            RisonValue::Array(vec![s(
+                "arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs",
+            )]),
         );
         detail.insert("lang".into(), s("CWLI"));
         detail.insert("logClass".into(), s("STANDARD"));
@@ -575,14 +584,20 @@ mod tests {
         assert_eq!(detail.get("start").unwrap().as_f64(), Some(-3600.0));
         assert_eq!(detail.get("timeType").unwrap().as_str(), Some("RELATIVE"));
         assert_eq!(detail.get("unit").unwrap().as_str(), Some("seconds"));
-        assert_eq!(detail.get("editorString").unwrap().as_str(), Some("fields @timestamp"));
+        assert_eq!(
+            detail.get("editorString").unwrap().as_str(),
+            Some("fields @timestamp")
+        );
         assert_eq!(
             detail.get("source").unwrap().as_array().unwrap()[0].as_str(),
             Some("arn:aws:logs:eu-north-1:1:log-group:/x")
         );
         assert_eq!(detail.get("lang").unwrap().as_str(), Some("CWLI"));
         assert_eq!(detail.get("logClass").unwrap().as_str(), Some("STANDARD"));
-        assert_eq!(detail.get("queryBy").unwrap().as_str(), Some("logGroupName"));
+        assert_eq!(
+            detail.get("queryBy").unwrap().as_str(),
+            Some("logGroupName")
+        );
         assert!(!detail.contains_key("queryId"));
     }
 
@@ -619,8 +634,16 @@ mod tests {
         assert_eq!(
             keys,
             vec![
-                "end", "start", "timeType", "tz", "unit", "editorString", "source", "lang",
-                "logClass", "queryBy"
+                "end",
+                "start",
+                "timeType",
+                "tz",
+                "unit",
+                "editorString",
+                "source",
+                "lang",
+                "logClass",
+                "queryBy"
             ]
         );
     }
@@ -707,7 +730,9 @@ mod tests {
         detail.insert("queryId".into(), s("dae7095d-9b56-4ec6-ab9a-d2ffb41b0fdb"));
         detail.insert(
             "source".into(),
-            RisonValue::Array(vec![s("arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs")]),
+            RisonValue::Array(vec![s(
+                "arn:aws:logs:eu-north-1:123456789012:log-group:/my/service/logs",
+            )]),
         );
         detail.insert("lang".into(), s("CWLI"));
         detail.insert("logClass".into(), s("STANDARD"));

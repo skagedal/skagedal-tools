@@ -5,8 +5,8 @@ use chrono::{TimeZone, Utc};
 
 use crate::cli::PasteLinkArgs;
 use crate::commands::fail;
-use crate::console_link::{parse_console_link, parse_log_group_arn, RisonValue};
-use crate::pasteboard::{read_from_pasteboard, PasteboardError};
+use crate::console_link::{RisonValue, parse_console_link, parse_log_group_arn};
+use crate::pasteboard::{PasteboardError, read_from_pasteboard};
 use crate::paths;
 
 pub async fn run(args: PasteLinkArgs) -> Result<()> {
@@ -44,8 +44,7 @@ pub struct ParsedLinkState {
 }
 
 pub fn parse_link_to_state(url: &str) -> Result<ParsedLinkState> {
-    let parsed = parse_console_link(url)
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let parsed = parse_console_link(url).map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     let editor_string = parsed
         .query_detail
@@ -69,7 +68,9 @@ pub fn parse_link_to_state(url: &str) -> Result<ParsedLinkState> {
             .ok_or_else(|| anyhow::anyhow!(format!("queryDetail.source[{i}] is not a string")))?;
         if s.starts_with("arn:") {
             let parsed_arn = parse_log_group_arn(s).ok_or_else(|| {
-                anyhow::anyhow!(format!("queryDetail.source[{i}] is not a log-group ARN: {s}"))
+                anyhow::anyhow!(format!(
+                    "queryDetail.source[{i}] is not a log-group ARN: {s}"
+                ))
             })?;
             log_groups.push(parsed_arn.2);
         } else {
@@ -95,7 +96,10 @@ fn time_from_query_detail(detail: &indexmap::IndexMap<String, RisonValue>) -> Re
             .get("start")
             .and_then(|v| v.as_f64())
             .ok_or_else(|| anyhow::anyhow!("RELATIVE time has non-numeric start"))?;
-        let unit = detail.get("unit").and_then(|v| v.as_str()).unwrap_or("seconds");
+        let unit = detail
+            .get("unit")
+            .and_then(|v| v.as_str())
+            .unwrap_or("seconds");
         let seconds = if unit == "milliseconds" {
             (-start / 1000.0).round() as i64
         } else {
@@ -112,7 +116,8 @@ fn time_from_query_detail(detail: &indexmap::IndexMap<String, RisonValue>) -> Re
 }
 
 fn absolute_bound_ms(value: Option<&RisonValue>, field: &str) -> Result<i64> {
-    let value = value.ok_or_else(|| anyhow::anyhow!(format!("ABSOLUTE time is missing {field}")))?;
+    let value =
+        value.ok_or_else(|| anyhow::anyhow!(format!("ABSOLUTE time is missing {field}")))?;
     if let Some(n) = value.as_f64() {
         return Ok(n as i64);
     }
@@ -181,7 +186,8 @@ fn write_insights_file(path: &std::path::Path, state: &ParsedLinkState) -> Resul
 
 fn toml_string(s: &str) -> String {
     let value = toml::Value::String(s.to_string());
-    toml::to_string(&value).unwrap_or_else(|_| format!("\"{s}\""))
+    toml::to_string(&value)
+        .unwrap_or_else(|_| format!("\"{s}\""))
         .trim()
         .to_string()
 }
@@ -200,11 +206,7 @@ pub fn build_raw_command(state: &ParsedLinkState) -> String {
     args.push(shell_quote(&state.time));
     args.push("-f".into());
     args.push("-".into());
-    format!(
-        "{} <<'EOF'\n{}\nEOF",
-        args.join(" "),
-        state.query
-    )
+    format!("{} <<'EOF'\n{}\nEOF", args.join(" "), state.query)
 }
 
 fn shell_quote(s: &str) -> String {
@@ -272,8 +274,8 @@ fn prompt_for_url() -> Result<String> {
 mod tests {
     use super::*;
     use crate::console_link::{
-        build_console_link, build_query_detail, log_group_arn, ConsoleLinkInput,
-        QueryDetailInput, RisonValue, TimeSpec,
+        ConsoleLinkInput, QueryDetailInput, RisonValue, TimeSpec, build_console_link,
+        build_query_detail, log_group_arn,
     };
 
     fn build_link(

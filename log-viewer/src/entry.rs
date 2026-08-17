@@ -185,10 +185,7 @@ mod tests {
     #[test]
     fn pick_falls_through_candidates() {
         let e = Entry::parse(r#"{"timestamp":"2026-01-01"}"#, "message");
-        assert_eq!(
-            e.pick(&s(&["@timestamp", "timestamp", "ts"])),
-            "2026-01-01"
-        );
+        assert_eq!(e.pick(&s(&["@timestamp", "timestamp", "ts"])), "2026-01-01");
     }
 
     #[test]
@@ -268,10 +265,7 @@ mod tests {
 
     #[test]
     fn flatten_parses_string_as_json() {
-        let mut e = Entry::parse(
-            r#"{"@message":"{\"foo\":\"bar\"}"}"#,
-            "message",
-        );
+        let mut e = Entry::parse(r#"{"@message":"{\"foo\":\"bar\"}"}"#, "message");
         e.flatten_fields(&["@message".into()]);
         assert_eq!(e.get_str("foo").unwrap(), "bar");
         assert!(!e.keys().contains(&"@message".to_string()));
@@ -286,10 +280,7 @@ mod tests {
 
     #[test]
     fn flatten_inner_wins_on_collision() {
-        let mut e = Entry::parse(
-            r#"{"app":"outer","message":{"app":"inner"}}"#,
-            "message",
-        );
+        let mut e = Entry::parse(r#"{"app":"outer","message":{"app":"inner"}}"#, "message");
         e.flatten_fields(&["message".into()]);
         assert_eq!(e.get_str("app").unwrap(), "inner");
     }

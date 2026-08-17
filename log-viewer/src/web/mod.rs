@@ -46,11 +46,7 @@ pub fn run(
     open_window(&url, &source_label)
 }
 
-fn spawn_consumer(
-    stream: EntryStream,
-    mut triggers: TriggerRuntime,
-    state: Arc<ServerState>,
-) {
+fn spawn_consumer(stream: EntryStream, mut triggers: TriggerRuntime, state: Arc<ServerState>) {
     thread::spawn(move || {
         loop {
             let new = stream.drain();

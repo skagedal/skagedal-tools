@@ -147,6 +147,10 @@ mod tests {
     fn missing_cache_returns_none() {
         let temp = tempfile::tempdir().unwrap();
         let cache = BranchCache::new(temp.path().to_path_buf());
-        assert!(cache.read_fresh(Path::new("/tmp/no/cache/here/yet")).is_none());
+        assert!(
+            cache
+                .read_fresh(Path::new("/tmp/no/cache/here/yet"))
+                .is_none()
+        );
     }
 }

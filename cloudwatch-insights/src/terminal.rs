@@ -158,7 +158,14 @@ mod tests {
     #[test]
     fn colorize_with_styling() {
         assert_eq!(
-            colorize("hi", ColorOptions { color: Some(Color::Cyan), underline: true, bold: false }),
+            colorize(
+                "hi",
+                ColorOptions {
+                    color: Some(Color::Cyan),
+                    underline: true,
+                    bold: false
+                }
+            ),
             "\x1b[4;36mhi\x1b[0m"
         );
     }
@@ -171,7 +178,15 @@ mod tests {
     #[test]
     fn styled_link_combines_osc8_and_sgr() {
         let url = "https://example.com/q";
-        let result = styled_link(url, "Open", ColorOptions { color: Some(Color::Cyan), underline: true, bold: false });
+        let result = styled_link(
+            url,
+            "Open",
+            ColorOptions {
+                color: Some(Color::Cyan),
+                underline: true,
+                bold: false,
+            },
+        );
         assert_eq!(
             result,
             format!("\x1b]8;;{url}\x1b\\\x1b[4;36mOpen\x1b[0m\x1b]8;;\x1b\\")

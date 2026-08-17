@@ -5,11 +5,11 @@ use crossterm::{
 };
 use filetime::FileTime;
 use ratatui::{
+    Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     widgets::{List, ListItem, ListState, Paragraph},
-    Frame, Terminal, TerminalOptions, Viewport,
 };
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -369,7 +369,9 @@ fn render(f: &mut Frame, app: &App) {
         .split(f.area());
 
     let header_text = match app.mode {
-        Mode::Normal => "↑↓/jk: navigate  /: search  s: snooze +1h  u: unsnooze  Enter: select  q/Esc: quit",
+        Mode::Normal => {
+            "↑↓/jk: navigate  /: search  s: snooze +1h  u: unsnooze  Enter: select  q/Esc: quit"
+        }
         Mode::Search => "↑↓: navigate  Enter: select  Esc: back to normal",
     };
     f.render_widget(
@@ -383,12 +385,8 @@ fn render(f: &mut Frame, app: &App) {
         .map(|p| {
             if let Some(expiry) = app.snoozed.get(p) {
                 let remaining = format_snooze_remaining(expiry);
-                ListItem::new(format!(
-                    "{} (snoozed {})",
-                    p.to_string_lossy(),
-                    remaining
-                ))
-                .style(Style::default().fg(Color::DarkGray))
+                ListItem::new(format!("{} (snoozed {})", p.to_string_lossy(), remaining))
+                    .style(Style::default().fg(Color::DarkGray))
             } else {
                 ListItem::new(p.to_string_lossy().to_string())
             }
@@ -427,8 +425,9 @@ fn render(f: &mut Frame, app: &App) {
             };
             Paragraph::new(text).style(Style::default().fg(Color::DarkGray))
         }
-        Mode::Search => Paragraph::new(format!("/{}", app.query))
-            .style(Style::default().fg(Color::White)),
+        Mode::Search => {
+            Paragraph::new(format!("/{}", app.query)).style(Style::default().fg(Color::White))
+        }
     };
     f.render_widget(footer, chunks[2]);
 }
@@ -461,10 +460,7 @@ mod tests {
     fn format_snooze_remaining_uses_minutes_only_under_an_hour() {
         let expiry = SystemTime::now() + Duration::from_secs(45 * 60);
         let formatted = format_snooze_remaining(&expiry);
-        assert!(
-            formatted == "45m" || formatted == "44m",
-            "got {formatted}"
-        );
+        assert!(formatted == "45m" || formatted == "44m", "got {formatted}");
     }
 
     #[test]

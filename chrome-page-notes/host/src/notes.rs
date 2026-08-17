@@ -52,7 +52,13 @@ pub fn note_path(url_str: &str, folder: &str) -> Option<String> {
 fn sanitize_segment(segment: String) -> String {
     segment
         .chars()
-        .map(|c| if matches!(c, '/' | '\\' | ':' | '\0') { '_' } else { c })
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':' | '\0') {
+                '_'
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -64,10 +70,16 @@ pub fn initial_content(url: &str) -> String {
 pub fn lookup(vault_path: &Path, path: &str) -> Result<Note> {
     let full_path = vault_path.join(path);
     match fs::read_to_string(&full_path) {
-        Ok(content) => Ok(Note { path: path.to_string(), exists: true, content: Some(content) }),
-        Err(e) if e.kind() == ErrorKind::NotFound => {
-            Ok(Note { path: path.to_string(), exists: false, content: None })
-        }
+        Ok(content) => Ok(Note {
+            path: path.to_string(),
+            exists: true,
+            content: Some(content),
+        }),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(Note {
+            path: path.to_string(),
+            exists: false,
+            content: None,
+        }),
         Err(e) => Err(e).with_context(|| format!("could not read {}", full_path.display())),
     }
 }
@@ -82,10 +94,16 @@ pub fn create(vault_path: &Path, path: &str, content: &str) -> Result<Note> {
 
     let full_path = vault_path.join(path);
     if let Some(parent) = full_path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("could not create directory {}", parent.display()))?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("could not create directory {}", parent.display()))?;
     }
-    fs::write(&full_path, content).with_context(|| format!("could not write {}", full_path.display()))?;
-    Ok(Note { path: path.to_string(), exists: true, content: Some(content.to_string()) })
+    fs::write(&full_path, content)
+        .with_context(|| format!("could not write {}", full_path.display()))?;
+    Ok(Note {
+        path: path.to_string(),
+        exists: true,
+        content: Some(content.to_string()),
+    })
 }
 
 /// Opens a note in the Obsidian app via its `obsidian://` URL scheme, which
@@ -115,8 +133,14 @@ mod tests {
 
     #[test]
     fn root_path_becomes_index() {
-        assert_eq!(note_path("https://example.com", "webnotes"), Some("webnotes/example.com/index.md".to_string()));
-        assert_eq!(note_path("https://example.com/", "webnotes"), Some("webnotes/example.com/index.md".to_string()));
+        assert_eq!(
+            note_path("https://example.com", "webnotes"),
+            Some("webnotes/example.com/index.md".to_string())
+        );
+        assert_eq!(
+            note_path("https://example.com/", "webnotes"),
+            Some("webnotes/example.com/index.md".to_string())
+        );
     }
 
     #[test]

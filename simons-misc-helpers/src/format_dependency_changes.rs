@@ -66,19 +66,39 @@ pub fn write_dependency_changes(
     color: bool,
 ) -> io::Result<()> {
     let bold = |s: &str| -> String {
-        if color { s.bold().to_string() } else { s.to_string() }
+        if color {
+            s.bold().to_string()
+        } else {
+            s.to_string()
+        }
     };
     let green = |s: &str| -> String {
-        if color { s.green().to_string() } else { s.to_string() }
+        if color {
+            s.green().to_string()
+        } else {
+            s.to_string()
+        }
     };
     let yellow = |s: &str| -> String {
-        if color { s.yellow().to_string() } else { s.to_string() }
+        if color {
+            s.yellow().to_string()
+        } else {
+            s.to_string()
+        }
     };
     let red = |s: &str| -> String {
-        if color { s.red().to_string() } else { s.to_string() }
+        if color {
+            s.red().to_string()
+        } else {
+            s.to_string()
+        }
     };
     let dim = |s: &str| -> String {
-        if color { s.dim().to_string() } else { s.to_string() }
+        if color {
+            s.dim().to_string()
+        } else {
+            s.to_string()
+        }
     };
 
     let (major, minor): (Vec<&DependencyChange>, Vec<&DependencyChange>) =
@@ -88,20 +108,25 @@ pub fn write_dependency_changes(
             matches!(is_major_bump(from, to), Some(true))
         });
 
-    let write_modified_line = |w: &mut dyn Write, c: &DependencyChange, highlight_to: bool| -> io::Result<()> {
-        let from = c.from_requirement.as_deref().unwrap_or("");
-        let to = c.to_requirement.as_deref().unwrap_or("");
-        let to_painted = if highlight_to { red(to) } else { to.to_string() };
-        writeln!(
-            w,
-            "  {} {} {} -> {} {}",
-            yellow("~"),
-            yellow(&c.name),
-            dim(from),
-            to_painted,
-            dim(&format!("({})", c.manifest_path)),
-        )
-    };
+    let write_modified_line =
+        |w: &mut dyn Write, c: &DependencyChange, highlight_to: bool| -> io::Result<()> {
+            let from = c.from_requirement.as_deref().unwrap_or("");
+            let to = c.to_requirement.as_deref().unwrap_or("");
+            let to_painted = if highlight_to {
+                red(to)
+            } else {
+                to.to_string()
+            };
+            writeln!(
+                w,
+                "  {} {} {} -> {} {}",
+                yellow("~"),
+                yellow(&c.name),
+                dim(from),
+                to_painted,
+                dim(&format!("({})", c.manifest_path)),
+            )
+        };
 
     let mut wrote_section = false;
 

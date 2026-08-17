@@ -149,12 +149,7 @@ impl GitRepo {
         self.run_interactive_printing("git", &args)
     }
 
-    pub fn create_pull_request(
-        &self,
-        refname: &str,
-        base: &str,
-        options: PrOptions,
-    ) -> Result<()> {
+    pub fn create_pull_request(&self, refname: &str, base: &str, options: PrOptions) -> Result<()> {
         let args = pr_create_args(refname, base, options);
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
         self.run_interactive_printing("gh", &arg_refs)
@@ -231,17 +226,13 @@ impl GitRepo {
     }
 
     fn run_interactive(&self, program: &str, args: &[&str]) -> Result<()> {
-        let status = self
-            .command(program)
-            .args(args)
-            .status()
-            .with_context(|| {
-                format!(
-                    "failed to run {} in {}",
-                    format_command(program, args),
-                    self.dir.display()
-                )
-            })?;
+        let status = self.command(program).args(args).status().with_context(|| {
+            format!(
+                "failed to run {} in {}",
+                format_command(program, args),
+                self.dir.display()
+            )
+        })?;
 
         if status.success() {
             Ok(())
@@ -327,8 +318,12 @@ fn parse_upstream_track(track: &str) -> UpstreamStatus {
     if inner == "gone" {
         return UpstreamStatus::UpstreamIsGone;
     }
-    let has_ahead = inner.split(',').any(|part| part.trim().starts_with("ahead"));
-    let has_behind = inner.split(',').any(|part| part.trim().starts_with("behind"));
+    let has_ahead = inner
+        .split(',')
+        .any(|part| part.trim().starts_with("ahead"));
+    let has_behind = inner
+        .split(',')
+        .any(|part| part.trim().starts_with("behind"));
     match (has_ahead, has_behind) {
         (true, true) => UpstreamStatus::MergeNeeded,
         (true, false) => UpstreamStatus::LocalIsAheadOfUpstream,

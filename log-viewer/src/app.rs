@@ -237,7 +237,11 @@ impl App {
 
     pub fn last_displayed(&self) -> Option<usize> {
         let n = self.displayed_count();
-        if n == 0 { None } else { self.displayed_at(n - 1) }
+        if n == 0 {
+            None
+        } else {
+            self.displayed_at(n - 1)
+        }
     }
 
     /// Cursor's position in the filtered list (0 if the selected entry isn't
@@ -677,12 +681,10 @@ mod tests {
     #[test]
     fn level_for_uses_level_column_when_present() {
         let mut cfg = cfg();
-        cfg.fields = vec![
-            crate::config::FieldDef {
-                name: "level".into(),
-                from: vec!["severity".into(), "level".into()],
-            },
-        ];
+        cfg.fields = vec![crate::config::FieldDef {
+            name: "level".into(),
+            from: vec!["severity".into(), "level".into()],
+        }];
         let app = App::new(&cfg, "test".into());
         let e = Entry::parse(r#"{"severity":"WARN"}"#, "message");
         assert_eq!(app.level_for(&e), "WARN");
@@ -765,9 +767,17 @@ mod tests {
         let mut app = make(0);
         app.columns.clear();
         app.column_max_widths.clear();
-        app.columns.push(ColumnState { name: "a".into(), from: vec!["a".into()], visible: true });
+        app.columns.push(ColumnState {
+            name: "a".into(),
+            from: vec!["a".into()],
+            visible: true,
+        });
         app.column_max_widths.push(1);
-        app.columns.push(ColumnState { name: "b".into(), from: vec!["b".into()], visible: true });
+        app.columns.push(ColumnState {
+            name: "b".into(),
+            from: vec!["b".into()],
+            visible: true,
+        });
         app.column_max_widths.push(2);
         app.open_fields_menu();
         app.fields_menu_swap(1);
@@ -793,10 +803,7 @@ mod tests {
     fn position_in_displayed_uses_binary_search() {
         let mut app = make(0);
         for i in 0..10 {
-            app.append_entries([Entry::parse(
-                &format!(r#"{{"message":"x{i}"}}"#),
-                "message",
-            )]);
+            app.append_entries([Entry::parse(&format!(r#"{{"message":"x{i}"}}"#), "message")]);
         }
         // Filter that matches every entry.
         app.set_filter("x".into());

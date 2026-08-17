@@ -163,11 +163,9 @@ fn apply_patch(project: &Path, patch: &Patch, dry_run: bool) -> Result<PatchResu
         println!("- {}: would update {}", patch.name, target.display());
     } else {
         if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("creating {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
         }
-        fs::write(&target, &new_text)
-            .with_context(|| format!("writing {}", target.display()))?;
+        fs::write(&target, &new_text).with_context(|| format!("writing {}", target.display()))?;
         let verb = if original_text.is_some() {
             "updated"
         } else {
@@ -247,9 +245,9 @@ fn parse_attr_predicates(mut s: &str) -> Result<Vec<(String, String)>> {
             .find(']')
             .ok_or_else(|| anyhow!("missing closing ']' in predicate: {s:?}"))?;
         let inner = s[1..end].trim();
-        let inner = inner
-            .strip_prefix('@')
-            .ok_or_else(|| anyhow!("only attribute predicates ([@name='val']) are supported: {inner:?}"))?;
+        let inner = inner.strip_prefix('@').ok_or_else(|| {
+            anyhow!("only attribute predicates ([@name='val']) are supported: {inner:?}")
+        })?;
         let eq = inner
             .find('=')
             .ok_or_else(|| anyhow!("predicate is missing '=': {inner:?}"))?;
@@ -371,7 +369,9 @@ fn eval_match(elem: &Element, path: &MatchPath) -> Option<String> {
 
 fn default_config_path() -> Result<PathBuf> {
     if let Ok(home) = std::env::var("SKAGEDAL_TOOLS_HOME") {
-        return Ok(PathBuf::from(home).join("intellij-patch").join("config.toml"));
+        return Ok(PathBuf::from(home)
+            .join("intellij-patch")
+            .join("config.toml"));
     }
     let home = std::env::var_os("HOME")
         .ok_or_else(|| anyhow!("HOME is not set; cannot resolve default config path"))?;
@@ -387,10 +387,8 @@ mod tests {
 
     #[test]
     fn parses_path_with_attribute_predicates() {
-        let path = parse_path(
-            "project/component[@name='Foo']/option[@name='x'][@value='y']/list",
-        )
-        .unwrap();
+        let path = parse_path("project/component[@name='Foo']/option[@name='x'][@value='y']/list")
+            .unwrap();
         assert_eq!(path.len(), 4);
         assert_eq!(path[0].tag, "project");
         assert!(path[0].attrs.is_empty());
@@ -429,13 +427,11 @@ mod tests {
 
     #[test]
     fn ensure_children_creates_nested_structure() {
-        let mut root = Element::parse(
-            br#"<?xml version="1.0"?><project version="4"></project>"# as &[u8],
-        )
-        .unwrap();
+        let mut root =
+            Element::parse(br#"<?xml version="1.0"?><project version="4"></project>"# as &[u8])
+                .unwrap();
         let ensure = EnsureChildren {
-            parent:
-                "project/component[@name='Foo']/option[@name='entries']/list".to_string(),
+            parent: "project/component[@name='Foo']/option[@name='entries']/list".to_string(),
             match_by: "option/@value".to_string(),
             fragments: vec![
                 r#"<Entry><option name="location" value="A"/></Entry>"#.to_string(),
@@ -461,10 +457,9 @@ mod tests {
 
     #[test]
     fn ensure_children_is_idempotent() {
-        let mut root = Element::parse(
-            br#"<?xml version="1.0"?><project version="4"></project>"# as &[u8],
-        )
-        .unwrap();
+        let mut root =
+            Element::parse(br#"<?xml version="1.0"?><project version="4"></project>"# as &[u8])
+                .unwrap();
         let ensure = EnsureChildren {
             parent: "project/component[@name='Foo']/list".to_string(),
             match_by: "@id".to_string(),
@@ -523,10 +518,9 @@ mod tests {
 
     #[test]
     fn rejects_path_root_mismatch() {
-        let mut root = Element::parse(
-            br#"<?xml version="1.0"?><project version="4"></project>"# as &[u8],
-        )
-        .unwrap();
+        let mut root =
+            Element::parse(br#"<?xml version="1.0"?><project version="4"></project>"# as &[u8])
+                .unwrap();
         let ensure = EnsureChildren {
             parent: "module/list".to_string(),
             match_by: "@id".to_string(),
