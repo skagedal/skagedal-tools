@@ -1,3 +1,43 @@
+# Migrations
+
+Two one-time migrations of the week files under the tracker data directory. Both tools take `--dry-run`.
+
+---
+
+# Duration Format Migration
+
+## Background
+
+Durations used to be written as separate hour and minute terms, `* balance 3h 12m`. They are now written in the compound format, `* balance 3:12h` – see the "Durations" section of the README. The old form still parses, so this migration is optional; it exists so an archive of week files reads the same way throughout.
+
+## How to Migrate
+
+1. **Dry run**:
+   ```bash
+   cargo run --bin migrate_duration_format -- --dry-run
+   ```
+
+2. **Perform the migration**:
+   ```bash
+   cargo run --bin migrate_duration_format
+   ```
+
+Running it twice is harmless – durations already in the compound format are left alone.
+
+## Ambiguous Lines
+
+A line like `* balance -9h 26m` is read term by term, as `-9h` plus `26m`, which is `-8:34h`. But it is also exactly what the old report printed for `-9:26h`, and copying that output into a week file was how a balance got carried over by hand – so it most likely means `-9:26h`.
+
+The tool cannot tell these apart, so it leaves such lines alone and lists them at the end. Pass `--fix-negative-minutes` to read them as `-9:26h` instead. Lines where the minutes are zero, `* balance -8h 0m`, mean the same thing either way and are migrated normally.
+
+## Safety
+
+- Only files named `YYYY-Www.txt` are touched; editor autosaves and other files in the directory are left alone.
+- Only duration lines are rewritten. Every other line is written back unchanged.
+- A line that isn't a duration – a shift, a special day, a comment – is never touched.
+
+---
+
 # Week File Naming Migration
 
 ## Background

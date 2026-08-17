@@ -43,9 +43,9 @@ fn ctx() -> TrackerTestContext {
 fn read_file_and_report() {
     // This will print:
     //
-    // You have worked 0 h 0 m today.
-    // You have worked 40 h 54 m this week.
-    // Balance: 8 h 36 m
+    // You have worked 0h today.
+    // You have worked 40:54h this week.
+    // Balance: +8:36h
     let ctx = ctx();
     let tracker = ctx
         .builder
