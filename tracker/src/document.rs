@@ -1,7 +1,8 @@
 use crate::document::Line::{
     Blank, ClosedShift, Comment, DayHeader, DurationShift, OpenShift, SpecialDay, SpecialShift,
 };
-use chrono::{Datelike, Duration, IsoWeek, NaiveDate, NaiveTime, TimeDelta};
+use crate::duration::{ParseDurationError, format_duration, parse_duration};
+use chrono::{Datelike, Duration, IsoWeek, NaiveDate, NaiveTime};
 use regex::{Captures, Regex};
 use std::fmt;
 
@@ -58,13 +59,9 @@ impl fmt::Display for Line {
                 start_time.format("%H:%M"),
                 stop_time.format("%H:%M")
             ),
-            DurationShift { text, duration } => write!(
-                f,
-                "* {} {}h {}m",
-                text,
-                duration.num_hours(),
-                duration.num_minutes() - duration.num_hours() * 60
-            ),
+            DurationShift { text, duration } => {
+                write!(f, "* {} {}", text, format_duration(*duration))
+            }
             SpecialDay { text } => write!(f, "* {}", text),
             SpecialShift {
                 text,
@@ -276,10 +273,6 @@ fn get_u32(m: &Captures, name: &str) -> u32 {
     m.name(name).unwrap().as_str().parse::<u32>().unwrap()
 }
 
-fn get_i64(m: &Captures, name: &str) -> i64 {
-    m.name(name).unwrap().as_str().parse::<i64>().unwrap()
-}
-
 impl Parser {
     pub fn new() -> Self {
         Parser {
@@ -287,7 +280,7 @@ impl Parser {
             day_header_regex: Regex::new(r"^\[[a-z]+\s+(?P<year>[0-9]{4})-(?P<month>[0-9]{2})-(?P<day>[0-9]{2})]\s*$").unwrap(),
             open_shift_regex: Regex::new(r"^\* (?P<hour>[0-9]{2}):(?P<minute>[0-9]{2})-\s*$").unwrap(),
             closed_shift_regex: Regex::new(r"^\* (?P<startHour>[0-9]{2}):(?P<startMinute>[0-9]{2})-(?P<stopHour>[0-9]{2}):(?P<stopMinute>[0-9]{2})\s*$").unwrap(),
-            duration_shift_regex: Regex::new(r"^\* (?P<text>[A-Za-z]+)\s+(?P<hours>-?[0-9]+)\s*h\s+(?P<minutes>-?[0-9]+)\s*m\s*$").unwrap(),
+            duration_shift_regex: Regex::new(r"^\* (?P<text>[A-Za-z]+)\s+(?P<duration>\S.*?)\s*$").unwrap(),
             special_shift_regex: Regex::new(r"^\* (?P<text>[A-Za-z]+) (?P<startHour>[0-9]{2}):(?P<startMinute>[0-9]{2})-(?P<stopHour>[0-9]{2}):(?P<stopMinute>[0-9]{2})\s*$").unwrap(),
             special_day_regex: Regex::new(r"^\* (?P<text>[A-Za-z]+)\s*$").unwrap(),
             blank_regex: Regex::new(r"^\s*$").unwrap(),
@@ -350,15 +343,19 @@ impl Parser {
     }
 
     fn parse_duration_shift(&self, string: &str) -> Option<Line> {
-        self.duration_shift_regex
-            .captures(string)
-            .map(|m| DurationShift {
-                text: String::from(m.name("text").unwrap().as_str()),
-                duration: TimeDelta::try_minutes(
-                    get_i64(&m, "hours") * 60 + get_i64(&m, "minutes"),
-                )
-                .unwrap(),
-            })
+        let m = self.duration_shift_regex.captures(string)?;
+        let duration = parse_duration(m.name("duration").unwrap().as_str()).ok()?;
+        Some(DurationShift {
+            text: String::from(m.name("text").unwrap().as_str()),
+            duration,
+        })
+    }
+
+    /// For a line that could not be parsed at all: why the duration in it, if
+    /// there is one, was rejected. Used to explain the failure to the user.
+    fn duration_error(&self, string: &str) -> Option<ParseDurationError> {
+        let m = self.duration_shift_regex.captures(string)?;
+        parse_duration(m.name("duration").unwrap().as_str()).err()
     }
 
     fn parse_special_shift(&self, string: &str) -> Option<Line> {
@@ -400,8 +397,16 @@ impl Parser {
         let mut current_day_lines: Vec<Line> = Vec::new();
 
         let lines = string.lines().enumerate().map(|(line_num, l)| {
-            self.parse_line(l)
-                .unwrap_or_else(|| panic!("line {} could not be parsed: {}", line_num, l))
+            self.parse_line(l).unwrap_or_else(|| {
+                match self.duration_error(l) {
+                    // `Empty` only means the line isn't a duration at all, so
+                    // it says nothing about why the line couldn't be parsed.
+                    Some(err) if !matches!(err, ParseDurationError::Empty(_)) => {
+                        panic!("line {} could not be parsed: {} ({})", line_num, l, err)
+                    }
+                    _ => panic!("line {} could not be parsed: {}", line_num, l),
+                }
+            })
         });
         for line in lines {
             match current_date {

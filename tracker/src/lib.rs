@@ -4,6 +4,7 @@ pub mod tracker;
 
 mod constants;
 mod document;
+mod duration;
 mod report;
 
 #[cfg(test)]
