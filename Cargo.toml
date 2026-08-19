@@ -21,6 +21,9 @@ members = [
 [workspace.package]
 edition = "2024"
 
+[profile.dev]
+debug = "line-tables-only"
+
 # Every dep used by any member is declared here so this file doubles as
 # an inventory of what's used across all the tools. Members opt in via
 # `dep.workspace = true` in their own [dependencies] — that's what
