@@ -4,6 +4,7 @@ members = [
     "assistant",
     "chrome-page-notes/host",
     "cloudwatch-insights",
+    "disky",
     "gh-pr",
     "git-branch-assistant",
     "git-dirty-checker",

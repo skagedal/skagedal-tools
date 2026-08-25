@@ -24,4 +24,5 @@ A collection of small tools.
 | [package-json-merge](package-json-merge/) | Git merge driver for `package.json` that picks the higher semver range when both branches bumped the same dependency |
 | [simons-misc-helpers](simons-misc-helpers/) | Miscellaneous helpers; currently formats the JSON output of `git pkgs diff --format=json` with colors |
 | [tracker](tracker/) | Tracks weekly work hours in a simple per-week text file with start/stop/report commands |
+| [disky](disky/) | Offload and onload big directories between this machine and a remote, deleting locally only after checksum verification |
 | [chrome-page-notes](chrome-page-notes/) | Chrome extension for attaching your own notes to a page |

@@ -1389,6 +1389,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "disky"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "regex",
+ "serde",
+ "shellexpand",
+ "tempfile",
+ "toml 0.8.2",
+]
+
+[[package]]
 name = "dispatch2"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
