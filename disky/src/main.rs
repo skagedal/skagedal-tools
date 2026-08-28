@@ -6,6 +6,7 @@
 //! `disky list` shows what is here and what is on the Storage Box.
 
 mod config;
+mod disk;
 mod ops;
 mod rsync;
 

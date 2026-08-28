@@ -6,6 +6,7 @@ use std::path::Path;
 use anyhow::{Result, bail};
 
 use crate::config::{ResolvedPair, check_project_name};
+use crate::disk;
 use crate::rsync;
 
 pub struct Where {
@@ -16,6 +17,10 @@ pub struct Where {
 pub fn list(pair: &ResolvedPair) -> Result<()> {
     let local: BTreeSet<String> = rsync::list_local(&pair.local)?.into_iter().collect();
     let remote: BTreeSet<String> = rsync::list_projects(pair)?.into_iter().collect();
+
+    if let Some(line) = remote_usage_line(pair) {
+        println!("{line}\n");
+    }
 
     let all: BTreeSet<&String> = local.union(&remote).collect();
     if all.is_empty() {
@@ -57,6 +62,13 @@ pub fn offload(
             failed.push(project.clone());
         }
     }
+
+    // Where the remote stands now — the number that decides whether the next
+    // project will fit.
+    if let Some(line) = remote_usage_line(pair) {
+        println!("\n{line}");
+    }
+
     if !failed.is_empty() {
         bail!("offload failed for: {}", failed.join(", "));
     }
@@ -222,6 +234,23 @@ pub fn pairs(config: &crate::config::Config) -> Result<()> {
     Ok(())
 }
 
+/// Space on the disk behind the far side of the pair, as one line.
+///
+/// Never fatal: a remote whose restricted shell has no `df` must still be able
+/// to list and offload, so a failure is a note on stderr and `None` here.
+fn remote_usage_line(pair: &ResolvedPair) -> Option<String> {
+    match disk::usage(pair) {
+        Ok(reading) => Some(format!("{}: {}", pair.remote_label(), reading.summary())),
+        Err(e) => {
+            eprintln!(
+                "disky: could not read disk usage for {}: {e:#}",
+                pair.remote_label()
+            );
+            None
+        }
+    }
+}
+
 /// Total size of a directory tree, formatted the way `du -h` would.
 fn human_size(path: &Path) -> String {
     fn walk(p: &Path) -> u64 {
@@ -237,22 +266,7 @@ fn human_size(path: &Path) -> String {
             })
             .sum()
     }
-    format_bytes(walk(path))
-}
-
-fn format_bytes(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "K", "M", "G", "T"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{}B", bytes)
-    } else {
-        format!("{:.1}{}", value, UNITS[unit])
-    }
+    disk::format_bytes(walk(path))
 }
 
 /// Where a bare `disky <cmd>` should act when run from `cwd`.
@@ -273,15 +287,6 @@ pub fn require_dir(p: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn formats_sizes_like_du() {
-        assert_eq!(format_bytes(0), "0B");
-        assert_eq!(format_bytes(512), "512B");
-        assert_eq!(format_bytes(1024), "1.0K");
-        assert_eq!(format_bytes(1536), "1.5K");
-        assert_eq!(format_bytes(3_650_722_201), "3.4G");
-    }
 
     #[test]
     fn refuses_to_delete_outside_the_root() {

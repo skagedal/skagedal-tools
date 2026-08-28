@@ -4,7 +4,7 @@ Move big directories between this machine and a remote, and reclaim the local
 space once the remote copy has been proved correct.
 
 ```
-disky list                 what exists locally, remotely, or both
+disky list                 what exists locally, remotely, or both, plus free space
 disky offload <name>...    push local -> remote  (--delete to reclaim the space)
 disky onload  <name>...    pull remote -> local  (no name: list what's available)
 disky status  [<name>]     per-project detail, including exactly what differs
@@ -48,6 +48,34 @@ path = "/Volumes/Backup/studio"
 
 `rsync_extra` takes additional rsync flags, at top level (all pairs) or inside a
 pair.
+
+## Disk space
+
+`list` and `offload` both report how full the remote disk is:
+
+```
+u656759.your-storagebox.de:studio: 1.2T used, 3.8T free of 5.0T (24% full)
+```
+
+Nothing in the rsync protocol carries this, so `disky` runs `df -Pk` on the far
+side — over the pair's own ssh settings for a remote pair, locally for a pair
+without one. The percentage counts used against used-plus-available, the way
+`df`'s own Capacity column does, so it agrees with what every other tool on the
+machine says.
+
+The reading is never fatal. A remote whose restricted shell has no `df` still
+lists and offloads fine; the line is replaced by a note on stderr.
+
+If the directory itself isn't there — nothing offloaded yet, or an external disk
+that isn't mounted — `df` is asked about the nearest enclosing directory that
+does exist, and the line says so:
+
+```
+/Volumes/Backup/studio: 409.1G used, 22.7G free of 460.4G (95% full) (measured at /Volumes)
+```
+
+That suffix is worth reading. `/Volumes` is on the *internal* disk, so a reading
+annotated that way is telling you the backup drive is not plugged in.
 
 ## How `--delete` decides it is safe
 

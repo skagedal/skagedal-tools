@@ -39,9 +39,15 @@ fn base_args(pair: &ResolvedPair) -> Vec<String> {
     args
 }
 
-/// The `-e` argument, when the pair has a remote. Port and key live here rather
-/// than in ssh config so the tool is self-contained.
+/// The `-e` argument, when the pair has a remote.
 pub fn ssh_transport(pair: &ResolvedPair) -> Option<String> {
+    Some(ssh_command(pair)?.join(" "))
+}
+
+/// The ssh invocation for a pair, as argv — also what `disky` runs directly to
+/// ask the remote for its `df`. Port and key live here rather than in ssh
+/// config so the tool is self-contained.
+pub fn ssh_command(pair: &ResolvedPair) -> Option<Vec<String>> {
     let remote = pair.remote.as_ref()?;
     let mut parts = vec!["ssh".to_string()];
     if let Some(port) = remote.port {
@@ -56,7 +62,7 @@ pub fn ssh_transport(pair: &ResolvedPair) -> Option<String> {
         parts.push("-o".into());
         parts.push("IdentitiesOnly=yes".into());
     }
-    Some(parts.join(" "))
+    Some(parts)
 }
 
 fn run(args: &[String], quiet: bool) -> Result<()> {
@@ -288,6 +294,22 @@ path = "studio"
     fn ssh_transport_carries_port_and_key() {
         let t = ssh_transport(&studio()).unwrap();
         assert_eq!(t, "ssh -p 23 -i /keys/hetzner-key -o IdentitiesOnly=yes");
+    }
+
+    #[test]
+    fn ssh_command_is_the_same_thing_as_argv() {
+        assert_eq!(
+            ssh_command(&studio()).unwrap(),
+            vec![
+                "ssh",
+                "-p",
+                "23",
+                "-i",
+                "/keys/hetzner-key",
+                "-o",
+                "IdentitiesOnly=yes"
+            ]
+        );
     }
 
     #[test]
