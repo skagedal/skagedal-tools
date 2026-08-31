@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../alarm/exact_alarms.dart';
 import '../bell.dart';
+import '../settings.dart';
 import '../sitting_controller.dart';
 import 'theme.dart';
 
@@ -53,6 +54,10 @@ class SettingsPage extends StatelessWidget {
                   ],
                 ),
               ),
+              _BellSize(controller: controller),
+              const Divider(),
+              const _SectionHeading('Before sitting'),
+              _PrepareTile(controller: controller),
               const Divider(),
               const _SectionHeading('While sitting'),
               SwitchListTile(
@@ -72,10 +77,12 @@ class SettingsPage extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 4, 16, 32),
                 child: Text(
-                  'Three strikes of the bell open the sitting and three '
-                  'close it, as in a zendo. The countdown starts with the '
-                  'first strike, so the bell rings out over the beginning of '
-                  'the period rather than before it.\n\n'
+                  'Three strikes of the bell open the sitting, and two close '
+                  'it — the second stopped by laying the striker on the bowl '
+                  'rather than letting it ring away, as in a zendo. The '
+                  'countdown starts with the first strike, so the bell rings '
+                  'out over the beginning of the period rather than before '
+                  'it.\n\n'
                   'The bell plays on the alarm channel, so it is heard even '
                   'with the phone silenced. Its volume follows the alarm '
                   'volume — the opening bell tells you how loud the closing '
@@ -87,6 +94,126 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// How large the bell is.
+///
+/// One slider, not two, because a real bell's pitch and how long it rings
+/// are not independent: a bigger bowl sounds lower *and* longer. The
+/// synthesizer holds the quality factor constant so this moves both at once,
+/// the way casting a larger bell would.
+class _BellSize extends StatelessWidget {
+  const _BellSize({required this.controller});
+
+  final SittingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = controller.settings.bellSize;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('Size'),
+              const Spacer(),
+              Text(
+                _describe(size),
+                style: const TextStyle(color: JikidoColors.faded),
+              ),
+            ],
+          ),
+          Slider(
+            value: size,
+            min: Settings.minimumBellSize,
+            max: Settings.maximumBellSize,
+            activeColor: JikidoColors.vermilion,
+            onChanged: controller.setBellSize,
+            // Struck when the finger lifts rather than continuously: a bell
+            // that rang on every pixel of the drag would be unusable.
+            onChangeEnd: (_) => controller.previewBell(),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'A larger bell sounds lower and rings for longer, as a heavier '
+              'casting does.',
+              style: TextStyle(color: JikidoColors.faded, height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _describe(double size) {
+    if (size < 0.8) {
+      return 'small';
+    }
+    if (size < 1.15) {
+      return 'as cast';
+    }
+    if (size < 1.6) {
+      return 'large';
+    }
+    return 'temple';
+  }
+}
+
+/// The silence between pressing Sit and the opening bell.
+class _PrepareTile extends StatelessWidget {
+  const _PrepareTile({required this.controller});
+
+  final SittingController controller;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text('Settling time'),
+            ),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final prepare in Settings.preparePresets)
+                  ChoiceChip(
+                    label: Text(_describe(prepare)),
+                    selected: controller.settings.prepare == prepare,
+                    selectedColor: JikidoColors.vermilion,
+                    backgroundColor: JikidoColors.inkRaised,
+                    showCheckmark: false,
+                    onSelected: (_) => controller.setPrepare(prepare),
+                  ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 8),
+              child: Text(
+                'Silence between pressing Sit and the opening bell, to get '
+                'settled. The sitting is timed from the bell, so this is not '
+                'taken out of it.',
+                style: TextStyle(color: JikidoColors.faded, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  static String _describe(Duration prepare) {
+    if (prepare == Duration.zero) {
+      return 'None';
+    }
+    if (prepare.inSeconds < 60) {
+      return '${prepare.inSeconds}s';
+    }
+    return '${prepare.inMinutes} min';
+  }
 }
 
 /// Offers to fix the exact-alarm permission, and says nothing at all when

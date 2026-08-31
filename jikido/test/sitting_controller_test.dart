@@ -4,6 +4,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jikido/src/alarm/closing_bell_notification.dart';
+import 'package:jikido/src/audio/bell_audio.dart';
 import 'package:jikido/src/bell.dart';
 import 'package:jikido/src/settings.dart';
 import 'package:jikido/src/sitting_controller.dart';
@@ -20,13 +21,22 @@ void main() {
   late FakeScreenAwake screen;
   late TestClock clock;
 
-  SittingController makeController() => SittingController(
-        audio: audio,
-        notification: notification,
-        service: service,
-        screen: screen,
-        clock: clock.call,
-      );
+  /// A controller with no settling time, which is what most of these tests
+  /// are about. The default is a minute — see [Settings.defaultPrepare] — and
+  /// the tests that care about it ask for it explicitly.
+  SittingController makeController({Duration prepare = Duration.zero}) {
+    final controller = SittingController(
+      audio: audio,
+      notification: notification,
+      service: service,
+      screen: screen,
+      clock: clock.call,
+    );
+    // Applies to _settings before it awaits anything, so the value is in
+    // place by the time this returns.
+    controller.setPrepare(prepare);
+    return controller;
+  }
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -309,6 +319,151 @@ void main() {
 
       controller.cancel();
       async.flushMicrotasks();
+      controller.dispose();
+    });
+  });
+
+  group('the settling time', () {
+    test('holds the opening bell until it has run out', () {
+      fakeAsync((async) {
+        final controller = makeController(prepare: const Duration(minutes: 1))
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        expect(controller.status, SittingStatus.running);
+        expect(audio.strikes, isEmpty,
+            reason: 'pressing Sit starts the settling, not the sitting');
+        expect(audio.keepAliveRunning, isTrue,
+            reason: 'the audio session is held from the moment Sit is '
+                'pressed — the settling time counts too');
+
+        // Just short of a minute: still nothing.
+        for (var i = 0; i < 59 * 5; i++) {
+          clock.advance(const Duration(milliseconds: 200));
+          async.elapse(const Duration(milliseconds: 200));
+        }
+        expect(audio.strikes, isEmpty);
+
+        for (var i = 0; i < 5; i++) {
+          clock.advance(const Duration(milliseconds: 200));
+          async.elapse(const Duration(milliseconds: 200));
+        }
+        expect(audio.sequences, <BellSequence>[BellSequence.opening],
+            reason: 'the settling is over, so the period opens');
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+
+    test('does not come out of the sitting', () {
+      fakeAsync((async) {
+        final controller = makeController(prepare: const Duration(minutes: 1))
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        expect(
+          notification.scheduledFor,
+          DateTime.utc(2026, 3, 1, 7, 16, 0)
+              .add(ClosingBellNotification.backstopDelay),
+          reason: 'fifteen minutes of sitting still means fifteen minutes, '
+              'starting when the bell rings rather than when Sit was pressed',
+        );
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+
+    test('an opening bell missed while the app was gone is not rung late', () {
+      fakeAsync((async) {
+        final controller = makeController(prepare: const Duration(minutes: 1))
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        // The app was suspended and comes back well past the opening bell.
+        clock.advance(const Duration(minutes: 2));
+        controller.onResumed();
+        async.flushMicrotasks();
+
+        expect(audio.strikes, isEmpty,
+            reason: 'the period has been under way for a minute; opening it '
+                'now would be a lie about where things are');
+        expect(controller.status, SittingStatus.running,
+            reason: 'the sitting itself carries on regardless — it is timed '
+                'from the instant, not from the bell being heard');
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+  });
+
+  group('the free-play bell', () {
+    test('strikes overlap rather than cutting each other off', () {
+      fakeAsync((async) {
+        final controller = makeController();
+        controller.strikeBell();
+        controller.strikeBell();
+        controller.strikeBell();
+        async.flushMicrotasks();
+
+        expect(audio.taps, 3);
+        expect(audio.strikes, isEmpty,
+            reason: 'the free-play bell is a single strike, not a sequence');
+
+        controller.dampBell();
+        async.flushMicrotasks();
+        expect(audio.damps, 1);
+
+        controller.dispose();
+      });
+    });
+
+    test('is unavailable mid-sitting', () {
+      fakeAsync((async) {
+        final controller = makeController()
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        controller.strikeBell();
+        controller.dampBell();
+        async.flushMicrotasks();
+
+        expect(audio.taps, 0);
+        expect(audio.damps, 0,
+            reason: 'a bell to play with during zazen is a bell to get '
+                'distracted by, and damping would silence the real one');
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+  });
+
+  test('the closing bell is the damped two-strike sequence', () {
+    fakeAsync((async) {
+      final controller = makeController()
+        ..setDuration(const Duration(minutes: 5));
+      controller.start();
+      async.flushMicrotasks();
+
+      for (var i = 0; i < 5 * 60 * 5; i++) {
+        clock.advance(const Duration(milliseconds: 200));
+        async.elapse(const Duration(milliseconds: 200));
+      }
+
+      expect(audio.sequences,
+          <BellSequence>[BellSequence.opening, BellSequence.closing]);
+
       controller.dispose();
     });
   });

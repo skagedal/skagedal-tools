@@ -9,8 +9,14 @@ void main() {
   MeditationSession sessionOf({
     Duration duration = const Duration(minutes: 15),
     Bell bell = Bell.inkin,
+    Duration prepare = Duration.zero,
   }) =>
-      MeditationSession(startedAt: start, duration: duration, bell: bell);
+      MeditationSession(
+        beganAt: start,
+        duration: duration,
+        bell: bell,
+        prepare: prepare,
+      );
 
   group('instants', () {
     test('the closing bell is due when the configured time has passed', () {
@@ -22,7 +28,103 @@ void main() {
       final session = sessionOf();
       expect(
         session.endsAt,
-        start.add(const Duration(minutes: 15) + Bell.inkin.duration),
+        start.add(const Duration(minutes: 15) + Bell.inkin.closingRingAt(1)),
+      );
+    });
+
+    test('the closing rings for a fraction of what the opening does', () {
+      // The closing ends with the striker laid on the bowl, so there is no
+      // tail to wait out. It is the reason a sitting now ends three seconds
+      // after the bell rather than twelve.
+      final session = sessionOf();
+      expect(session.closingRing, lessThan(session.openingRing ~/ 3));
+      expect(session.closingRing, lessThan(const Duration(seconds: 3)));
+    });
+  });
+
+  group('the settling time', () {
+    test('delays the opening bell without shortening the sitting', () {
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      expect(session.startedAt, start.add(const Duration(minutes: 1)));
+      expect(
+        session.closingBellAt,
+        start.add(const Duration(minutes: 16)),
+        reason: 'fifteen minutes still means fifteen minutes of sitting',
+      );
+    });
+
+    test('counts down, and stops at zero', () {
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      expect(session.prepareRemainingAt(start), const Duration(minutes: 1));
+      expect(
+        session.prepareRemainingAt(start.add(const Duration(seconds: 40))),
+        const Duration(seconds: 20),
+      );
+      expect(
+        session.prepareRemainingAt(start.add(const Duration(minutes: 5))),
+        Duration.zero,
+      );
+    });
+
+    test('leaves the ring empty until the sitting actually starts', () {
+      // A ring that crept round during the settling time would say the
+      // sitting had begun when it had not.
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      expect(session.progressAt(start), 0);
+      expect(session.progressAt(start.add(const Duration(seconds: 59))), 0);
+      expect(
+        session.progressAt(start.add(const Duration(minutes: 1, seconds: 30))),
+        greaterThan(0),
+      );
+    });
+
+    test('is a phase of its own', () {
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      expect(session.phaseAt(start), SessionPhase.preparing);
+      expect(
+        session.phaseAt(start.add(const Duration(seconds: 59))),
+        SessionPhase.preparing,
+      );
+      expect(
+        session.phaseAt(start.add(const Duration(minutes: 1))),
+        SessionPhase.opening,
+      );
+    });
+
+    test('is skipped entirely when it is zero', () {
+      final session = sessionOf();
+      expect(session.startedAt, start);
+      expect(session.phaseAt(start), SessionPhase.opening);
+    });
+  });
+
+  group('the opening bell', () {
+    test('is due the moment the settling time is up', () {
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      expect(
+        session.openingBellIsDueAt(start.add(const Duration(seconds: 59))),
+        isFalse,
+      );
+      expect(
+        session.openingBellIsDueAt(start.add(const Duration(minutes: 1))),
+        isTrue,
+      );
+    });
+
+    test('is not rung at all once the app has missed it by seconds', () {
+      // The sitting is timed from the instant whether or not anyone heard
+      // the bell, so an app suspended through the settling time comes back to
+      // a period already under way. Ringing it open now would be a lie.
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      expect(
+        session.openingBellIsStaleAt(
+            start.add(const Duration(minutes: 1, seconds: 2))),
+        isFalse,
+      );
+      expect(
+        session.openingBellIsStaleAt(
+            start.add(const Duration(minutes: 1, seconds: 4))),
+        isTrue,
       );
     });
   });
@@ -81,11 +183,11 @@ void main() {
         SessionPhase.closing,
       );
       expect(
-        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 11))),
+        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 2))),
         SessionPhase.closing,
       );
       expect(
-        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 12))),
+        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 3))),
         SessionPhase.complete,
       );
     });
@@ -93,13 +195,23 @@ void main() {
     test('the opening phase lasts as long as the chosen bell rings', () {
       final keisu = sessionOf(bell: Bell.keisu);
       expect(
-        keisu.phaseAt(start.add(const Duration(seconds: 20))),
+        keisu.phaseAt(start.add(const Duration(seconds: 40))),
         SessionPhase.opening,
       );
       expect(
-        keisu.phaseAt(start.add(const Duration(seconds: 26))),
+        keisu.phaseAt(start.add(const Duration(seconds: 43))),
         SessionPhase.sitting,
       );
+    });
+
+    test('a bigger bell rings for longer', () {
+      final small = MeditationSession(
+          beganAt: start, duration: const Duration(minutes: 15),
+          bell: Bell.inkin, bellSize: 0.6);
+      final large = MeditationSession(
+          beganAt: start, duration: const Duration(minutes: 15),
+          bell: Bell.inkin, bellSize: 2.0);
+      expect(large.openingRing, greaterThan(small.openingRing));
     });
 
     test('a sitting shorter than the bell still reaches every phase', () {

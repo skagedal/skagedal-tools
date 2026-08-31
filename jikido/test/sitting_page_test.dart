@@ -34,6 +34,10 @@ void main() {
 
   tearDown(() => controller.dispose());
 
+  /// Most of these tests are about the sitting rather than the settling time
+  /// that now precedes it by default, so they turn it off.
+  void withoutSettling() => controller.setPrepare(Duration.zero);
+
   Future<void> pumpPage(WidgetTester tester) => tester.pumpWidget(
         MaterialApp(
           theme: jikidoTheme(),
@@ -64,6 +68,7 @@ void main() {
   });
 
   testWidgets('sitting shows a countdown and a way out', (tester) async {
+    withoutSettling();
     await pumpPage(tester);
 
     await tester.tap(find.text('Sit'));
@@ -94,5 +99,56 @@ void main() {
 
     expect(controller.initializationError, isNotNull);
     expect(find.textContaining('could not set up'), findsOneWidget);
+  });
+
+  testWidgets('the settling time counts down before the sitting does',
+      (tester) async {
+    controller.setPrepare(const Duration(minutes: 1));
+    await pumpPage(tester);
+
+    await tester.tap(find.text('Sit'));
+    await tester.pump();
+
+    expect(controller.status, SittingStatus.running);
+    expect(find.text('1:00'), findsOneWidget);
+    expect(find.text('settling'), findsOneWidget);
+    expect(find.text('15:00'), findsNothing,
+        reason: 'the period has not opened, so its clock has not started');
+    expect(audio.strikes, isEmpty);
+
+    clock.advance(const Duration(seconds: 40));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('0:20'), findsOneWidget);
+
+    clock.advance(const Duration(seconds: 20));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('15:00'), findsOneWidget,
+        reason: 'the bell has rung and the sitting proper has begun');
+    expect(find.text('opening bell'), findsOneWidget);
+
+    // Leave nothing ticking behind us.
+    await tester.tap(find.text('End sitting'));
+    await tester.pump();
+    await tester.pump();
+  });
+
+  testWidgets('the bell can be rung on its own', (tester) async {
+    withoutSettling();
+    await pumpPage(tester);
+
+    await tester.tap(find.byTooltip('Ring the bell'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('strike'), findsOneWidget);
+    expect(find.text('rest the striker'), findsOneWidget);
+
+    await tester.tap(find.text('strike'));
+    await tester.tap(find.text('strike'));
+    await tester.pump();
+    expect(audio.taps, 2, reason: 'strikes overlap rather than restarting');
+
+    await tester.tap(find.text('rest the striker'));
+    await tester.pump();
+    expect(audio.damps, 1);
   });
 }

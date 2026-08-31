@@ -59,6 +59,7 @@ class SittingController extends ChangeNotifier {
   SittingStatus _status = SittingStatus.idle;
   MeditationSession? _session;
   Timer? _ticker;
+  bool _openingBellStruck = false;
   bool _closingBellStruck = false;
   bool _permissionsRequested = false;
   String? _notice;
@@ -77,6 +78,14 @@ class SittingController extends ChangeNotifier {
 
   double get progress => _session?.progressAt(_now()) ?? 0;
 
+  /// How long until the opening bell. Only meaningful while settling.
+  Duration get prepareRemaining =>
+      _session?.prepareRemainingAt(_now()) ?? _settings.prepare;
+
+  /// Whether the sitting has not started yet because the settling time is
+  /// still running.
+  bool get isPreparing => phase == SessionPhase.preparing;
+
   SessionPhase? get phase => _session?.phaseAt(_now());
 
   /// Set when something the sitting depends on could not be set up. The user
@@ -90,7 +99,7 @@ class SittingController extends ChangeNotifier {
       _settings = await Settings.load();
       _service.configure();
       await _notification.initialize();
-      await _audio.initialize(_settings.bell);
+      await _audio.initialize(_settings.bell, _settings.bellSize);
       _initializationError = null;
     } catch (error) {
       _initializationError = 'Jikido could not set up its audio: $error';
@@ -107,7 +116,31 @@ class SittingController extends ChangeNotifier {
   Future<void> setBell(Bell bell) async {
     _settings = _settings.copyWith(bell: bell);
     notifyListeners();
-    await _audio.load(bell);
+    await _audio.load(bell, _settings.bellSize);
+    await _settings.save();
+  }
+
+  /// Casts the bell larger or smaller. One control, because a real bell's
+  /// pitch and ring length are not independent — see [Settings.bellSize].
+  Future<void> setBellSize(double size) async {
+    _settings = _settings.copyWith(bellSize: Settings.clampBellSize(size));
+    notifyListeners();
+    // Re-casting the bell for every pixel of a slider drag would start a
+    // background rendering per frame. Wait for the finger to settle.
+    _bellReload?.cancel();
+    _bellReload = Timer(_bellReloadDelay, () {
+      unawaited(_audio.load(_settings.bell, _settings.bellSize));
+    });
+    await _settings.save();
+  }
+
+  Timer? _bellReload;
+  static const Duration _bellReloadDelay = Duration(milliseconds: 250);
+
+  /// Sets the silence between pressing Sit and the opening bell.
+  Future<void> setPrepare(Duration prepare) async {
+    _settings = _settings.copyWith(prepare: Settings.clampPrepare(prepare));
+    notifyListeners();
     await _settings.save();
   }
 
@@ -130,7 +163,25 @@ class SittingController extends ChangeNotifier {
       await _audio.silence();
       return;
     }
-    await _audio.strike(_settings.bell);
+    await strikeBell();
+  }
+
+  /// Strikes the bell once, letting it overlap whatever is still ringing.
+  /// This is the free-play bell, and the overlap is the point: struck twice
+  /// in quick succession a real bell does not start over, it adds.
+  Future<void> strikeBell() async {
+    if (_status == SittingStatus.running) {
+      return;
+    }
+    await _audio.tap(_settings.bell, _settings.bellSize);
+  }
+
+  /// Lays the striker on the bowl, stopping whatever is ringing.
+  Future<void> dampBell() async {
+    if (_status == SittingStatus.running) {
+      return;
+    }
+    await _audio.damp();
   }
 
   Future<void> start() async {
@@ -145,12 +196,15 @@ class SittingController extends ChangeNotifier {
     }
 
     final session = MeditationSession(
-      startedAt: _now(),
+      beganAt: _now(),
       duration: _settings.duration,
       bell: _settings.bell,
+      bellSize: _settings.bellSize,
+      prepare: _settings.prepare,
     );
     _session = session;
     _status = SittingStatus.running;
+    _openingBellStruck = false;
     _closingBellStruck = false;
     _notice = null;
     _notifiedMinutesLeft = _wholeMinutes(session.duration);
@@ -175,18 +229,33 @@ class SittingController extends ChangeNotifier {
   /// the others to fail, see the README — so they are engaged independently
   /// too, and one that throws costs the sitting that layer and nothing else.
   Future<void> _engageLayers(MeditationSession session) async {
-    // Ring first. Everything below is housekeeping, and the user pressed a
-    // button expecting a bell.
-    await _engage(() => _audio.strike(session.bell));
+    // Ring first — unless there is settling time to sit through, in which
+    // case the ticker rings it when it comes due. Everything below is
+    // housekeeping, and a user who pressed a button expecting a bell should
+    // not wait on it.
+    if (session.openingBellIsDueAt(_now())) {
+      _openingBellStruck = true;
+      await _engage(() => _audio.strike(
+          session.bell, session.bellSize, BellSequence.opening));
+    }
     await _engage(() => _audio.startKeepAlive());
 
     if (_settings.keepScreenOn) {
       await _engage(() => _screen.set(enabled: true));
     }
 
-    await _engage(
-      () => _service.start(text: _serviceText(session.remainingAt(_now()))),
-    );
+    await _engage(() {
+      final now = _now();
+      final settling = session.phaseAt(now) == SessionPhase.preparing;
+      if (settling) {
+        _notifiedMinutesLeft = _settling;
+      }
+      return _service.start(
+        text: settling
+            ? 'Settling — the bell is coming'
+            : _serviceText(session.remainingAt(now)),
+      );
+    });
     await _engage(
       () => _notification.schedule(
         // Deliberately a little after the app would ring the bell itself; see
@@ -264,6 +333,18 @@ class SittingController extends ChangeNotifier {
     }
     final now = _now();
 
+    if (!_openingBellStruck && session.openingBellIsDueAt(now)) {
+      _openingBellStruck = true;
+      // If the app was suspended through the settling time it comes back to a
+      // sitting already under way, and an opening bell minutes late would be
+      // a lie about where things are. The sitting is timed from the instant
+      // either way.
+      if (!session.openingBellIsStaleAt(now)) {
+        unawaited(_audio.strike(
+            session.bell, session.bellSize, BellSequence.opening));
+      }
+    }
+
     if (!_closingBellStruck && session.closingBellIsDueAt(now)) {
       _closingBellStruck = true;
       unawaited(_notification.cancel());
@@ -276,7 +357,8 @@ class SittingController extends ChangeNotifier {
         unawaited(_finish());
         return;
       }
-      unawaited(_audio.strike(session.bell));
+      unawaited(_audio.strike(
+          session.bell, session.bellSize, BellSequence.closing));
     }
 
     if (_closingBellStruck && !now.isBefore(session.endsAt)) {
@@ -284,7 +366,7 @@ class SittingController extends ChangeNotifier {
       return;
     }
 
-    _updateServiceText(session.remainingAt(now));
+    _updateServiceText(now, session);
     notifyListeners();
   }
 
@@ -310,9 +392,20 @@ class SittingController extends ChangeNotifier {
     await _screen.set(enabled: false);
   }
 
-  void _updateServiceText(Duration remaining) {
+  void _updateServiceText(DateTime now, MeditationSession session) {
+    if (session.phaseAt(now) == SessionPhase.preparing) {
+      // The settling time counts down in its own right, and saying "15
+      // minutes left" while the period has not opened would be wrong. It is
+      // short enough that one line for the whole of it is fine.
+      if (_notifiedMinutesLeft != _settling) {
+        _notifiedMinutesLeft = _settling;
+        unawaited(_service.update(text: 'Settling — the bell is coming'));
+      }
+      return;
+    }
     // Once a minute is plenty for a notification, and rewriting it five times
     // a second would be an odd thing to do to someone's battery.
+    final remaining = session.remainingAt(now);
     final minutesLeft = _wholeMinutes(remaining);
     if (minutesLeft == _notifiedMinutesLeft) {
       return;
@@ -320,6 +413,10 @@ class SittingController extends ChangeNotifier {
     _notifiedMinutesLeft = minutesLeft;
     unawaited(_service.update(text: _serviceText(remaining)));
   }
+
+  /// Stands in for a minute count while settling, so that the notification is
+  /// written once rather than on every tick. No real count collides with it.
+  static const int _settling = -2;
 
   static int _wholeMinutes(Duration remaining) =>
       (remaining.inSeconds / 60).ceil();
@@ -335,6 +432,7 @@ class SittingController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _bellReload?.cancel();
     _ticker?.cancel();
     unawaited(_audio.dispose());
     super.dispose();

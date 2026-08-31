@@ -14,29 +14,59 @@ class FakeBellAudio implements BellAudio {
   /// audio output.
   bool failToInitialize = false;
 
+  /// Every sequence rung, in order.
+  final List<BellSequence> sequences = <BellSequence>[];
+
+  /// Every bell struck, in order. Kept alongside [sequences] because most
+  /// tests care about one or the other, not both.
   final List<Bell> strikes = <Bell>[];
+
+  /// Free-play strikes, which overlap rather than replacing each other.
+  int taps = 0;
+  int damps = 0;
+
   bool keepAliveRunning = false;
   bool ringing = false;
   bool disposed = false;
   Bell? loaded;
+  double? loadedSize;
 
   @override
-  Future<void> initialize(Bell bell) async {
+  Future<void> initialize(Bell bell, double size) async {
     if (failToInitialize) {
       throw StateError('no audio output');
     }
     loaded = bell;
+    loadedSize = size;
   }
 
   @override
-  Future<void> load(Bell bell) async {
+  Future<void> load(Bell bell, double size) async {
     loaded = bell;
+    loadedSize = size;
   }
 
   @override
-  Future<void> strike(Bell bell) async {
+  Future<void> strike(Bell bell, double size, BellSequence sequence) async {
     strikes.add(bell);
+    sequences.add(sequence);
+    loaded = bell;
+    loadedSize = size;
     ringing = true;
+  }
+
+  @override
+  Future<void> tap(Bell bell, double size) async {
+    taps++;
+    loaded = bell;
+    loadedSize = size;
+    ringing = true;
+  }
+
+  @override
+  Future<void> damp() async {
+    damps++;
+    ringing = false;
   }
 
   @override

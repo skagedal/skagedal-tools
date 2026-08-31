@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../session.dart';
 import '../settings.dart';
 import '../sitting_controller.dart';
+import 'bell_page.dart';
 import 'duration_sheet.dart';
 import 'enso.dart';
 import 'settings_page.dart';
@@ -55,8 +56,18 @@ class _SittingPageState extends State<SittingPage> with WidgetsBindingObserver {
           style: TextStyle(letterSpacing: 6, fontSize: 14),
         ),
         actions: [
-          // Settings are hidden mid-sitting; there is nothing in there worth
-          // getting up for.
+          // Both of these are hidden mid-sitting; there is nothing in either
+          // worth getting up for.
+          if (!running)
+            IconButton(
+              icon: const Icon(Icons.notifications_none),
+              tooltip: 'Ring the bell',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => BellPage(controller: controller),
+                ),
+              ),
+            ),
           if (!running)
             IconButton(
               icon: const Icon(Icons.more_horiz),
@@ -116,6 +127,15 @@ class _Face extends StatelessWidget {
               : 'minutes',
         );
       case SittingStatus.running:
+        // While settling, the countdown is the settling one. Showing the
+        // sitting's fifteen minutes before the bell has rung would say the
+        // period had started when it has not.
+        if (controller.isPreparing) {
+          return _Stack(
+            big: formatRemaining(controller.prepareRemaining),
+            small: 'settling',
+          );
+        }
         return _Stack(
           big: formatRemaining(controller.remaining),
           small: _phaseCaption(controller.phase),

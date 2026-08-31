@@ -3,17 +3,19 @@
 A zazen timer for iOS and Android, written in Flutter.
 
 Three strikes of the bell open the sitting. Then silence for as long as you
-asked for — five, fifteen, twenty minutes. Then three strikes to close it.
-That is the whole app.
+asked for — five, fifteen, twenty minutes. Then two strikes to close it, the
+second stopped under the hand rather than left to ring. That is the whole app.
 
 *Jikidō* (直堂) is the person in a zendo who keeps time and rings the bell.
 
 ## Using it
 
-Pick a length and press **Sit**. The ensō fills as the period passes. The
-opening bell rings over the beginning of the sitting rather than before it,
-which is how it goes in a zendo — the countdown starts with the first strike,
-so twenty minutes means twenty minutes from pressing the button.
+Pick a length and press **Sit**. A settling minute passes — long enough to
+arrange yourself, and adjustable or turned off in settings — and then the
+opening bell rings. The ensō fills as the period passes. The bell rings out
+over the beginning of the sitting rather than before it, which is how it goes
+in a zendo: the countdown starts with the first strike, so twenty minutes
+means twenty minutes from the bell. The settling time is not taken out of it.
 
 Two bells are offered, and are chosen in settings:
 
@@ -22,7 +24,21 @@ Two bells are offered, and are chosen in settings:
 | **Inkin** | The small hand bell on a stick. Bright, fades in a few seconds. |
 | **Keisu** | The large standing bowl gong. Low, rings for half a minute. |
 
+Either can be made larger or smaller. It is one control rather than two
+because a real bell's pitch and how long it rings are not independent — a
+heavier casting sounds lower *and* rings longer — and the synthesizer moves
+them together.
+
+The closing is two strikes rather than three, and the second is stopped: the
+striker is laid on the bowl instead of being lifted away, so the ring is cut
+off rather than allowed to fade. It is unmistakable, and it is the difference
+between a period that has ended and one that is trailing off.
+
 Ending a sitting early rings nothing. The sitting did not finish.
+
+There is also a bell on its own, under the bell icon: tap the upper half of
+the screen to strike it, the lower half to rest the striker and stop the
+ring. Nothing is timed there.
 
 ## Making sure the bell is heard
 
@@ -71,29 +87,61 @@ offers a way to grant it, and falls back to an approximate alarm otherwise.
 
 ## The bells
 
-The bell sounds are synthesized rather than recorded, by
-`tool/synthesize_bells.py`. A struck bowl bell is a sum of exponentially
-decaying inharmonic partials plus a short noise transient where the mallet
-lands, and each partial is rendered with a quiet detuned twin to give the
-slow beating that keeps it from sounding like an organ pipe.
+The bells are synthesized rather than recorded, and synthesized on the device
+rather than shipped as files. A struck bowl bell is a sum of exponentially
+decaying inharmonic partials, and the numbers describing them are measured
+from recordings of real inkin and rin bells rather than guessed. Three things
+that the measurements settled, and that are easy to get wrong:
 
-Each asset holds the whole three-strike sequence, with the strikes overlapping
-as they do on a real bell. Ringing is therefore a single `play()` with no
-timers of Jikido's own in between.
+**The pitch is not the fundamental.** An inkin's hum mode is barely audible;
+the partial at 2.70 times it is more than ten times louder and is what you
+hear as the note. Modelling the hum as the loudest partial — the obvious
+thing to do — gives something far darker and duller than any real inkin.
 
-To change how the bells sound, edit the parameters at the top of the script
-and re-run it from this directory:
+**The upper partials die fast.** The third partial is gone in a third of a
+second while the second is still ringing after two. That collapse from a
+bright clang to a nearly pure tone is most of what makes the attack sound
+like struck metal rather than a synthesizer.
+
+**Every partial is a pair.** No bowl is perfectly circular, so each mode comes
+in two a few Hz apart, and the interference between them is the slow warble a
+bell has. Which of the pair is louder depends on where the striker lands, and
+the measured depth matters in both directions: modes of equal level beat all
+the way down to silence, which sounds like a tremolo pedal, and a single mode
+sounds dead.
+
+Synthesizing on the device is what buys the variation between strikes. Where
+the striker lands is a parameter, chosen afresh for each strike, and the mode
+balance, the phases and the contact noise all follow from it — so three
+strikes in a row are three strikes rather than one sample played three times.
+
+One number sets a bell's size. Frequency goes inversely with it, and because
+the quality factor is held constant the ring time follows: `tau = Q / (pi f)`,
+with Q measured at 20300 on a traditional inkin. The same constant
+independently puts a keisu at a twelve-second decay, which is the half-minute
+of ring a real one has.
+
+`lib/src/audio/bell_synth.dart` is the synthesizer the app uses.
+`tool/synthesize_bells.py` is the reference implementation of the same model,
+and the two are held together by goldens in `test/bell_synth_test.dart` —
+sample-for-sample, which is why neither uses its language's random number
+generator for anything the other has to reproduce.
+
+The script still has a job of its own: the closing-bell notification, which
+the operating system plays if Jikido has been killed mid-sitting. That one has
+to be a file on disk, so it cannot be synthesized on demand and is always the
+default size. Re-run the script from this directory after changing the model:
 
 ```
 python3 tool/synthesize_bells.py
-cp assets/audio/inkin.wav assets/audio/keisu.wav android/app/src/main/res/raw/
-cp assets/audio/inkin.wav assets/audio/keisu.wav ios/Runner/
 ```
 
-The copies are not redundant: a notification sound has to be a platform
-resource, and Flutter assets are not visible to the notification system.
-iOS also refuses notification sounds longer than 30 seconds, which is the
-constraint that sets the length of the keisu asset.
+It writes `assets/audio/` and copies each bell into the Android and iOS
+resource directories itself. The copies are not redundant: a notification
+sound has to be a platform resource, and Flutter assets are not visible to the
+notification system. iOS also refuses notification sounds longer than 30
+seconds — comfortable now that the closing bell ends under the hand, but the
+reason the tail length is computed rather than assumed.
 
 Only the standard library is needed; there is nothing to install.
 
