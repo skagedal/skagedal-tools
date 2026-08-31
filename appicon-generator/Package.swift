@@ -1,40 +1,33 @@
-// swift-tools-version:4.0
+// swift-tools-version:6.2
 
 import PackageDescription
 
 let package = Package(
     name: "appicon-generator",
+    platforms: [
+        // NSBitmapImageRep and Core Text do the drawing, so this is macOS-only.
+        .macOS(.v14)
+    ],
     products: [
-        .library(
-            name: "AppIconKit",
-            type: .static,
-            targets: ["AppIconKit"]
-        ),
-       .executable(
-           name: "appicon-generator",
-           targets: ["appicon-generator"]
-       )
+        .executable(name: "appicon-generator", targets: ["appicon-generator"]),
+        .library(name: "AppIconKit", targets: ["AppIconKit"]),
     ],
     dependencies: [
-        // Adding tools as a dependencies lets us do `swift run swiftlint`.
-        .package(url: "https://github.com/Realm/SwiftLint", from: "0.28.1"),
-        .package(url: "https://github.com/skagedal/xcodeproj-modify", from: "1.0.2")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0")
     ],
     targets: [
-        .target(
-            name: "AppIconKit"
-        ),
-        .target(
-            name: "AppIconGeneratorCore",
-            dependencies: ["AppIconKit"]
-        ),
-        .target(
+        .target(name: "AppIconKit"),
+        .executableTarget(
             name: "appicon-generator",
-            dependencies: ["AppIconKit", "AppIconGeneratorCore"]
+            dependencies: [
+                "AppIconKit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
         ),
         .testTarget(
-            name: "AppIconGeneratorTests",
-            dependencies: ["AppIconKit", "AppIconGeneratorCore"]
-        )
-    ]
+            name: "AppIconKitTests",
+            dependencies: ["AppIconKit"]
+        ),
+    ],
+    swiftLanguageModes: [.v6]
 )
