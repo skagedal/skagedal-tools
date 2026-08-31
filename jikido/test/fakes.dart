@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:jikido/src/alarm/closing_bell_notification.dart';
 import 'package:jikido/src/alarm/sitting_service.dart';
 import 'package:jikido/src/audio/bell_audio.dart';
@@ -62,6 +64,11 @@ class FakeBellAudio implements BellAudio {
 }
 
 class FakeClosingBellNotification implements ClosingBellNotification {
+  /// Makes [schedule] throw, standing in for a platform that refuses the
+  /// alarm — a denied permission, or a scheduling API that objects to being
+  /// called while a permission dialog is still up.
+  bool failToSchedule = false;
+
   DateTime? scheduledFor;
   Bell? scheduledBell;
   int cancelCount = 0;
@@ -83,6 +90,9 @@ class FakeClosingBellNotification implements ClosingBellNotification {
     required Bell bell,
     required Duration sittingLength,
   }) async {
+    if (failToSchedule) {
+      throw StateError('notifications not permitted');
+    }
     scheduledFor = at;
     scheduledBell = bell;
   }
@@ -96,6 +106,14 @@ class FakeClosingBellNotification implements ClosingBellNotification {
 }
 
 class FakeSittingService implements SittingService {
+  /// Makes [start] throw, standing in for Android 14 refusing to start a
+  /// foreground service while the app is not in the foreground.
+  bool failToStart = false;
+
+  /// Held by [start] until it completes, standing in for a platform call
+  /// that takes its time — or never returns at all.
+  Completer<void>? startBlocker;
+
   bool running = false;
   String? text;
   final List<String> texts = <String>[];
@@ -111,6 +129,12 @@ class FakeSittingService implements SittingService {
 
   @override
   Future<void> start({required String text}) async {
+    if (startBlocker != null) {
+      await startBlocker!.future;
+    }
+    if (failToStart) {
+      throw StateError('foreground service start not allowed');
+    }
     running = true;
     this.text = text;
     texts.add(text);

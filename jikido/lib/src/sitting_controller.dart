@@ -140,8 +140,8 @@ class SittingController extends ChangeNotifier {
 
     if (!_permissionsRequested) {
       _permissionsRequested = true;
-      await _notification.requestPermissions();
-      await _service.requestPermissions();
+      await _engage(() => _notification.requestPermissions());
+      await _engage(() => _service.requestPermissions());
     }
 
     final session = MeditationSession(
@@ -153,31 +153,73 @@ class SittingController extends ChangeNotifier {
     _status = SittingStatus.running;
     _closingBellStruck = false;
     _notice = null;
-    _notifiedMinutesLeft = -1;
-    notifyListeners();
+    _notifiedMinutesLeft = _wholeMinutes(session.duration);
 
-    // Ring first. Everything below is housekeeping, and the user pressed a
-    // button expecting a bell.
-    await _audio.strike(session.bell);
-    await _audio.startKeepAlive();
-
-    if (_settings.keepScreenOn) {
-      await _screen.set(enabled: true);
-    }
-
-    final remaining = session.remainingAt(_now());
-    _notifiedMinutesLeft = _wholeMinutes(remaining);
-    await _service.start(text: _serviceText(remaining));
-    await _notification.schedule(
-      // Deliberately a little after the app would ring the bell itself; see
-      // ClosingBellNotification.backstopDelay.
-      at: session.closingBellAt.add(ClosingBellNotification.backstopDelay),
-      bell: session.bell,
-      sittingLength: session.duration,
-    );
-
+    // The ticker goes up before the layers below, not after them. It only
+    // ever asks the wall clock what should have happened by now, so it is
+    // right from the instant the session exists — and starting it first
+    // means a plugin that throws or takes its time cannot leave the user
+    // watching a sitting whose clock never moves.
     _ticker?.cancel();
     _ticker = Timer.periodic(_tickInterval, (_) => _tick());
+    notifyListeners();
+
+    await _engageLayers(session);
+  }
+
+  /// Engages everything that keeps a sitting alive to the closing bell: the
+  /// opening bell itself, the held-open audio session, the wakelock, the
+  /// foreground service and the backstop notification.
+  ///
+  /// The layers are independent by design — each covers a different way for
+  /// the others to fail, see the README — so they are engaged independently
+  /// too, and one that throws costs the sitting that layer and nothing else.
+  Future<void> _engageLayers(MeditationSession session) async {
+    // Ring first. Everything below is housekeeping, and the user pressed a
+    // button expecting a bell.
+    await _engage(() => _audio.strike(session.bell));
+    await _engage(() => _audio.startKeepAlive());
+
+    if (_settings.keepScreenOn) {
+      await _engage(() => _screen.set(enabled: true));
+    }
+
+    await _engage(
+      () => _service.start(text: _serviceText(session.remainingAt(_now()))),
+    );
+    await _engage(
+      () => _notification.schedule(
+        // Deliberately a little after the app would ring the bell itself; see
+        // ClosingBellNotification.backstopDelay.
+        at: session.closingBellAt.add(ClosingBellNotification.backstopDelay),
+        bell: session.bell,
+        sittingLength: session.duration,
+      ),
+    );
+  }
+
+  /// Engages one layer, and carries on if it throws.
+  ///
+  /// The error is reported rather than swallowed, so it still reaches the
+  /// log, but it is not allowed to abandon the rest of the setup. It used
+  /// to: these calls were a straight run of awaits ending in the ticker, so
+  /// a plugin throwing part-way through skipped everything after it — the
+  /// ticker included, which left a sitting running with its clock frozen on
+  /// the second it began. Android 14 makes that a live risk rather than a
+  /// theoretical one: starting a foreground service is refused outright
+  /// while the app is not in the foreground, which is exactly where the
+  /// first-run permission dialog puts it.
+  Future<void> _engage(Future<void> Function() layer) async {
+    try {
+      await layer();
+    } catch (error, stack) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'jikido',
+        context: ErrorDescription('engaging a layer of a sitting'),
+      ));
+    }
   }
 
   /// Ends the sitting early, at the user's request. No bell: the sitting did

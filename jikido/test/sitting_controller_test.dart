@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jikido/src/alarm/closing_bell_notification.dart';
 import 'package:jikido/src/bell.dart';
@@ -222,6 +225,87 @@ void main() {
 
       expect(notification.permissionsRequested, isFalse);
       expect(service.permissionsRequested, isFalse);
+
+      controller.cancel();
+      async.flushMicrotasks();
+      controller.dispose();
+    });
+  });
+
+  test('a layer that fails is reported, and does not stop the clock', () {
+    fakeAsync((async) {
+      // Android 14 refuses to start a foreground service while the app is
+      // not in the foreground, which is exactly where the first-run
+      // notification dialog puts it. That used to abandon the rest of the
+      // setup, ticker included, and the countdown sat frozen on the second
+      // the sitting began.
+      service.failToStart = true;
+
+      final errors = <FlutterErrorDetails>[];
+      final previousOnError = FlutterError.onError;
+      FlutterError.onError = errors.add;
+      addTearDown(() => FlutterError.onError = previousOnError);
+
+      final controller = makeController()
+        ..setDuration(const Duration(minutes: 15));
+      controller.start();
+      async.flushMicrotasks();
+
+      expect(errors, hasLength(1),
+          reason: 'the failure reaches the log rather than being swallowed');
+      expect(service.running, isFalse);
+      expect(notification.isScheduled, isTrue,
+          reason: 'the layers are independent: the service failing must not '
+              'cost the sitting its backstop bell');
+
+      // What the user sees is a redraw per tick, so that is what is counted
+      // here. `remaining` reads the clock directly and would look right even
+      // with no ticker at all.
+      var redraws = 0;
+      controller.addListener(() => redraws++);
+      for (var i = 0; i < 15; i++) {
+        clock.advance(const Duration(milliseconds: 200));
+        async.elapse(const Duration(milliseconds: 200));
+      }
+
+      expect(redraws, 15);
+      expect(controller.remaining, const Duration(minutes: 14, seconds: 57));
+
+      controller.cancel();
+      async.flushMicrotasks();
+      controller.dispose();
+    });
+  });
+
+  test('a layer that hangs does not hold up the clock', () {
+    fakeAsync((async) {
+      final blocked = Completer<void>();
+      service.startBlocker = blocked;
+
+      final controller = makeController()
+        ..setDuration(const Duration(minutes: 15));
+      controller.start();
+      async.flushMicrotasks();
+
+      var redraws = 0;
+      controller.addListener(() => redraws++);
+      for (var i = 0; i < 15; i++) {
+        clock.advance(const Duration(milliseconds: 200));
+        async.elapse(const Duration(milliseconds: 200));
+      }
+
+      expect(redraws, 15,
+          reason: 'the ticker is up before the platform calls, so one of '
+              'them taking its time cannot freeze the countdown');
+      expect(controller.remaining, const Duration(minutes: 14, seconds: 57));
+      expect(notification.isScheduled, isFalse,
+          reason: 'the layers after the blocked one are genuinely still '
+              'waiting — this is what the countdown is being kept clear of');
+
+      blocked.complete();
+      async.flushMicrotasks();
+      expect(service.running, isTrue);
+      expect(notification.isScheduled, isTrue);
 
       controller.cancel();
       async.flushMicrotasks();
