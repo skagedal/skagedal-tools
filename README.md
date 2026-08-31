@@ -26,3 +26,4 @@ A collection of small tools.
 | [tracker](tracker/) | Tracks weekly work hours in a simple per-week text file with start/stop/report commands |
 | [disky](disky/) | Offload and onload big directories between this machine and a remote, deleting locally only after checksum verification |
 | [chrome-page-notes](chrome-page-notes/) | Chrome extension for attaching your own notes to a page |
+| [appicon-generator](appicon-generator/) | Generates placeholder app icons from an emoji, for Xcode and Flutter projects |
