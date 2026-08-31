@@ -4,6 +4,11 @@ import Testing
 
 @testable import AppIconKit
 
+enum VerticalHalf {
+    case upper
+    case lower
+}
+
 @Suite("Emoji rendering")
 struct EmojiIconRendererTests {
     private func render(
@@ -133,6 +138,28 @@ struct EmojiIconRendererTests {
         // spill past the canvas edge — iOS masks the corners off.
         #expect(Double(large.width) / Double(size) <= 1)
         #expect(Double(small.width) / Double(size) < 0.6)
+    }
+
+    @Test(
+        "the icon is the right way up",
+        arguments: [
+            // Ink that sits below the baseline has to land in the lower half of
+            // the canvas, and ink up by the ascender in the upper half. Core
+            // Graphics draws from a bottom-left origin but its buffer stores the
+            // top row first, and conflating the two flips the whole icon — which
+            // no assertion about colour, size or centring notices.
+            ("_", VerticalHalf.lower),
+            ("'", VerticalHalf.upper),
+        ]
+    )
+    func orientation(text: String, expected: VerticalHalf) throws {
+        let size = 128
+        let image = try render(text, size: size, style: .transparentColor, glyphScale: 0.82)
+        let bounds = try #require(image.opaqueBounds())
+
+        // opaqueBounds is in NSBitmapImageRep coordinates, so y grows downward.
+        let isInUpperHalf = bounds.midY < Double(size) / 2
+        #expect(isInUpperHalf == (expected == .upper), "\(text.debugDescription) at \(bounds)")
     }
 
     @Test("plain text renders too, not just emoji")

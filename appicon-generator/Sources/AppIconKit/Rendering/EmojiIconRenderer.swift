@@ -202,10 +202,11 @@ public struct EmojiIconRenderer: IconRenderer {
 
         let pixels = source.assumingMemoryBound(to: UInt8.self)
         for y in 0..<context.height {
-            // Core Graphics puts the origin at the bottom left and
-            // NSBitmapImageRep at the top left, so the rows are copied in
-            // reverse.
-            let from = pixels + (context.height - 1 - y) * context.bytesPerRow
+            // Row order is the same on both sides. Core Graphics puts the
+            // drawing origin at the bottom left, but its buffer still stores
+            // the top row first, exactly as NSBitmapImageRep does — reversing
+            // here would flip the icon upside down.
+            let from = pixels + y * context.bytesPerRow
             let to = destination + y * bitmap.bytesPerRow
             for x in 0..<context.width {
                 let sourcePixel = from + x * 4
