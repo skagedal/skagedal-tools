@@ -109,6 +109,29 @@ meaningfully portable to macOS (the OS convention there is
 Tools may honor a `SKAGEDAL_TOOLS_HOME` environment variable to
 override the base directory (primarily useful for tests).
 
+## Swift Projects
+
+All Swift projects in this repository must follow these guidelines:
+
+- Use `// swift-tools-version:6.2` and `swiftLanguageModes: [.v6]` in
+  `Package.swift`, so packages build under strict concurrency checking.
+- Formatting and linting go through `swift format`, which ships with the
+  toolchain. Each package has a `.swift-format` config, and the top-level
+  `./check` runs `swift format lint --strict` before building, so any finding
+  becomes a CI failure. Run `swift format --in-place --recursive` before
+  committing. Do not add SwiftLint as a package dependency — that makes
+  `swift build` compile a linter.
+- Use **swift-testing** (`import Testing`, `@Suite`, `@Test`, `#expect`) for new
+  tests, not XCTest.
+- Use **[swift-argument-parser](https://github.com/apple/swift-argument-parser)**
+  for CLI argument parsing rather than reading `CommandLine.arguments` by hand.
+- macOS-only packages (anything importing AppKit) can't be checked on the
+  Linux runner the rest of `./check` uses. They go in `SWIFT_TOOLS` in
+  `shared.sh`, where `check-swift` skips them off macOS, and get exercised by
+  the separate `check-swift` job in `.github/workflows/tests.yml`.
+- `install-swift` copies the release binary to `~/.local/bin`, since SwiftPM
+  has no equivalent of `cargo install`.
+
 ## Rust Projects
 
 All Rust projects in this repository must follow these guidelines:

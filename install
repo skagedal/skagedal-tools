@@ -43,27 +43,40 @@ tool-kind() {
             return 0
         fi
     done
+    for t in "${INSTALLED_SWIFT_TOOLS[@]}"; do
+        if [[ "$t" == "$tool" ]]; then
+            echo "swift"
+            return 0
+        fi
+    done
     return 1
 }
 
 select-tools() {
     SELECTED_NODE_TOOLS=()
     SELECTED_RUST_TOOLS=()
+    SELECTED_SWIFT_TOOLS=()
     if [[ ${#REQUESTED_TOOLS[@]} -eq 0 ]]; then
         SELECTED_NODE_TOOLS=("${INSTALLED_NODE_TOOLS[@]}")
         SELECTED_RUST_TOOLS=("${INSTALLED_RUST_TOOLS[@]}")
+        # Only when there is a toolchain to build them with, so that a bulk
+        # install on a machine without Swift is a no-op rather than a failure.
+        if swift-available; then
+            SELECTED_SWIFT_TOOLS=("${INSTALLED_SWIFT_TOOLS[@]}")
+        fi
         return
     fi
     for tool in "${REQUESTED_TOOLS[@]}"; do
         local kind
         kind="$(tool-kind "$tool")" || {
             echo "Unknown tool: $tool" >&2
-            echo "Available tools: ${INSTALLED_NODE_TOOLS[*]} ${INSTALLED_RUST_TOOLS[*]}" >&2
+            echo "Available tools: ${INSTALLED_NODE_TOOLS[*]} ${INSTALLED_RUST_TOOLS[*]} ${INSTALLED_SWIFT_TOOLS[*]}" >&2
             exit 1
         }
         case "$kind" in
             node) SELECTED_NODE_TOOLS+=("$tool") ;;
             rust) SELECTED_RUST_TOOLS+=("$tool") ;;
+            swift) SELECTED_SWIFT_TOOLS+=("$tool") ;;
         esac
     done
 }
@@ -75,6 +88,9 @@ run-checks() {
     for tool in ${SELECTED_RUST_TOOLS[@]+"${SELECTED_RUST_TOOLS[@]}"}; do
         check-rust "$tool"
     done
+    for tool in ${SELECTED_SWIFT_TOOLS[@]+"${SELECTED_SWIFT_TOOLS[@]}"}; do
+        check-swift "$tool"
+    done
 }
 
 run-installs() {
@@ -83,6 +99,9 @@ run-installs() {
     done
     for tool in ${SELECTED_RUST_TOOLS[@]+"${SELECTED_RUST_TOOLS[@]}"}; do
         install-rust "$tool"
+    done
+    for tool in ${SELECTED_SWIFT_TOOLS[@]+"${SELECTED_SWIFT_TOOLS[@]}"}; do
+        install-swift "$tool"
     done
 }
 
