@@ -113,6 +113,12 @@ override the base directory (primarily useful for tests).
 
 All Flutter/Dart projects in this repository must follow these guidelines:
 
+- The Flutter SDK is pinned per app with [fvm](https://fvm.app): the version
+  lives in the app's `.fvmrc`, which is committed, while the `.fvm/` directory
+  of machine-local symlinks is not. Run Flutter through `fvm flutter ...`, not
+  a `flutter` off `$PATH`. Change the version with `fvm use <version>` and
+  commit the resulting `.fvmrc`; CI reads it via `flutter-version-file` and so
+  needs no separate bump.
 - Keep `flutter analyze` clean. The top-level `./check` runs
   `flutter pub get && flutter analyze && flutter test` per app, so any lint
   becomes a CI failure. Fix the lint rather than adding `// ignore:`.

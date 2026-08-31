@@ -100,14 +100,26 @@ check-maven() {
     (cd "$SCRIPT_DIR/$dir" && mvn --batch-mode test)
 }
 
+# Runs the Flutter SDK version the app pins in its .fvmrc. Locally that means
+# going through fvm; CI installs the pinned version onto PATH instead (see
+# .github/workflows/tests.yml), where there is no fvm and plain flutter is
+# already the right SDK.
+run-flutter() {
+    if command -v fvm >/dev/null 2>&1; then
+        fvm flutter "$@"
+    else
+        flutter "$@"
+    fi
+}
+
 check-flutter() {
     local dir="$1"
     echo "==> Checking $dir"
     (
         cd "$SCRIPT_DIR/$dir"
-        flutter pub get
-        flutter analyze
-        flutter test
+        run-flutter pub get
+        run-flutter analyze
+        run-flutter test
     )
 }
 
@@ -169,6 +181,6 @@ update-maven() {
 update-flutter() {
     local dir="$1"
     echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && flutter pub upgrade)
+    (cd "$SCRIPT_DIR/$dir" && run-flutter pub upgrade)
 }
 

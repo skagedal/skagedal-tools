@@ -99,13 +99,29 @@ Only the standard library is needed; there is nothing to install.
 
 ## Building
 
+The Flutter SDK version is pinned in `.fvmrc` and installed with
+[fvm](https://fvm.app), so everyone — and CI — builds against the same SDK:
+
 ```
-flutter pub get
-flutter test
-flutter run
+brew install fvm     # once
+fvm install          # gets the version .fvmrc names
 ```
 
-`flutter analyze` and `flutter test` are what the top-level `./check` runs.
+Then prefix Flutter commands with `fvm`:
+
+```
+fvm flutter pub get
+fvm flutter test
+fvm flutter run
+```
+
+`fvm flutter analyze` and `fvm flutter test` are what the top-level `./check`
+runs. To move to a newer SDK, `fvm use <version>` and commit the new `.fvmrc`;
+CI reads the version straight out of that file.
+
+Editors are pointed at the SDK through the `.fvm/versions/<version>` symlink
+`fvm use` leaves in the project — in VS Code that is `dart.flutterSdkPath`,
+and IntelliJ takes the same path as its Flutter SDK.
 
 The layout follows the usual split between what can be tested off-device and
 what cannot:
