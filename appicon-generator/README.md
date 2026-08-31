@@ -135,8 +135,15 @@ an emoji, conform to `IconRenderer` and hand it to one of the targets in
 ```shell
 $ swift build
 $ swift test
-$ ../check appicon-generator     # lint, build and test, as CI does
+$ swift format --in-place --recursive Package.swift Sources Tests
 $ ../install appicon-generator   # release build into ~/.local/bin
+```
+
+`../check` runs the lint, build and test for every tool in the monorepo,
+including this one. To run just this one the way CI does:
+
+```shell
+$ (cd .. && SCRIPT_DIR="$PWD" bash -c 'source ./shared.sh && check-swift appicon-generator')
 ```
 
 macOS only: the drawing goes through AppKit and Core Text.
