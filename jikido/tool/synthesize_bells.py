@@ -86,9 +86,14 @@ DOMINANT = 1
 #
 # This is what makes one size knob physical. A bigger bell of the same shape
 # sounds lower and rings longer, in proportion, and a constant Q is exactly
-# that relationship. Measured 20300 on the traditional inkin (3245 Hz ringing
-# with tau 1.99 s); the same constant puts a keisu at tau 12 s, which is the
+# that relationship. Measured 20300 on a struck inkin (3245 Hz ringing with
+# tau 1.99 s); the same constant puts a keisu at tau 12 s, which is the
 # half-minute of ring a real one has.
+#
+# It is a modelling choice, not a law. Three rin bowls measured 11700, 17300
+# and 24100, so wall thickness and alloy move Q about independently of size.
+# What holding it constant buys is a size control that behaves like a bell —
+# lower and longer together — from one number instead of two.
 DOMINANT_Q = 20300
 
 # The striker laid on the bowl rather than lifted away. `DAMPED_AFTER` is how
@@ -167,8 +172,9 @@ class Voice:
         return Voice(name=self.name, dominant_hz=self.dominant_hz / size)
 
 
-# The default sizes. The inkin's pitch is the traditional inkin measured from
-# the monastery-store demonstration; the keisu is set where a large standing
+# The default sizes. The inkin's pitch is the one measured from the single
+# struck inkin recording, which is also where the flattop inkin of the
+# monastery-store demonstration sits; the keisu is set where a large standing
 # bowl sits, and inherits its half-minute of ring from the constant Q.
 VOICES = [
     Voice(name="inkin", dominant_hz=3245.0),

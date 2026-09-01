@@ -61,7 +61,12 @@ const int dominantIndex = 1;
 ///
 /// Holding this constant is what makes one size control physical. A bigger
 /// bell of the same shape sounds lower and rings longer in proportion, and a
-/// constant Q says exactly that. Measured 20300 on the traditional inkin.
+/// constant Q says exactly that. Measured 20300 on a struck inkin, 3245 Hz
+/// ringing with a decay time of 1.99 s.
+///
+/// A modelling choice rather than a law: three rin bowls measured 11700,
+/// 17300 and 24100. What holding it constant buys is a size control that
+/// behaves like a bell from one number instead of two.
 const double dominantQ = 20300;
 
 /// The striker laid on the bowl rather than lifted away: how long the bell

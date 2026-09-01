@@ -117,9 +117,11 @@ strikes in a row are three strikes rather than one sample played three times.
 
 One number sets a bell's size. Frequency goes inversely with it, and because
 the quality factor is held constant the ring time follows: `tau = Q / (pi f)`,
-with Q measured at 20300 on a traditional inkin. The same constant
-independently puts a keisu at a twelve-second decay, which is the half-minute
-of ring a real one has.
+with Q measured at 20300 on the single struck inkin below — 3245 Hz ringing
+with a decay time of 1.99 s. The same constant independently puts a keisu at a
+twelve-second decay, which is the half-minute of ring a real one has. It is a
+modelling choice rather than a law bells obey; see the caveat under
+**References**.
 
 `lib/src/audio/bell_synth.dart` is the synthesizer the app uses.
 `tool/synthesize_bells.py` is the reference implementation of the same model,
@@ -191,3 +193,53 @@ what cannot:
 | `lib/src/audio/` | just_audio and the audio session. |
 | `lib/src/alarm/` | The scheduled notification, the foreground service, and the exact-alarm permission. |
 | `lib/src/ui/` | Screens, and the ensō. |
+
+## References
+
+### The recordings the bell model was measured from
+
+The numbers in `tool/synthesize_bells.py` are fitted to these, so the claims
+about partial ratios and decay times in **The bells** above can be checked
+against them rather than taken on trust.
+
+| | |
+|--|--|
+| [Monastery Store inkin demonstration](https://vimeo.com/110573379) | Three different inkin — traditional, flattop and portable — at 2695, 3234 and 6146 Hz. Where the damped strikes are: 0.05-0.17 s to fall 20 dB, against 2.5-4.7 s for one left to ring. |
+| [Inkin bell, struck once](https://www.youtube.com/watch?v=xfeBig0xfJQ) | The cleanest single strike of the set, and the source of the headline numbers: partials at 1.00, 2.70, 4.93 and 7.67, decaying in 1.99 s, 0.34 s and 0.10 s. |
+| [Small rin bell](https://www.youtube.com/watch?v=sqLAyvcVQZ8) | A second bell agreeing with the first to within a couple of percent, which is why the model is not just a fit to one recording. |
+| [Rin bells of three sizes](https://www.youtube.com/watch?v=YV5hzjzkvyM) | 2707, 3375 and 3492 Hz, ringing 6.5, 2.6 and 3.6 s. The lowest rings by far the longest, which is the behaviour the size control reproduces — but see the caveat below. |
+| [Small inkin, struck repeatedly](https://www.youtube.com/watch?v=KGN3f-atEYU) | Strikes 1.4-1.8 s apart. The app deliberately does not copy this; see `strike_interval`. |
+| [Vintage bell, struck repeatedly](https://www.youtube.com/shorts/NdeuOdg0WsQ) | A much lower bell — 208 Hz hum, partials at 654 and 1813 Hz — struck every 3.6 s. |
+| [Portable inkin, waved](https://www.youtube.com/watch?v=4nhYhrU1I8s) | Waving the bell smears each partial into a cluster. Not modelled, but a good picture of what the mode pairs are doing. |
+
+**Where the model is a choice rather than a measurement.** Holding Q constant
+is what makes the size control one slider instead of two, and it gets the
+direction unarguably right: across the three bowls above, the lowest rings
+two and a half times longer than the highest. But their individual Q values
+are 11700, 17300 and 24100, against the 20300 the model uses. Wall thickness
+and alloy move Q independently of size, so real bowls do not sit on one curve.
+Constant Q is the simplest rule that behaves like a bell; it is not a law
+bells obey.
+
+### Other people's zazen timers
+
+Neither the ensō nor the idea of drawing one as a timer is original here. It
+is the standard visual shorthand for Zen, and a circle is the obvious shape
+for elapsed time, so this is convergence rather than borrowing — but the prior
+art is worth knowing about.
+
+| | |
+|--|--|
+| [Ensō — Meditation Timer & Bell](https://ensomeditationtimer.app/) ([App Store](https://apps.apple.com/us/app/ens%C5%8D-meditation-timer-bell/id840637879)) | A ring that erases itself as the session passes, and a library of recorded bells, bowls and chimes. The opposite choice to this one in both respects: Jikido's ring fills, and its bells are synthesized rather than recorded. |
+| [Zenso Meditation Timer](https://appstor.io/app/zenso-meditation-timer) | Draws an animated ensō as the session elapses. |
+| [Tricycle: meditation app roundup](https://tricycle.org/magazine/meditation-apps-review-enso-calm-smiling-mind/) · [timer apps for iOS](https://tricycle.org/article/meditation-timer-app/) | The wider landscape, reviewed by people who sit. |
+
+### The ensō
+
+An ensō (円相) is drawn in one uninterrupted brushstroke and never corrected,
+so what stays on the paper is a record of the moment rather than a drawing of
+a circle: thick where the brush pressed, broken where it ran dry, and stopped
+where it lifted. Closed, it means completeness; left open, as `lib/src/ui/enso.dart`
+draws it, it means the imperfect and the still-moving. Which is the better fit
+for a period of sitting — entered once, in one movement, with no going back to
+tidy it up.
