@@ -2,9 +2,7 @@
 
 A zazen timer for iOS and Android, written in Flutter.
 
-Three strikes of the bell open the sitting. Then silence for as long as you
-asked for — five, fifteen, twenty minutes. Then two strikes to close it, the
-second stopped under the hand rather than left to ring. That is the whole app.
+Follows the practices of Soto Zen.
 
 *Jikidō* (直堂) is the person in a zendo who keeps time and rings the bell.
 
@@ -31,14 +29,11 @@ them together.
 
 The closing is two strikes rather than three, and the second is stopped: the
 striker is laid on the bowl instead of being lifted away, so the ring is cut
-off rather than allowed to fade. It is unmistakable, and it is the difference
-between a period that has ended and one that is trailing off.
+off rather than allowed to fade.
 
-Ending a sitting early rings nothing. The sitting did not finish.
-
-There is also a bell on its own, under the bell icon: tap the upper half of
-the screen to strike it, the lower half to rest the striker and stop the
-ring. Nothing is timed there.
+You can also interact with a bell on its own, under the bell icon: tap the 
+upper half of the screen to strike it, the lower half to rest the striker and 
+stop the ring. 
 
 ## Making sure the bell is heard
 
@@ -87,11 +82,9 @@ offers a way to grant it, and falls back to an approximate alarm otherwise.
 
 ## The bells
 
-The bells are synthesized rather than recorded, and synthesized on the device
-rather than shipped as files. A struck bowl bell is a sum of exponentially
-decaying inharmonic partials, and the numbers describing them are measured
-from recordings of real inkin and rin bells rather than guessed. Three things
-that the measurements settled, and that are easy to get wrong:
+The bells are synthesized on the device. A struck bowl bell is a sum of 
+exponentially decaying inharmonic partials, and the numbers describing them 
+are measured from some recordings of real bells. Three things to note:
 
 **The pitch is not the fundamental.** An inkin's hum mode is barely audible;
 the partial at 2.70 times it is more than ten times louder and is what you
@@ -137,25 +130,6 @@ default size. Re-run the script from this directory after changing the model:
 ```
 python3 tool/synthesize_bells.py
 ```
-
-It writes each bell straight into the Android and iOS resource directories,
-and nowhere else. There are two copies of every bell and both are load-bearing:
-Android resolves `R.raw.inkin` out of `res/raw`, iOS asks
-`UNNotificationSound` for `inkin.wav` in the bundle root, and neither platform
-can see the other's — or a Flutter asset, which is why a notification sound
-cannot be one. Nothing in the Flutter build copies between these places, so
-they are committed rather than generated at build time.
-
-A third copy under `assets/audio/` used to exist and no longer does: once the
-app synthesized its own bells, it was read by nothing and bundled half a
-megabyte into the app for nothing. `assets/audio/` now holds only the
-keep-alive loop, which really is a Flutter asset.
-
-iOS also refuses notification sounds longer than 30 seconds — comfortable now
-that the closing bell ends under the hand, but the reason the tail length is
-computed rather than assumed.
-
-Only the standard library is needed; there is nothing to install.
 
 ## Building
 
@@ -221,16 +195,11 @@ and alloy move Q independently of size, so real bowls do not sit on one curve.
 Constant Q is the simplest rule that behaves like a bell; it is not a law
 bells obey.
 
-### Other people's zazen timers
-
-Neither the ensō nor the idea of drawing one as a timer is original here. It
-is the standard visual shorthand for Zen, and a circle is the obvious shape
-for elapsed time, so this is convergence rather than borrowing — but the prior
-art is worth knowing about.
+### Other zazen timers
 
 | | |
 |--|--|
-| [Ensō — Meditation Timer & Bell](https://ensomeditationtimer.app/) ([App Store](https://apps.apple.com/us/app/ens%C5%8D-meditation-timer-bell/id840637879)) | A ring that erases itself as the session passes, and a library of recorded bells, bowls and chimes. The opposite choice to this one in both respects: Jikido's ring fills, and its bells are synthesized rather than recorded. |
+| [Ensō — Meditation Timer & Bell](https://ensomeditationtimer.app/) ([App Store](https://apps.apple.com/us/app/ens%C5%8D-meditation-timer-bell/id840637879)) | A ring that erases itself as the session passes, and a library of recorded bells, bowls and chimes. |
 | [Zenso Meditation Timer](https://appstor.io/app/zenso-meditation-timer) | Draws an animated ensō as the session elapses. |
 | [Tricycle: meditation app roundup](https://tricycle.org/magazine/meditation-apps-review-enso-calm-smiling-mind/) · [timer apps for iOS](https://tricycle.org/article/meditation-timer-app/) | The wider landscape, reviewed by people who sit. |
 
