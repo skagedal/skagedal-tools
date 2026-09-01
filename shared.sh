@@ -55,6 +55,12 @@ SWIFT_TOOLS=(
     "${INSTALLED_SWIFT_TOOLS[@]}"
 )
 
+# Flutter apps. Not installable — they get built onto a phone, not into
+# ~/.cargo/bin — so they only show up in ./check and ./update.
+FLUTTER_TOOLS=(
+    jikido
+)
+
 check-node() {
     local dir="$1"
     echo "==> Checking $dir"
@@ -156,6 +162,29 @@ check-maven() {
     (cd "$SCRIPT_DIR/$dir" && mvn --batch-mode test)
 }
 
+# Runs the Flutter SDK version the app pins in its .fvmrc. Locally that means
+# going through fvm; CI installs the pinned version onto PATH instead (see
+# .github/workflows/tests.yml), where there is no fvm and plain flutter is
+# already the right SDK.
+run-flutter() {
+    if command -v fvm >/dev/null 2>&1; then
+        fvm flutter "$@"
+    else
+        flutter "$@"
+    fi
+}
+
+check-flutter() {
+    local dir="$1"
+    echo "==> Checking $dir"
+    (
+        cd "$SCRIPT_DIR/$dir"
+        run-flutter pub get
+        run-flutter analyze
+        run-flutter test
+    )
+}
+
 install-node() {
     local dir="$1"
     echo "==> Installing $dir"
@@ -209,5 +238,11 @@ update-maven() {
     local dir="$1"
     echo "==> Updating $dir"
     (cd "$SCRIPT_DIR/$dir" && mvn versions:use-latest-releases)
+}
+
+update-flutter() {
+    local dir="$1"
+    echo "==> Updating $dir"
+    (cd "$SCRIPT_DIR/$dir" && run-flutter pub upgrade)
 }
 

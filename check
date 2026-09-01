@@ -16,6 +16,9 @@ main() {
     for tool in "${SWIFT_TOOLS[@]}"; do
         check-swift "$tool"
     done
+    for tool in "${FLUTTER_TOOLS[@]}"; do
+        check-flutter "$tool"
+    done
     echo "==> Done"
 }
 

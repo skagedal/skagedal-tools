@@ -109,6 +109,27 @@ meaningfully portable to macOS (the OS convention there is
 Tools may honor a `SKAGEDAL_TOOLS_HOME` environment variable to
 override the base directory (primarily useful for tests).
 
+## Flutter Projects
+
+All Flutter/Dart projects in this repository must follow these guidelines:
+
+- The Flutter SDK is pinned per app with [fvm](https://fvm.app): the version
+  lives in the app's `.fvmrc`, which is committed, while the `.fvm/` directory
+  of machine-local symlinks is not. Run Flutter through `fvm flutter ...`, not
+  a `flutter` off `$PATH`. Change the version with `fvm use <version>` and
+  commit the resulting `.fvmrc`; CI reads it via `flutter-version-file` and so
+  needs no separate bump.
+- Keep `flutter analyze` clean. The top-level `./check` runs
+  `flutter pub get && flutter analyze && flutter test` per app, so any lint
+  becomes a CI failure. Fix the lint rather than adding `// ignore:`.
+- Keep the platform-independent logic — timing, state machines, formatting —
+  in plain Dart classes that do not import plugins, and have widgets and
+  controllers take their platform dependencies by constructor injection.
+  Plugin calls can't run under `flutter test`, so anything reached through a
+  static plugin call is untestable.
+- Generated binary assets (sounds, images) should ship with the script that
+  generated them, under the app's `tool/` directory.
+
 ## Swift Projects
 
 All Swift projects in this repository must follow these guidelines:

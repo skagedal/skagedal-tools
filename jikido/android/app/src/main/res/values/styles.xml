@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Jikido is dark whatever the system theme is set to, so there is no
+     values-night counterpart to this file: both cases want the same thing. -->
+<resources>
+    <!-- The window while the process is starting, before Flutter exists. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <!-- The window once the process has started: behind the Flutter UI while
+         it initializes, and behind it while it runs. Same ink, so there is no
+         seam between the two. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+</resources>

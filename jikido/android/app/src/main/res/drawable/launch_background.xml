@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window behind the app while it starts. Jikido is dark whatever the
+     system theme is, so this is the app's own ink rather than
+     ?android:colorBackground, which would be white in light mode.
+
+     There is no drawable-v21 copy of this: minSdk is 24, so the API 21 split
+     the Flutter template ships could only ever be an identical duplicate. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_background" />
+</layer-list>

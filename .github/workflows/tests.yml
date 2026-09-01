@@ -27,6 +27,11 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - uses: subosito/flutter-action@v2
+        with:
+          # The version jikido pins with fvm, so CI and local builds agree.
+          flutter-version-file: jikido/.fvmrc
+          cache: true
       - name: ./check
         run: ./check
 

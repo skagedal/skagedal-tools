@@ -16,6 +16,9 @@ main() {
     for tool in "${SWIFT_TOOLS[@]}"; do
         update-swift "$tool"
     done
+    for tool in "${FLUTTER_TOOLS[@]}"; do
+        update-flutter "$tool"
+    done
     echo "==> Dependency changes"
     show-dependency-changes
     echo "==> Done"
