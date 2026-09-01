@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+<!-- The window behind the app while it starts. Jikido is dark whatever the
+     system theme is, so this is the app's own ink rather than
+     ?android:colorBackground, which would be white in light mode.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+     There is no drawable-v21 copy of this: minSdk is 24, so the API 21 split
+     the Flutter template ships could only ever be an identical duplicate. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launch_background" />
 </layer-list>

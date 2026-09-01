@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#ffffff</color>
+    <!-- JikidoColors.ink. The window is painted this from the moment the
+         process starts until Flutter has drawn, so that launching the app
+         does not flash a white screen at someone about to sit. -->
+    <color name="launch_background">#14110F</color>
 </resources>
