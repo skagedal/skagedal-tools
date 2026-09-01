@@ -1,6 +1,6 @@
 //! CloudWatch Logs Insights runtime: start_query → poll → results.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use aws_sdk_cloudwatchlogs::Client;
 use aws_sdk_cloudwatchlogs::types::QueryStatus;
 use chrono::{DateTime, Utc};
@@ -127,9 +127,7 @@ fn is_terminal(status: &QueryStatus) -> bool {
     )
 }
 
-fn result_fields_to_row(
-    fields: Vec<aws_sdk_cloudwatchlogs::types::ResultField>,
-) -> QueryRow {
+fn result_fields_to_row(fields: Vec<aws_sdk_cloudwatchlogs::types::ResultField>) -> QueryRow {
     let mut row = IndexMap::new();
     for f in fields {
         let Some(name) = f.field else { continue };

@@ -7,20 +7,19 @@ use chrono::Local;
 use crate::cli::CopyLinkArgs;
 use crate::commands::fail;
 use crate::config::{
-    is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults,
-    EnvConfig,
+    EnvConfig, is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults,
 };
 use crate::console_link::{
-    build_console_link, build_query_detail, log_group_arn, ConsoleLinkInput, QueryDetailInput,
-    TimeSpec,
+    ConsoleLinkInput, QueryDetailInput, TimeSpec, build_console_link, build_query_detail,
+    log_group_arn,
 };
-use crate::pasteboard::{copy_to_pasteboard, PasteboardError};
+use crate::pasteboard::{PasteboardError, copy_to_pasteboard};
 use crate::paths;
-use crate::query_file::{load_query_file, parse_query_file, FrontMatter, LogGroupValue};
+use crate::query_file::{FrontMatter, LogGroupValue, load_query_file, parse_query_file};
 use crate::template::expand_template;
 use crate::terminal::{current_platform, default_link_style, open_url_command, styled_link};
 use crate::time_range::{
-    parse_time_range, try_parse_relative_duration_seconds, TimeRange, TimeRangeParseError,
+    TimeRange, TimeRangeParseError, parse_time_range, try_parse_relative_duration_seconds,
 };
 
 pub async fn run(args: CopyLinkArgs) -> Result<()> {
@@ -37,7 +36,9 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
         Some(v) if !is_valid_environment_name(v) => {
             return Err(fail(
                 2,
-                format!("--environment must be lower kebab-case (e.g. \"prod\", \"us-east-1\") — got {v:?}"),
+                format!(
+                    "--environment must be lower kebab-case (e.g. \"prod\", \"us-east-1\") — got {v:?}"
+                ),
             ));
         }
         Some(v) => Some(v.clone()),
@@ -86,8 +87,8 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
         section_name.as_deref(),
     )?;
 
-    let expanded_query = expand_template(&query_body, &template_vars)
-        .map_err(|e| fail(2, e.to_string()))?;
+    let expanded_query =
+        expand_template(&query_body, &template_vars).map_err(|e| fail(2, e.to_string()))?;
 
     let env_config = match environment.as_deref() {
         Some(e) => resolve_env_config(&settings, section_name.as_deref(), e),
@@ -231,7 +232,9 @@ fn open_in_browser(url: &str) {
 fn choose_time_spec(time_expr: &str, range: &TimeRange, preserve_absolute: bool) -> TimeSpec {
     if !preserve_absolute {
         if let Some(seconds) = try_parse_relative_duration_seconds(time_expr) {
-            return TimeSpec::Relative { seconds_back: seconds };
+            return TimeSpec::Relative {
+                seconds_back: seconds,
+            };
         }
     }
     TimeSpec::Absolute {

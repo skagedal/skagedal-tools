@@ -161,10 +161,7 @@ fn parse_env_config(section: &toml::Table) -> EnvConfig {
 /// Pick the configuration for the current git repo (by basename of the repo
 /// root), merging on top of the `[defaults]` section. Per-repo values fully
 /// replace defaults values (arrays are not concatenated).
-pub fn resolve_repo_defaults(
-    settings: &Settings,
-    cwd: &Path,
-) -> (Option<String>, RepoConfig) {
+pub fn resolve_repo_defaults(settings: &Settings, cwd: &Path) -> (Option<String>, RepoConfig) {
     let Some(root) = git::find_git_root(cwd) else {
         return (None, settings.defaults.clone());
     };
@@ -303,8 +300,9 @@ pub fn ensure_config_file(path: &Path, cwd: &Path) -> Result<EnsureResult, Confi
     let mut result = EnsureResult::default();
     if !path.exists() {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| ConfigError(format!("could not create {}: {}", parent.display(), e)))?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                ConfigError(format!("could not create {}: {}", parent.display(), e))
+            })?;
         }
         std::fs::write(path, DEFAULT_SETTINGS_TEMPLATE)
             .map_err(|e| ConfigError(format!("could not write {}: {}", path.display(), e)))?;
@@ -325,8 +323,9 @@ pub fn ensure_config_file(path: &Path, cwd: &Path) -> Result<EnsureResult, Confi
                 let mut new = contents;
                 new.push_str(prefix);
                 new.push_str(&block);
-                std::fs::write(path, new)
-                    .map_err(|e| ConfigError(format!("could not write {}: {}", path.display(), e)))?;
+                std::fs::write(path, new).map_err(|e| {
+                    ConfigError(format!("could not write {}: {}", path.display(), e))
+                })?;
                 result.added_section = Some(name.to_string());
             }
         }
@@ -375,11 +374,17 @@ mod tests {
              group = \"/prod/another\"\n",
         )
         .unwrap();
-        assert_eq!(s.defaults.flatten_fields.as_deref(), Some(&["@message".to_string()][..]));
+        assert_eq!(
+            s.defaults.flatten_fields.as_deref(),
+            Some(&["@message".to_string()][..])
+        );
         let r = &s.repos["my-service"];
         assert_eq!(r.group.as_deref(), Some("/{env}/team-x"));
         assert_eq!(r.app.as_deref(), Some("my-service"));
-        assert_eq!(s.repos["another-service"].group.as_deref(), Some("/prod/another"));
+        assert_eq!(
+            s.repos["another-service"].group.as_deref(),
+            Some("/prod/another")
+        );
     }
 
     #[test]
@@ -419,7 +424,10 @@ mod tests {
                 account_id: None,
             }
         );
-        assert_eq!(s.environments["systest"].aws_profile.as_deref(), Some("company-systest"));
+        assert_eq!(
+            s.environments["systest"].aws_profile.as_deref(),
+            Some("company-systest")
+        );
     }
 
     #[test]
@@ -434,7 +442,10 @@ mod tests {
         )
         .unwrap();
         let overrides = s.repos["special-service"].env_overrides.as_ref().unwrap();
-        assert_eq!(overrides["prod"].aws_profile.as_deref(), Some("special-prod"));
+        assert_eq!(
+            overrides["prod"].aws_profile.as_deref(),
+            Some("special-prod")
+        );
         assert_eq!(overrides["prod"].region, None);
     }
 
@@ -485,7 +496,10 @@ mod tests {
     #[test]
     fn resolve_env_config_no_settings() {
         let s = parse_settings("").unwrap();
-        assert_eq!(resolve_env_config(&s, Some("foo"), "prod"), EnvConfig::default());
+        assert_eq!(
+            resolve_env_config(&s, Some("foo"), "prod"),
+            EnvConfig::default()
+        );
     }
 
     #[test]
@@ -532,7 +546,10 @@ mod tests {
         assert_eq!(name.as_deref(), Some("my-service"));
         assert_eq!(defaults.group.as_deref(), Some("/{env}/team-x"));
         assert_eq!(defaults.app.as_deref(), Some("my-service"));
-        assert_eq!(defaults.flatten_fields.as_deref(), Some(&["@message".to_string()][..]));
+        assert_eq!(
+            defaults.flatten_fields.as_deref(),
+            Some(&["@message".to_string()][..])
+        );
     }
 
     #[test]
@@ -549,7 +566,10 @@ mod tests {
         )
         .unwrap();
         let (_, defaults) = resolve_repo_defaults(&s, &repo);
-        assert_eq!(defaults.flatten_fields.as_deref(), Some(&["context".to_string()][..]));
+        assert_eq!(
+            defaults.flatten_fields.as_deref(),
+            Some(&["context".to_string()][..])
+        );
     }
 
     #[test]
@@ -564,7 +584,10 @@ mod tests {
         .unwrap();
         let (name, defaults) = resolve_repo_defaults(&s, &repo);
         assert_eq!(name.as_deref(), Some("unknown-repo"));
-        assert_eq!(defaults.flatten_fields.as_deref(), Some(&["@message".to_string()][..]));
+        assert_eq!(
+            defaults.flatten_fields.as_deref(),
+            Some(&["@message".to_string()][..])
+        );
         assert!(defaults.group.is_none());
     }
 
@@ -649,7 +672,10 @@ mod tests {
 
         let r2 = ensure_config_file(&settings_path, &repo).unwrap();
         assert!(!r2.file_created);
-        assert!(r2.added_section.is_none(), "placeholder must not be duplicated");
+        assert!(
+            r2.added_section.is_none(),
+            "placeholder must not be duplicated"
+        );
         assert_eq!(fs::read_to_string(&settings_path).unwrap(), contents);
     }
 
@@ -672,7 +698,11 @@ mod tests {
         let root = std::fs::canonicalize(tmp.path()).unwrap();
         let repo = init_repo(&root, "my-service");
         let settings_path = root.join("settings.toml");
-        fs::write(&settings_path, "[repo.my-service]\ngroup = \"/prod/team\"\n").unwrap();
+        fs::write(
+            &settings_path,
+            "[repo.my-service]\ngroup = \"/prod/team\"\n",
+        )
+        .unwrap();
         let before = fs::read_to_string(&settings_path).unwrap();
         let r = ensure_config_file(&settings_path, &repo).unwrap();
         assert!(!r.file_created);

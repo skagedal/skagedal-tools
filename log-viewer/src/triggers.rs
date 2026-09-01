@@ -37,8 +37,7 @@ impl TriggerRuntime {
     /// value we haven't seen before. If so, fire (unless we're still inside
     /// the startup-delay window, in which case we just record).
     pub fn handle(&mut self, entry: &Entry) {
-        let in_startup =
-            |delay: u64| self.started_at.elapsed().as_millis() < u128::from(delay);
+        let in_startup = |delay: u64| self.started_at.elapsed().as_millis() < u128::from(delay);
         for state in &mut self.triggers {
             let value = pick_first(entry, &state.def.on_new_value);
             let Some(value) = value else { continue };

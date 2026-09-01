@@ -24,9 +24,9 @@ Use `tracker report` to show your progress.
 
 ```
 $ tracker report
-You have worked 3 h 12 m today.
-You have worked 3 h 12 m this week.
-Balance: -4 h 48 m
+You have worked 3:12h today.
+You have worked 3:12h this week.
+Balance: -4:48h
 ```
 
 The balance tells you that you have 4 hours and 48 minutes left to work this day in order to be in balance. 
@@ -50,6 +50,33 @@ Each day starts with the week day and ISO-formatted date in square brackets. (Th
 
 Comments can be written in the file using lines starting with `#`.
 
+## Durations
+
+Wherever a duration is written – in the report output, or in the week file – the same format is used.
+
+The normal form is *compound*: a single term with an optional sign, where hours and minutes are separated by a colon.
+
+| Written    | Means                            |
+|------------|----------------------------------|
+| `8h`       | 8 hours                          |
+| `1:26h`    | 1 hour and 26 minutes            |
+| `+1:26h`   | the same, sign made explicit     |
+| `-1:26h`   | minus 1 hour and 26 minutes      |
+| `45m`      | 45 minutes                       |
+| `-45m`     | minus 45 minutes                 |
+
+The minutes after the colon must always be two digits, so `1:05h` – never `1:5h`. This is deliberate: it keeps `1:30h` from being read as one and a half hours in one place and one hour and thirty minutes in another.
+
+When writing a duration yourself, you may also use the *separated* form, where hours and minutes are given as separate terms, each with its own sign:
+
+```
+1h 30m
++1h -30m       # the same as +30m
+-2h -15m
+```
+
+Output always uses the compound form: whole hours are written as `8h`, durations shorter than an hour as `30m`, everything else as `1:26h`, and zero as `0h`. Negative durations always carry a `-`; a balance also carries an explicit `+` when it is positive.
+
 ## Specifying a start time
 
 If you forgot to run `tracker start` when you started working, you can specify a start time when you run the command:
@@ -67,10 +94,10 @@ The time should be in `HH:MM` format (24-hour format).
 Tracker will only look at the current week file when stating your report. If you wish to transfer a balance from a previous week, it can be done by adding a line like this to the top of the current week file: 
 
 ```
-* balance 3h 12m
+* balance 3:12h
 ```
 
-This will add 3 hours and 12 minutes to the balance for the current week. 
+This will add 3 hours and 12 minutes to the balance for the current week. A negative balance is written the same way, with a minus sign: `* balance -3:12h`. Any duration format described above works here – the separated form `* balance 3h 12m` is still read, and is rewritten in the compound form the next time `tracker` writes the file. 
 
 (Under development: Such as balance shift will be added automatically when you start a new week.)
 

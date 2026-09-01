@@ -13,6 +13,9 @@ main() {
     for tool in "${MAVEN_TOOLS[@]}"; do
         update-maven "$tool"
     done
+    for tool in "${SWIFT_TOOLS[@]}"; do
+        update-swift "$tool"
+    done
     for tool in "${FLUTTER_TOOLS[@]}"; do
         update-flutter "$tool"
     done

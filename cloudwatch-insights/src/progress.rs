@@ -4,7 +4,7 @@
 use std::io::{IsTerminal, Write};
 
 use crate::insights::{QueryProgress, QueryStatistics};
-use crate::terminal::{colorize, ColorOptions};
+use crate::terminal::{ColorOptions, colorize};
 
 /// Width of the bold prompt column shared by the header and the live status
 /// line (e.g. "AWS region:  ", "Status:      ").
@@ -64,7 +64,13 @@ impl ProgressReporter {
 
 fn status_prefix() -> String {
     let label = "Status:";
-    let bold = colorize(label, ColorOptions { bold: true, ..Default::default() });
+    let bold = colorize(
+        label,
+        ColorOptions {
+            bold: true,
+            ..Default::default()
+        },
+    );
     let pad = " ".repeat(HEADER_COLUMN_WIDTH.saturating_sub(label.len()));
     format!("{bold}{pad}")
 }

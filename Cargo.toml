@@ -4,6 +4,7 @@ members = [
     "assistant",
     "chrome-page-notes/host",
     "cloudwatch-insights",
+    "disky",
     "gh-pr",
     "git-branch-assistant",
     "git-dirty-checker",
@@ -20,6 +21,9 @@ members = [
 
 [workspace.package]
 edition = "2024"
+
+[profile.dev]
+debug = "line-tables-only"
 
 # Every dep used by any member is declared here so this file doubles as
 # an inventory of what's used across all the tools. Members opt in via

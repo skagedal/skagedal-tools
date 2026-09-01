@@ -1,4 +1,5 @@
 pub mod config;
+pub mod duration;
 pub mod paths;
 pub mod tracker;
 

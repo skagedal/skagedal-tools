@@ -14,7 +14,9 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{
+    Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState,
+};
 
 use crate::app::{App, View};
 use crate::colors::{hash_color, level_color};
@@ -252,7 +254,9 @@ fn draw_list(f: &mut ratatui::Frame, app: &mut App, area: Rect, state: &mut Tabl
         let entry = &app.entries[i];
         let body = app.row_cells(entry).into_iter().map(Cell::from);
         let cells: Vec<Cell> = if show_gutter {
-            std::iter::once(gutter_cell(app, entry)).chain(body).collect()
+            std::iter::once(gutter_cell(app, entry))
+                .chain(body)
+                .collect()
         } else {
             body.collect()
         };
@@ -376,12 +380,7 @@ fn draw_detail(f: &mut ratatui::Frame, app: &App, area: Rect) {
     f.render_widget(para, area);
 }
 
-fn draw_fields_menu(
-    f: &mut ratatui::Frame,
-    app: &App,
-    area: Rect,
-    state: &mut ListState,
-) {
+fn draw_fields_menu(f: &mut ratatui::Frame, app: &App, area: Rect, state: &mut ListState) {
     let items: Vec<ListItem> = app
         .columns
         .iter()
@@ -420,7 +419,9 @@ fn draw_status(f: &mut ratatui::Frame, app: &App, area: Rect) {
         .map(|m| format!(" · {m}"))
         .unwrap_or_default();
     let bindings = match app.view {
-        View::List => " j/k move · g/G top/bottom · o open · / filter · f follow · v fields · q quit ",
+        View::List => {
+            " j/k move · g/G top/bottom · o open · / filter · f follow · v fields · q quit "
+        }
         View::Detail => " j/k field · n/p entry · t toggle col · c copy · u/Esc back ",
         View::FieldsMenu => " j/k cursor · space toggle · J/K reorder · v close ",
     };

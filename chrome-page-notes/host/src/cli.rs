@@ -17,7 +17,10 @@ use anyhow::{Context, Result, bail};
 /// Obsidian's own URL scheme handler resolves by vault name correctly, and
 /// which auto-launches the app if it's not already running.
 pub fn open_url(url: &str) -> Result<()> {
-    let output = Command::new("open").arg(url).output().context("failed to run `open`")?;
+    let output = Command::new("open")
+        .arg(url)
+        .output()
+        .context("failed to run `open`")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

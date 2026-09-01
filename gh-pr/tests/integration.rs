@@ -36,7 +36,12 @@ impl Harness {
         let log_path = tempdir.path().join("invocations.log");
         let git_log_path = tempdir.path().join("git-invocations.log");
 
-        Self { tempdir, path_value, log_path, git_log_path }
+        Self {
+            tempdir,
+            path_value,
+            log_path,
+            git_log_path,
+        }
     }
 
     fn run(&self, args: &[&str], extra_env: &[(&str, &str)]) -> Output {
@@ -137,7 +142,10 @@ fn create_aborts_when_push_fails() {
         &["--create", "--toward", "main"],
         &[
             ("MOCK_GIT_FAIL", "1"),
-            ("MOCK_GH_CREATE_URL", "https://example.invalid/should-not-be-used"),
+            (
+                "MOCK_GH_CREATE_URL",
+                "https://example.invalid/should-not-be-used",
+            ),
         ],
     );
     assert_eq!(out.status.code(), Some(1));
@@ -192,7 +200,10 @@ fn create_skipped_when_pr_already_exists() {
         &["--create"],
         &[
             ("MOCK_GH_PR_URL", "https://github.com/me/repo/pull/9"),
-            ("MOCK_GH_CREATE_URL", "https://example.invalid/should-not-be-used"),
+            (
+                "MOCK_GH_CREATE_URL",
+                "https://example.invalid/should-not-be-used",
+            ),
         ],
     );
     assert_success(&out);
@@ -261,12 +272,21 @@ fn comments_text_format_calls_graphql_and_hides_resolved() {
     );
     assert_success(&out);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Conversation comments (1)"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("Conversation comments (1)"),
+        "stdout: {stdout}"
+    );
     assert!(stdout.contains("@alice"), "stdout: {stdout}");
     assert!(stdout.contains("LGTM"), "stdout: {stdout}");
     assert!(stdout.contains("Review summaries (1)"), "stdout: {stdout}");
-    assert!(stdout.contains("@dave (CHANGES_REQUESTED)"), "stdout: {stdout}");
-    assert!(stdout.contains("please fix the proto annotation"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("@dave (CHANGES_REQUESTED)"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("please fix the proto annotation"),
+        "stdout: {stdout}"
+    );
     assert!(
         stdout.contains("Review threads (1, 1 resolved hidden)"),
         "stdout: {stdout}"
@@ -297,7 +317,10 @@ fn comments_resolved_flag_shows_resolved_threads() {
     assert_success(&out);
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("Review threads (2)"), "stdout: {stdout}");
-    assert!(stdout.contains("src/bar.rs:7 [RESOLVED]"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("src/bar.rs:7 [RESOLVED]"),
+        "stdout: {stdout}"
+    );
     assert!(stdout.contains("@carol"), "stdout: {stdout}");
 }
 
@@ -352,7 +375,10 @@ fn mark_viewed_with_literal_filenames_marks_each() {
     let h = Harness::new();
     let out = h.run(
         &["mark-viewed", "src/foo.rs", "db/generated/schema.sql"],
-        &[("MOCK_GH_PR_NUMBER", "42"), ("MOCK_GH_PR_NODE_ID", "PR_abc")],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_PR_NODE_ID", "PR_abc"),
+        ],
     );
     assert_success(&out);
     let stdout = String::from_utf8_lossy(&out.stdout);

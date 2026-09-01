@@ -221,7 +221,9 @@ fn indentation_of_ours_is_preserved() {
     let mut buf = Vec::new();
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
     let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
-    json!({"dependencies": {"foo": "^1.5.0"}}).serialize(&mut ser).unwrap();
+    json!({"dependencies": {"foo": "^1.5.0"}})
+        .serialize(&mut ser)
+        .unwrap();
     fs::write(&ours, format!("{}\n", String::from_utf8(buf).unwrap())).unwrap();
 
     fs::write(
@@ -238,4 +240,3 @@ fn indentation_of_ours_is_preserved() {
         "expected 4-space indent, got: {merged:?}"
     );
 }
-

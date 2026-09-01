@@ -13,6 +13,9 @@ main() {
     for tool in "${MAVEN_TOOLS[@]}"; do
         check-maven "$tool"
     done
+    for tool in "${SWIFT_TOOLS[@]}"; do
+        check-swift "$tool"
+    done
     for tool in "${FLUTTER_TOOLS[@]}"; do
         check-flutter "$tool"
     done

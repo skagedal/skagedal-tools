@@ -3,7 +3,7 @@
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use indexmap::IndexMap;
 use serde_json::Value;
 
@@ -25,7 +25,8 @@ pub fn write_results_strings(path: &Path, rows: &[QueryRow]) -> Result<()> {
         contents.push_str(&serde_json::to_string(&Value::Object(map))?);
         contents.push('\n');
     }
-    std::fs::write(path, contents).map_err(|e| anyhow!("could not write {}: {}", path.display(), e))?;
+    std::fs::write(path, contents)
+        .map_err(|e| anyhow!("could not write {}: {}", path.display(), e))?;
     Ok(())
 }
 
@@ -42,7 +43,8 @@ pub fn write_results(path: &Path, rows: &[IndexMap<String, Value>]) -> Result<()
         contents.push_str(&serde_json::to_string(&Value::Object(map))?);
         contents.push('\n');
     }
-    std::fs::write(path, contents).map_err(|e| anyhow!("could not write {}: {}", path.display(), e))?;
+    std::fs::write(path, contents)
+        .map_err(|e| anyhow!("could not write {}: {}", path.display(), e))?;
     Ok(())
 }
 

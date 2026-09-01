@@ -79,7 +79,11 @@ fn write_message(stdout: &mut impl Write, value: &serde_json::Value) -> io::Resu
 /// Looks up (or creates) the note for `url` and builds the popup-facing
 /// response. `note_path` returning `None` means an unsupported scheme
 /// (anything but `https`), which isn't an error - just nothing to show.
-fn note_response(cfg: &Result<config::Config>, url: &str, create_if_missing: bool) -> serde_json::Value {
+fn note_response(
+    cfg: &Result<config::Config>,
+    url: &str,
+    create_if_missing: bool,
+) -> serde_json::Value {
     let cfg = match cfg {
         Ok(cfg) => cfg,
         Err(e) => return json!({"status": "error", "message": e.to_string()}),
@@ -151,7 +155,9 @@ fn main() {
 
                 let response = match serde_json::from_value::<Request>(value) {
                     Ok(request) => handle(request, &cfg),
-                    Err(e) => json!({"status": "error", "message": format!("invalid request: {e}")}),
+                    Err(e) => {
+                        json!({"status": "error", "message": format!("invalid request: {e}")})
+                    }
                 };
                 let _ = write_message(&mut stdout, &response);
             }

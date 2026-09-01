@@ -99,7 +99,9 @@ fn default_command(args: DefaultArgs) {
 
     println!("{}", url);
 
-    if args.open && let Err(e) = opener::open_browser(&url) {
+    if args.open
+        && let Err(e) = opener::open_browser(&url)
+    {
         eprintln!("Failed to open browser: {}", e);
         exit(1);
     }
@@ -387,7 +389,11 @@ fn print_text(response: &Value, show_resolved: bool) {
 
     println!();
 
-    let is_resolved = |t: &Value| t.get("isResolved").and_then(Value::as_bool).unwrap_or(false);
+    let is_resolved = |t: &Value| {
+        t.get("isResolved")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    };
     let visible: Vec<&Value> = threads
         .iter()
         .filter(|t| show_resolved || !is_resolved(t))
@@ -416,7 +422,11 @@ fn print_text(response: &Value, show_resolved: bool) {
             Some(l) => format!("{}:{}", path, l),
             None => path.to_string(),
         };
-        let res_tag = if is_resolved(thread) { " [RESOLVED]" } else { "" };
+        let res_tag = if is_resolved(thread) {
+            " [RESOLVED]"
+        } else {
+            ""
+        };
 
         println!();
         println!("— {}{}", location, res_tag);
@@ -441,10 +451,7 @@ fn print_review_summary_header(r: &Value) {
         .pointer("/author/login")
         .and_then(Value::as_str)
         .unwrap_or("ghost");
-    let submitted = r
-        .get("submittedAt")
-        .and_then(Value::as_str)
-        .unwrap_or("?");
+    let submitted = r.get("submittedAt").and_then(Value::as_str).unwrap_or("?");
     let state = r.get("state").and_then(Value::as_str).unwrap_or("?");
     println!("[{}] @{} ({}):", submitted, author, state);
 }

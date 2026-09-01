@@ -21,11 +21,7 @@ pub struct FrontMatter {
     pub env: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub app: Option<String>,
-    #[serde(
-        default,
-        rename = "log-group",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, rename = "log-group", skip_serializing_if = "Option::is_none")]
     pub log_group: Option<LogGroupValue>,
     /// When true, `query` skips AWS execution after the editor closes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -106,7 +102,10 @@ pub struct SeedOptions<'a> {
 
 /// Ensure `path` exists, seeding it on absence. Returns whether a new file
 /// was written.
-pub fn ensure_current_insights(path: &Path, options: &SeedOptions<'_>) -> Result<bool, QueryFileError> {
+pub fn ensure_current_insights(
+    path: &Path,
+    options: &SeedOptions<'_>,
+) -> Result<bool, QueryFileError> {
     if path.exists() {
         return Ok(false);
     }
@@ -120,7 +119,10 @@ pub fn ensure_current_insights(path: &Path, options: &SeedOptions<'_>) -> Result
 }
 
 /// Unconditionally reset `path` to the default template (used by `query --new`).
-pub fn reset_current_insights(path: &Path, options: &SeedOptions<'_>) -> Result<(), QueryFileError> {
+pub fn reset_current_insights(
+    path: &Path,
+    options: &SeedOptions<'_>,
+) -> Result<(), QueryFileError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| QueryFileError(format!("could not create {}: {}", parent.display(), e)))?;
@@ -163,7 +165,8 @@ fn render_front_matter(fm: &SeedFrontMatter) -> String {
 
 fn toml_string(s: &str) -> String {
     let value = toml::Value::String(s.to_string());
-    toml::to_string(&value).unwrap_or_else(|_| format!("\"{s}\""))
+    toml::to_string(&value)
+        .unwrap_or_else(|_| format!("\"{s}\""))
         .trim()
         .to_string()
 }
@@ -184,7 +187,10 @@ mod tests {
     fn no_front_matter_means_whole_body() {
         let qf = parse_query_file("fields @timestamp, @message | sort @timestamp desc").unwrap();
         assert!(qf.front_matter.time.is_none());
-        assert_eq!(qf.body, "fields @timestamp, @message | sort @timestamp desc");
+        assert_eq!(
+            qf.body,
+            "fields @timestamp, @message | sort @timestamp desc"
+        );
     }
 
     #[test]
@@ -198,15 +204,19 @@ mod tests {
             Some(LogGroupValue::Single(ref s)) => assert_eq!(s, "/prod/team"),
             _ => panic!("expected single log-group"),
         }
-        assert_eq!(qf.body, "fields @timestamp, @message\n| sort @timestamp desc");
+        assert_eq!(
+            qf.body,
+            "fields @timestamp, @message\n| sort @timestamp desc"
+        );
     }
 
     #[test]
     fn front_matter_log_group_can_be_array() {
-        let qf =
-            parse_query_file("log-group = [\"/a\", \"/b\"]\n---\nfields @timestamp").unwrap();
+        let qf = parse_query_file("log-group = [\"/a\", \"/b\"]\n---\nfields @timestamp").unwrap();
         match qf.front_matter.log_group {
-            Some(LogGroupValue::Multiple(v)) => assert_eq!(v, vec!["/a".to_string(), "/b".to_string()]),
+            Some(LogGroupValue::Multiple(v)) => {
+                assert_eq!(v, vec!["/a".to_string(), "/b".to_string()])
+            }
             _ => panic!("expected multiple log-groups"),
         }
     }
@@ -308,7 +318,9 @@ mod tests {
         .unwrap();
         let qf = load_query_file(&path).unwrap();
         match qf.front_matter.log_group {
-            Some(LogGroupValue::Multiple(v)) => assert_eq!(v, vec!["/a".to_string(), "/b".to_string()]),
+            Some(LogGroupValue::Multiple(v)) => {
+                assert_eq!(v, vec!["/a".to_string(), "/b".to_string()])
+            }
             _ => panic!("expected multiple log-groups"),
         }
     }

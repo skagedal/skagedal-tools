@@ -93,12 +93,7 @@ fn main() {
             let new_path = week_files_dir.join(&new_filename);
 
             if filename != new_filename {
-                migrations.push((
-                    path.clone(),
-                    new_path,
-                    filename.to_string(),
-                    new_filename,
-                ));
+                migrations.push((path.clone(), new_path, filename.to_string(), new_filename));
             }
         }
     }
@@ -228,9 +223,7 @@ fn main() {
     for (old_path, new_path, old_name, new_name) in ordered {
         println!("  {} -> {}", old_name, new_name);
 
-        if !dry_run
-            && let Err(e) = fs::rename(&old_path, &new_path)
-        {
+        if !dry_run && let Err(e) = fs::rename(&old_path, &new_path) {
             eprintln!("    ERROR: Failed to rename: {}", e);
         }
     }
@@ -264,9 +257,7 @@ fn parse_old_format(filename: &str) -> Option<(i32, u32)> {
 
 /// Topologically order renames so we never rename onto a file that's still a pending source.
 /// Returns Err with the names of files in a cycle if one exists (no valid order possible).
-fn order_migrations(
-    migrations: Vec<Migration>,
-) -> Result<Vec<Migration>, Vec<String>> {
+fn order_migrations(migrations: Vec<Migration>) -> Result<Vec<Migration>, Vec<String>> {
     let mut remaining = migrations;
     let mut ordered = Vec::with_capacity(remaining.len());
 
@@ -308,4 +299,3 @@ fn representative_date(year: i32, week_w: u32) -> Option<NaiveDate> {
         ))
     }
 }
-

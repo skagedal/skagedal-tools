@@ -61,8 +61,8 @@ fn main() -> Result<()> {
 }
 
 fn run(brewfile: &Path, list_only: bool) -> Result<()> {
-    let listed = parse_brewfile(brewfile)
-        .with_context(|| format!("reading {}", brewfile.display()))?;
+    let listed =
+        parse_brewfile(brewfile).with_context(|| format!("reading {}", brewfile.display()))?;
 
     let installed = installed_top_level()?;
 
@@ -284,9 +284,7 @@ fn run_menu<W: Write>(out: &mut W) -> Result<Option<usize>> {
                     KeyCode::Char('j') | KeyCode::Down => sel = (sel + 1) % n,
                     KeyCode::Char('k') | KeyCode::Up => sel = (sel + n - 1) % n,
                     KeyCode::Enter => chosen = Some(sel),
-                    KeyCode::Char('c' | 'C')
-                        if modifiers.contains(KeyModifiers::CONTROL) =>
-                    {
+                    KeyCode::Char('c' | 'C') if modifiers.contains(KeyModifiers::CONTROL) => {
                         break Ok(None);
                     }
                     KeyCode::Esc | KeyCode::Char('q' | 'Q') => break Ok(None),
@@ -441,8 +439,7 @@ fn insert_into_brewfile(content: &str, kind: Kind, new_line: &str) -> String {
         .iter()
         .enumerate()
         .filter_map(|(i, line)| {
-            parse_quoted_keyword(line.trim_start(), kind.keyword())
-                .map(|name| (i, name))
+            parse_quoted_keyword(line.trim_start(), kind.keyword()).map(|name| (i, name))
         })
         .collect();
 
@@ -506,10 +503,7 @@ mas "Xcode", id: 497799835
         );
 
         let items = parse_brewfile(f.path()).unwrap();
-        let names: Vec<(Kind, &str)> = items
-            .iter()
-            .map(|i| (i.kind, i.name.as_str()))
-            .collect();
+        let names: Vec<(Kind, &str)> = items.iter().map(|i| (i.kind, i.name.as_str())).collect();
 
         assert_eq!(
             names,
@@ -566,15 +560,13 @@ mas "Xcode", id: 497799835
     fn inserts_brew_after_last_when_larger_than_all() {
         let original = "brew \"ansible\"\nbrew \"bat\"\n";
         let updated = insert(original, &brew("zoxide"));
-        assert_eq!(
-            updated,
-            "brew \"ansible\"\nbrew \"bat\"\nbrew \"zoxide\"\n"
-        );
+        assert_eq!(updated, "brew \"ansible\"\nbrew \"bat\"\nbrew \"zoxide\"\n");
     }
 
     #[test]
     fn brew_inserts_only_among_brews_not_casks() {
-        let original = "tap \"foo/bar\"\n\nbrew \"ansible\"\nbrew \"jq\"\n\ncask \"iterm2\"\ncask \"slack\"\n";
+        let original =
+            "tap \"foo/bar\"\n\nbrew \"ansible\"\nbrew \"jq\"\n\ncask \"iterm2\"\ncask \"slack\"\n";
         let updated = insert(original, &brew("git"));
         assert_eq!(
             updated,
@@ -584,8 +576,7 @@ mas "Xcode", id: 497799835
 
     #[test]
     fn cask_inserts_only_among_casks() {
-        let original =
-            "brew \"ansible\"\nbrew \"jq\"\n\ncask \"iterm2\"\ncask \"slack\"\n";
+        let original = "brew \"ansible\"\nbrew \"jq\"\n\ncask \"iterm2\"\ncask \"slack\"\n";
         let updated = insert(original, &cask("orbstack"));
         assert_eq!(
             updated,
@@ -620,7 +611,10 @@ mas "Xcode", id: 497799835
     #[test]
     fn formats_entry_with_aligned_comment() {
         let line = format_entry_line(&brew("fnm"), Some("Fast node manager"));
-        assert_eq!(line, "brew \"fnm\"                      # Fast node manager");
+        assert_eq!(
+            line,
+            "brew \"fnm\"                      # Fast node manager"
+        );
     }
 
     #[test]

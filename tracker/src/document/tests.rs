@@ -69,6 +69,14 @@ fn read_line() {
         parser.parse_line("* balance -5h -6m")
     );
 
+    assert_eq!(
+        Option::Some(DurationShift {
+            text: String::from("balance"),
+            duration: TimeDelta::try_minutes(-5 * 60 - 6).unwrap()
+        }),
+        parser.parse_line("* balance -5:06h")
+    );
+
     assert_eq!(Option::Some(Blank), parser.parse_line(""));
 }
 
@@ -76,15 +84,31 @@ fn read_line() {
 fn serde_duration() {
     let parser = Parser::new();
 
-    let line = "* carry 1h 30m";
+    let line = "* carry 1:30h";
     let parsed = parser.parse_line(line).unwrap();
     let serialized = parsed.to_string();
     assert_eq!(line, serialized);
 
-    let line = "* carry -2h -15m";
+    let line = "* carry -2:15h";
     let parsed = parser.parse_line(line).unwrap();
     let serialized = parsed.to_string();
     assert_eq!(line, serialized);
+
+    let line = "* carry -45m";
+    let parsed = parser.parse_line(line).unwrap();
+    let serialized = parsed.to_string();
+    assert_eq!(line, serialized);
+}
+
+#[test]
+fn durations_written_in_the_separated_form_are_normalized() {
+    let parser = Parser::new();
+
+    let parsed = parser.parse_line("* carry +1h -30m").unwrap();
+    assert_eq!("* carry 30m", parsed.to_string());
+
+    let parsed = parser.parse_line("* carry -2h -15m").unwrap();
+    assert_eq!("* carry -2:15h", parsed.to_string());
 }
 
 #[test]
@@ -221,8 +245,8 @@ fn example_1_week() -> IsoWeek {
 fn example_1_text() -> String {
     String::from(
         "# Preamble
-* carry 1h 10m
-* negativecarry -2h -10m
+* carry 1:10h
+* negativecarry -2:10h
 
 [monday 2020-07-13]
 * Vacation

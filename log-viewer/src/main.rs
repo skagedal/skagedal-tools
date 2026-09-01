@@ -215,7 +215,14 @@ mod tests {
     #[test]
     fn parses_exec_with_long_flag() {
         let cli = Cli::try_parse_from([
-            "bin", "--profile", "stern", "--exec", "kubectl", "logs", "-f", "pod",
+            "bin",
+            "--profile",
+            "stern",
+            "--exec",
+            "kubectl",
+            "logs",
+            "-f",
+            "pod",
         ])
         .unwrap();
         assert_eq!(cli.profile.as_deref(), Some("stern"));
@@ -224,8 +231,7 @@ mod tests {
 
     #[test]
     fn parses_exec_with_short_flag() {
-        let cli =
-            Cli::try_parse_from(["bin", "-e", "stern", "--output", "json", "app"]).unwrap();
+        let cli = Cli::try_parse_from(["bin", "-e", "stern", "--output", "json", "app"]).unwrap();
         assert_eq!(exec_strings(&cli), vec!["stern", "--output", "json", "app"]);
     }
 

@@ -9,9 +9,9 @@ use tokio::io::AsyncReadExt;
 
 use crate::cli::RawArgs;
 use crate::commands::fail;
-use crate::insights::{run_insights_query, ProgressCallback, QueryProgress, RunQueryOptions};
+use crate::insights::{ProgressCallback, QueryProgress, RunQueryOptions, run_insights_query};
 use crate::output::write_results_strings;
-use crate::time_range::{parse_time_range, TimeRangeParseError};
+use crate::time_range::{TimeRangeParseError, parse_time_range};
 
 pub async fn run(args: RawArgs) -> Result<()> {
     let query_file = args

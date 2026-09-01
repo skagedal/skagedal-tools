@@ -1,9 +1,10 @@
 use crate::config::Config;
 use crate::document::Line::{self, OpenShift};
 use crate::document::{Day, Document, Parser};
+use crate::duration::{format_duration, format_signed_duration};
 use crate::paths::TrackerDirs;
 use crate::report::Report;
-use chrono::{Datelike, Duration, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
+use chrono::{Datelike, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -18,12 +19,6 @@ pub struct Tracker {
     now: NaiveDateTime,
     dirs: TrackerDirs,
     config: Config,
-}
-
-fn format_duration(duration: &Duration) -> String {
-    let hours = duration.num_hours();
-    let minutes = (duration.num_minutes() - (hours * 60)).abs();
-    format!("{} h {} m", hours, minutes)
 }
 
 impl Tracker {
@@ -178,7 +173,7 @@ impl Tracker {
 
         print!(
             "You have worked {} today",
-            format_duration(&report.duration_today)
+            format_duration(report.duration_today)
         );
         if report.is_ongoing {
             println!(", ongoing.")
@@ -187,9 +182,9 @@ impl Tracker {
         }
         println!(
             "You have worked {} this week.",
-            format_duration(&report.duration_week)
+            format_duration(report.duration_week)
         );
-        println!("Balance: {}", format_duration(&report.balance))
+        println!("Balance: {}", format_signed_duration(report.balance))
     }
 
     pub fn document_with_tracking_started(

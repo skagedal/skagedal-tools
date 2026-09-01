@@ -11,6 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
         with:
@@ -32,3 +34,28 @@ jobs:
           cache: true
       - name: ./check
         run: ./check
+
+  # appicon-generator draws through AppKit and Core Text, so it can only be
+  # built and tested on macOS. Kept as its own job rather than moving the whole
+  # check onto a macOS runner, which is slower and more expensive for the Rust,
+  # Node, Java and Flutter tools that do not need it.
+  check-swift:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: swift --version
+        run: swift --version
+      # Reuses check-swift from shared.sh rather than repeating the lint /
+      # build / test commands here, so there is only one definition of what
+      # checking a Swift package means. shared.sh reads SCRIPT_DIR, which the
+      # top-level scripts normally set for it.
+      - name: check-swift appicon-generator
+        run: |
+          set -euo pipefail
+          source ./shared.sh
+          check-swift appicon-generator
+        env:
+          SCRIPT_DIR: ${{ github.workspace }}

@@ -59,7 +59,8 @@ fn log_invocation(args: &[String]) {
 
 fn pr_view(args: &[String]) {
     // `mark-viewed` fetches id + number together without a --jq filter.
-    if arg_value(args, "--jq").is_none() && arg_value(args, "--json").as_deref() == Some("id,number")
+    if arg_value(args, "--jq").is_none()
+        && arg_value(args, "--json").as_deref() == Some("id,number")
     {
         match env_nonempty("MOCK_GH_PR_NUMBER") {
             Some(number) => {
@@ -113,7 +114,8 @@ fn repo_view(args: &[String]) {
             }
         },
         Some(".nameWithOwner") => {
-            let name = env::var("MOCK_GH_NAME_WITH_OWNER").unwrap_or_else(|_| "me/repo".to_string());
+            let name =
+                env::var("MOCK_GH_NAME_WITH_OWNER").unwrap_or_else(|_| "me/repo".to_string());
             println!("{}", name);
         }
         other => {

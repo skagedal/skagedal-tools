@@ -17,6 +17,7 @@ NODE_TOOLS=(
 INSTALLED_RUST_TOOLS=(
     assistant
     cloudwatch-insights
+    disky
     gh-pr
     git-branch-assistant
     git-dirty-checker
@@ -41,6 +42,17 @@ RUST_TOOLS=(
 
 MAVEN_TOOLS=(
     git-repos-latest-activity
+)
+
+# Swift packages. macOS-only — appicon-generator draws through AppKit and Core
+# Text — so ./check skips them anywhere else, and CI runs them on a separate
+# macOS job.
+INSTALLED_SWIFT_TOOLS=(
+    appicon-generator
+)
+
+SWIFT_TOOLS=(
+    "${INSTALLED_SWIFT_TOOLS[@]}"
 )
 
 # Flutter apps. Not installable — they get built onto a phone, not into
@@ -71,6 +83,7 @@ check-rust() {
         if [[ -f browser/package.json5 ]]; then
             (cd browser && pnpm install && pnpm run check)
         fi
+        cargo fmt --check
         cargo clippy --all-targets -- -D warnings
         cargo test
     )
@@ -89,9 +102,58 @@ check-rust-workspace() {
                 (cd "$tool/browser" && pnpm install && pnpm run check)
             fi
         done
+        cargo fmt --all --check
         cargo clippy --workspace --all-targets -- -D warnings
         cargo test --workspace
     )
+}
+
+# Where Swift binaries get installed. Rust tools go to ~/.cargo/bin by way of
+# cargo install and Node tools are pnpm-linked; SwiftPM has no equivalent, so
+# the release binary is copied to ~/.local/bin, which is already on PATH.
+SWIFT_BIN_DIR="$HOME/.local/bin"
+
+swift-available() {
+    if ! [[ "$(uname -s)" == "Darwin" ]]; then
+        return 1
+    fi
+    command -v swift >/dev/null 2>&1
+}
+
+check-swift() {
+    local dir="$1"
+    if ! swift-available; then
+        echo "==> Skipping $dir (needs a Swift toolchain on macOS)"
+        return 0
+    fi
+    echo "==> Checking $dir"
+    (
+        cd "$SCRIPT_DIR/$dir"
+        # --strict fails on lint findings rather than just printing them, which
+        # is what makes this a check rather than a report.
+        swift format lint --strict --recursive --parallel Package.swift Sources Tests
+        swift build
+        swift test
+    )
+}
+
+install-swift() {
+    local dir="$1"
+    echo "==> Installing $dir"
+    (
+        cd "$SCRIPT_DIR/$dir"
+        swift build --configuration release
+        mkdir -p "$SWIFT_BIN_DIR"
+        install -m 0755 "$(swift build --configuration release --show-bin-path)/$dir" \
+            "$SWIFT_BIN_DIR/$dir"
+        echo "    installed to $SWIFT_BIN_DIR/$dir"
+    )
+}
+
+update-swift() {
+    local dir="$1"
+    echo "==> Updating $dir"
+    (cd "$SCRIPT_DIR/$dir" && swift package update)
 }
 
 check-maven() {

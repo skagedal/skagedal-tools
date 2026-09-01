@@ -41,8 +41,12 @@ pub fn config_path() -> PathBuf {
 
 pub fn load() -> Result<Config> {
     let path = config_path();
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("could not read config file at {} (expected `vault_path`)", path.display()))?;
+    let text = std::fs::read_to_string(&path).with_context(|| {
+        format!(
+            "could not read config file at {} (expected `vault_path`)",
+            path.display()
+        )
+    })?;
     let config: Config = toml::from_str(&text)
         .with_context(|| format!("could not parse config file at {}", path.display()))?;
 

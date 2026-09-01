@@ -103,8 +103,8 @@ fn main() -> Result<()> {
         }
 
         // Parse the plist XML
-        let mut jvms: Vec<JVMInfo> = parse_jvms(&output.stdout)
-            .context("Failed to parse plist XML from java_home")?;
+        let mut jvms: Vec<JVMInfo> =
+            parse_jvms(&output.stdout).context("Failed to parse plist XML from java_home")?;
 
         // Filter by name if provided
         if let Some(name_filter) = &args.name {

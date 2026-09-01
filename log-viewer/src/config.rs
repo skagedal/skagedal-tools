@@ -164,12 +164,13 @@ pub fn load_with_profile(path: &Path, profile: Option<&str>) -> Result<Config> {
             return Ok(Config::default());
         }
         Err(err) => {
-            return Err(anyhow::Error::new(err)
-                .context(format!("reading config at {}", path.display())));
+            return Err(
+                anyhow::Error::new(err).context(format!("reading config at {}", path.display()))
+            );
         }
     };
-    let raw: RawConfig = toml::from_str(&text)
-        .with_context(|| format!("parsing config at {}", path.display()))?;
+    let raw: RawConfig =
+        toml::from_str(&text).with_context(|| format!("parsing config at {}", path.display()))?;
     if let Some(name) = profile {
         let profile = raw
             .profiles
@@ -218,8 +219,7 @@ pub fn ensure_config_file(path: &Path) -> Result<bool> {
         return Ok(false);
     }
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("creating {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
     }
     fs::write(path, STARTER_CONFIG)
         .with_context(|| format!("writing starter config to {}", path.display()))?;
@@ -417,12 +417,16 @@ name = "plain"
             Some("host".into())
         );
         assert_eq!(
-            load_with_profile(&path, Some("stern")).unwrap().color_by_field,
+            load_with_profile(&path, Some("stern"))
+                .unwrap()
+                .color_by_field,
             Some("pod".into())
         );
         // Profile without its own color_by_field inherits.
         assert_eq!(
-            load_with_profile(&path, Some("plain")).unwrap().color_by_field,
+            load_with_profile(&path, Some("plain"))
+                .unwrap()
+                .color_by_field,
             Some("host".into())
         );
     }
@@ -444,8 +448,7 @@ name = "plain"
 
     #[test]
     fn missing_file_with_profile_errors() {
-        let err =
-            load_with_profile(Path::new("/no/such/file.toml"), Some("stern")).unwrap_err();
+        let err = load_with_profile(Path::new("/no/such/file.toml"), Some("stern")).unwrap_err();
         assert!(err.to_string().contains("profile 'stern'"));
     }
 
