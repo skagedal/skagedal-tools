@@ -44,7 +44,6 @@ import cmath
 import math
 import os
 import random
-import shutil
 import struct
 import wave
 from dataclasses import dataclass
@@ -406,13 +405,17 @@ def write_keepalive(path: str) -> None:
     write_wav(path, sample_rate, samples)
 
 
-# Where each bell has to be copied to besides `assets/audio`.
+# Where the notification bell has to be written.
 #
-# A notification sound has to be a platform resource — Flutter assets are not
-# visible to the notification system — so the same file is needed in three
-# places. This used to be a step in the README that someone had to remember,
-# which is a thing that goes wrong quietly: the app rings one bell and the
-# notification rings a stale one.
+# Both, and not `assets/audio`. A notification sound has to be a platform
+# resource — Flutter assets are not visible to the notification system, and
+# nothing copies between the two — and the two platforms want it in different
+# places under different naming rules. Android resolves `R.raw.inkin` out of
+# `res/raw`, iOS asks `UNNotificationSound` for `inkin.wav` in the bundle root.
+#
+# Writing them here is not a step in the README any more. That is a thing that
+# goes wrong quietly: the app rings one bell and the notification rings a
+# stale one, in the case the user is by definition not present for.
 PLATFORM_DESTINATIONS = [
     os.path.join("android", "app", "src", "main", "res", "raw"),
     os.path.join("ios", "Runner"),
@@ -421,14 +424,16 @@ PLATFORM_DESTINATIONS = [
 
 def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    directory = os.path.join(root, "assets", "audio")
-    os.makedirs(directory, exist_ok=True)
 
     # The notification bell: what the operating system plays if Jikido has
     # been killed and the app is not there to ring the closing bell itself.
     # It is the only bell that still has to be a file, and it is always the
     # default size — the app cannot hand a customized bell to the OS, and
     # this is a backstop for a case the user is not there for anyway.
+    #
+    # It is deliberately not written to `assets/audio` as well. The app
+    # synthesizes what it rings, so a Flutter asset copy would be read by
+    # nothing and bundled into the app for nothing.
     for voice in VOICES:
         rng = random.Random(20250809)  # Reproducible output.
         interval = strike_interval(voice)
@@ -438,17 +443,16 @@ def main() -> None:
             strikes,
             tail_seconds=sequence_seconds(voice, strikes) - max(s.at for s in strikes),
         )
-        path = os.path.join(directory, f"{voice.name}.wav")
-        write_wav(path, SAMPLE_RATE, samples)
         for destination in PLATFORM_DESTINATIONS:
             target = os.path.join(root, destination)
             os.makedirs(target, exist_ok=True)
-            shutil.copyfile(path, os.path.join(target, f"{voice.name}.wav"))
-            print(f"  -> {os.path.join(destination, voice.name)}.wav")
+            write_wav(os.path.join(target, f"{voice.name}.wav"), SAMPLE_RATE, samples)
 
-    # Not copied anywhere: the keep-alive loop is played by the app, never by
-    # the notification system.
-    write_keepalive(os.path.join(directory, "keepalive.wav"))
+    # The keep-alive loop is the one sound that really is a Flutter asset: the
+    # app plays it itself, and the notification system never sees it.
+    audio = os.path.join(root, "assets", "audio")
+    os.makedirs(audio, exist_ok=True)
+    write_keepalive(os.path.join(audio, "keepalive.wav"))
 
 
 if __name__ == "__main__":

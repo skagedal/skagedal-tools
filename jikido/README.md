@@ -136,12 +136,22 @@ default size. Re-run the script from this directory after changing the model:
 python3 tool/synthesize_bells.py
 ```
 
-It writes `assets/audio/` and copies each bell into the Android and iOS
-resource directories itself. The copies are not redundant: a notification
-sound has to be a platform resource, and Flutter assets are not visible to the
-notification system. iOS also refuses notification sounds longer than 30
-seconds — comfortable now that the closing bell ends under the hand, but the
-reason the tail length is computed rather than assumed.
+It writes each bell straight into the Android and iOS resource directories,
+and nowhere else. There are two copies of every bell and both are load-bearing:
+Android resolves `R.raw.inkin` out of `res/raw`, iOS asks
+`UNNotificationSound` for `inkin.wav` in the bundle root, and neither platform
+can see the other's — or a Flutter asset, which is why a notification sound
+cannot be one. Nothing in the Flutter build copies between these places, so
+they are committed rather than generated at build time.
+
+A third copy under `assets/audio/` used to exist and no longer does: once the
+app synthesized its own bells, it was read by nothing and bundled half a
+megabyte into the app for nothing. `assets/audio/` now holds only the
+keep-alive loop, which really is a Flutter asset.
+
+iOS also refuses notification sounds longer than 30 seconds — comfortable now
+that the closing bell ends under the hand, but the reason the tail length is
+computed rather than assumed.
 
 Only the standard library is needed; there is nothing to install.
 
