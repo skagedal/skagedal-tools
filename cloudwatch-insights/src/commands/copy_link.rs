@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use aws_config::BehaviorVersion;
 use chrono::Local;
 
 use crate::cli::CopyLinkArgs;
@@ -9,10 +8,7 @@ use crate::commands::fail;
 use crate::config::{
     EnvConfig, is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults,
 };
-use crate::console_link::{
-    ConsoleLinkInput, QueryDetailInput, TimeSpec, build_console_link, build_query_detail,
-    log_group_arn,
-};
+use crate::console_link::{LogAnalyticsLinkInput, TimeSpec, build_log_analytics_link, new_tab_id};
 use crate::pasteboard::{PasteboardError, copy_to_pasteboard};
 use crate::paths;
 use crate::query_file::{FrontMatter, LogGroupValue, load_query_file, parse_query_file};
@@ -94,10 +90,6 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
         Some(e) => resolve_env_config(&settings, section_name.as_deref(), e),
         None => EnvConfig::default(),
     };
-    let profile = args
-        .profile
-        .clone()
-        .or_else(|| env_config.aws_profile.clone());
     let region = args
         .region
         .clone()
@@ -119,31 +111,9 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
     // for nothing but the URL.
     let show_diagnostics = !args.quiet && !args.raw;
 
-    let account_id = resolve_account_id(
-        args.account_id.as_deref(),
-        &env_config,
-        &region,
-        profile.as_deref(),
-        !show_diagnostics,
-        environment.as_deref(),
-    )
-    .await?;
-
-    let arns: Vec<String> = log_groups
-        .iter()
-        .map(|name| log_group_arn(&region, &account_id, name))
-        .collect();
-
     let time_spec = choose_time_spec(&time_expr, &range, args.preserve_time_window);
 
     if show_diagnostics {
-        if let Some(p) = &profile {
-            if args.profile.is_none() {
-                if let Some(env) = &environment {
-                    eprintln!("  AWS_PROFILE: {p} (from [env.{env}])");
-                }
-            }
-        }
         if args.region.is_none() {
             if let Some(r) = &env_config.region {
                 if let Some(env) = &environment {
@@ -158,7 +128,6 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
                 eprintln!("  AWS region:  {r} (from {from})");
             }
         }
-        eprintln!("  account ID:  {account_id}");
         eprintln!("  log groups:  {}", log_groups.join(", "));
         eprintln!(
             "  time:        {}",
@@ -173,16 +142,13 @@ pub async fn run(args: CopyLinkArgs) -> Result<()> {
         );
     }
 
-    let detail = build_query_detail(&QueryDetailInput {
-        query: &expanded_query,
-        log_group_arns: &arns,
-        time: time_spec,
-        query_id: None,
-        log_class: None,
-    });
-    let url = build_console_link(&ConsoleLinkInput {
+    let url = build_log_analytics_link(&LogAnalyticsLinkInput {
         region: &region,
-        query_detail: &detail,
+        log_groups: &log_groups,
+        time: time_spec,
+        query: &expanded_query,
+        label: app.as_deref(),
+        tab_id: &new_tab_id(),
     });
 
     if args.raw {
@@ -240,48 +206,6 @@ fn choose_time_spec(time_expr: &str, range: &TimeRange, preserve_absolute: bool)
     TimeSpec::Absolute {
         start_ms: range.start.timestamp_millis(),
         end_ms: range.end.timestamp_millis(),
-    }
-}
-
-async fn resolve_account_id(
-    cli_account_id: Option<&str>,
-    env_config: &EnvConfig,
-    region: &str,
-    profile: Option<&str>,
-    quiet: bool,
-    environment_label: Option<&str>,
-) -> Result<String> {
-    if let Some(id) = cli_account_id {
-        return Ok(id.to_string());
-    }
-    if let Some(id) = &env_config.account_id {
-        return Ok(id.clone());
-    }
-    if !quiet {
-        eprintln!(
-            "  looking up account ID via STS (set [env.{}].account-id to skip)",
-            environment_label.unwrap_or("<env>")
-        );
-    }
-    let mut loader = aws_config::defaults(BehaviorVersion::latest());
-    loader = loader.region(aws_config::Region::new(region.to_string()));
-    if let Some(p) = profile {
-        loader = loader.profile_name(p.to_string());
-    }
-    let config = loader.load().await;
-    let sts = aws_sdk_sts::Client::new(&config);
-    match sts.get_caller_identity().send().await {
-        Ok(resp) => match resp.account {
-            Some(a) => Ok(a),
-            None => Err(fail(1, "STS GetCallerIdentity returned no Account")),
-        },
-        Err(e) => Err(fail(
-            1,
-            format!(
-                "could not look up AWS account ID via STS: {e}\n  hint: set [env.{}].account-id in settings.toml, or pass --account-id",
-                environment_label.unwrap_or("<env>")
-            ),
-        )),
     }
 }
 

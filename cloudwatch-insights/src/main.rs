@@ -15,6 +15,7 @@ mod pasteboard;
 mod paths;
 mod progress;
 mod query_file;
+mod source_command;
 mod template;
 mod terminal;
 mod time_range;

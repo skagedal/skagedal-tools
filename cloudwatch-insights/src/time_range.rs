@@ -61,12 +61,39 @@ pub fn parse_time_range(
 /// If `input` is a relative-duration shorthand that is a whole number of seconds,
 /// return that. Used by `link` to emit RELATIVE time form.
 pub fn try_parse_relative_duration_seconds(input: &str) -> Option<i64> {
-    let (amount, unit) = split_duration(input.trim())?;
-    let ms = amount_ms(amount, unit)?;
+    let ms = try_parse_duration_ms(input)?;
     if ms % 1000 != 0 {
         return None;
     }
     Some(ms / 1000)
+}
+
+/// If `input` is a relative-duration shorthand ("1w", "500ms"), return it in
+/// milliseconds.
+pub fn try_parse_duration_ms(input: &str) -> Option<i64> {
+    let (amount, unit) = split_duration(input.trim())?;
+    amount_ms(amount, unit)
+}
+
+/// Format a non-negative number of milliseconds as the largest unit that
+/// divides it exactly — the inverse of [`try_parse_duration_ms`], and always
+/// something that parser accepts back.
+pub fn format_duration_ms(total_ms: i64) -> String {
+    if total_ms == 0 {
+        return "0s".into();
+    }
+    for (suffix, unit_ms) in [
+        ("w", 7 * 86_400_000),
+        ("d", 86_400_000),
+        ("h", 3_600_000),
+        ("m", 60_000),
+        ("s", 1_000),
+    ] {
+        if total_ms % unit_ms == 0 {
+            return format!("{}{suffix}", total_ms / unit_ms);
+        }
+    }
+    format!("{total_ms}ms")
 }
 
 fn try_parse_duration(input: &str, now: DateTime<Local>) -> Option<TimeRange> {

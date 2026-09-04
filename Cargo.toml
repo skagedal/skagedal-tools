@@ -71,5 +71,6 @@ thiserror = "*"
 tokio = { version = "*", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "io-util", "io-std", "time"] }
 toml = "*"
 url = "*"
+uuid = { version = "*", features = ["v4"] }
 wry = "*"
 xmltree = { version = "*", features = ["attribute-order"] }

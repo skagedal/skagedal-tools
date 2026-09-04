@@ -12,9 +12,7 @@ use crate::commands::fail;
 use crate::config::{
     RepoConfig, is_valid_environment_name, load_settings, resolve_env_config, resolve_repo_defaults,
 };
-use crate::console_link::{
-    ConsoleLinkInput, QueryDetailInput, TimeSpec, build_console_link, build_query_detail,
-};
+use crate::console_link::{LogAnalyticsLinkInput, TimeSpec, build_log_analytics_link, new_tab_id};
 use crate::editor::open_editor;
 use crate::flatten::flatten_row;
 use crate::insights::{ProgressCallback, QueryProgress, RunQueryOptions, run_insights_query};
@@ -216,9 +214,8 @@ fn emit_trailer(console_url: Option<&str>, quiet: bool) {
     }
 }
 
-/// Build a shareable AWS Console URL for the in-progress query, using bare
-/// log-group names (queryBy=logGroupName) so we don't have to look up an
-/// account ID. Returns None when no region is known.
+/// Build a shareable AWS Console URL for the in-progress query. Returns None
+/// when no region is known.
 fn build_query_console_url(
     region: Option<&str>,
     log_groups: &[String],
@@ -227,18 +224,13 @@ fn build_query_console_url(
     range: &TimeRange,
 ) -> Option<String> {
     let region = region?;
-    let time = pick_time_spec(time_expr, range);
-    let log_group_arns: Vec<String> = log_groups.to_vec();
-    let detail = build_query_detail(&QueryDetailInput {
-        query,
-        log_group_arns: &log_group_arns,
-        time,
-        query_id: None,
-        log_class: None,
-    });
-    Some(build_console_link(&ConsoleLinkInput {
+    Some(build_log_analytics_link(&LogAnalyticsLinkInput {
         region,
-        query_detail: &detail,
+        log_groups,
+        time: pick_time_spec(time_expr, range),
+        query,
+        label: None,
+        tab_id: &new_tab_id(),
     }))
 }
 

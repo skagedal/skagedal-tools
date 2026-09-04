@@ -139,14 +139,6 @@ pub struct CopyLinkArgs {
     #[arg(long, short = 'r')]
     pub region: Option<String>,
 
-    /// AWS profile (sets AWS_PROFILE; only used for the STS lookup)
-    #[arg(long)]
-    pub profile: Option<String>,
-
-    /// AWS account ID for the log-group ARN (overrides config; falls back to STS GetCallerIdentity)
-    #[arg(long = "account-id")]
-    pub account_id: Option<String>,
-
     /// Always emit absolute start/end timestamps in the URL, even when -t is a relative duration like 1h
     #[arg(long = "preserve-time-window", default_value_t = false)]
     pub preserve_time_window: bool,

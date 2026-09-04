@@ -86,6 +86,8 @@ cloudwatch-insights copy-link --preserve-time-window
 
 Copies a shareable AWS Console URL for the query that `cloudwatch-insights query` would otherwise run to the system pasteboard (`pbcopy` on macOS, `clip` on Windows, `wl-copy` / `xclip` / `xsel` on Linux). Outputs `AWS Console link copied to pasteboard. Open directly` — and on a TTY `Open directly` is rendered as an [OSC 8 clickable hyperlink](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda) so terminals that support the escape sequence (iTerm2, recent VS Code, GNOME Terminal, WezTerm, …) let you click straight through. Pass `--raw` to skip the pasteboard and print only the URL — handy for piping into other tools. `--open` additionally opens the URL in your default browser.
 
+The URL is a `#log-analytics` one, the format the revamped console uses — classic `#logsV2:logs-insights` links still work, but the console redirects them. The log groups and the time window go into the query's `SOURCE` command, so the link needs nothing but log group names: `copy-link` makes no AWS calls at all and works without credentials. (It used to look up your account ID via STS to build log-group ARNs; `--account-id`, `--profile` and the `[env.<name>].account-id` setting are gone with it.)
+
 ### `paste-link`
 
 ```sh
@@ -96,6 +98,11 @@ cloudwatch-insights paste-link --as-raw                        # print a `raw` s
 ```
 
 The inverse of `copy-link`. By default reads the URL from the system pasteboard. A positional argument overrides that; `-p` / `--prompt` asks for the URL interactively. Decodes the AWS Console Insights URL and recreates the query state by writing a fresh `current.insights` for the current slot (with `time`, `log-group`, and the query body filled in from the URL) — running `cloudwatch-insights query` afterwards re-runs the same query.
+
+Both console URL formats are accepted:
+
+- the classic Logs Insights link, `#logsV2:logs-insights?queryDetail=~(…)`, which carries the log groups and the time window beside the query;
+- the revamped "Log Analytics" link, `#log-analytics?active=~'a&a.query=~'…`, which instead puts them *in* the query, as the `SOURCE "…" START=-1w END=0s |` command at its head. That command is peeled off: its log group names become `log-group`, its `START`/`END` become `time` (a relative duration like `1w` when the window ends at now, an ISO range otherwise), and the rest of the pipeline becomes the query body. A `SOURCE` that selects log groups indirectly — `logGroups(namePrefix: […])`, `logGroupTags(…)`, `dataSource(…)` — is rejected, since only CloudWatch can resolve those to names. A URL with no `START`/`END` yields no `time` line, so the 1h default applies.
 
 `--as-raw` instead prints a self-contained `cloudwatch-insights raw …` shell command (a quoted heredoc piping the query body into stdin) and does not touch any state. Useful for sharing a one-shot invocation that someone else can paste into a terminal.
 

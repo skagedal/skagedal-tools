@@ -17,7 +17,6 @@ pub struct ConfigError(pub String);
 pub struct EnvConfig {
     pub aws_profile: Option<String>,
     pub region: Option<String>,
-    pub account_id: Option<String>,
 }
 
 /// Configuration that applies to a repository — either as the top-level
@@ -152,9 +151,6 @@ fn parse_env_config(section: &toml::Table) -> EnvConfig {
     if let Some(toml::Value::String(s)) = section.get("region") {
         config.region = Some(s.clone());
     }
-    if let Some(toml::Value::String(s)) = section.get("account-id") {
-        config.account_id = Some(s.clone());
-    }
     config
 }
 
@@ -217,7 +213,6 @@ pub fn resolve_env_config(
     EnvConfig {
         aws_profile: o.aws_profile.clone().or(base.aws_profile),
         region: o.region.clone().or(base.region),
-        account_id: o.account_id.clone().or(base.account_id),
     }
 }
 
@@ -258,7 +253,6 @@ const DEFAULT_SETTINGS_TEMPLATE: &str = "# cloudwatch-insights settings
 # set:
 #   aws-profile = \"...\"   # exported as AWS_PROFILE for the run
 #   region      = \"...\"   # AWS region used for the run
-#   account-id  = \"...\"   # AWS account ID; only needed for `link` (else looked up via STS)
 #
 # A repo can override individual env keys via [repo.<repo>.env.<env>] — only
 # keys you mention are overridden; the rest fall through to the top-level entry.
@@ -421,7 +415,6 @@ mod tests {
             EnvConfig {
                 aws_profile: Some("company-prod".into()),
                 region: Some("us-east-1".into()),
-                account_id: None,
             }
         );
         assert_eq!(
