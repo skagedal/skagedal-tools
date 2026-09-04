@@ -147,6 +147,65 @@ fn replacing_day_that_does_not_exist() {
     assert_eq!(document, new_document)
 }
 
+#[test]
+fn open_shift_finds_the_day_and_start_time_of_an_unclosed_shift() {
+    let document = Document {
+        week: NaiveDate::from_ymd_opt(2020, 7, 13).unwrap().iso_week(),
+        preamble: vec![],
+        days: vec![
+            Day {
+                date: NaiveDate::from_ymd_opt(2020, 7, 13).unwrap(),
+                lines: vec![ClosedShift {
+                    start_time: time_hm(8, 0),
+                    stop_time: time_hm(12, 0),
+                }],
+            },
+            Day {
+                date: NaiveDate::from_ymd_opt(2020, 7, 14).unwrap(),
+                lines: vec![OpenShift {
+                    start_time: time_hm(7, 23),
+                }],
+            },
+        ],
+    };
+
+    assert_eq!(
+        Some((
+            NaiveDate::from_ymd_opt(2020, 7, 14).unwrap(),
+            time_hm(7, 23)
+        )),
+        document.open_shift()
+    );
+}
+
+#[test]
+fn open_shift_skips_past_days_whose_shifts_are_all_closed() {
+    assert_eq!(
+        Some((
+            NaiveDate::from_ymd_opt(2020, 7, 17).unwrap(),
+            time_hm(8, 12)
+        )),
+        example_1_document().open_shift()
+    );
+}
+
+#[test]
+fn open_shift_is_none_when_all_shifts_are_closed() {
+    let document = Document {
+        week: NaiveDate::from_ymd_opt(2020, 7, 13).unwrap().iso_week(),
+        preamble: vec![],
+        days: vec![Day {
+            date: NaiveDate::from_ymd_opt(2020, 7, 13).unwrap(),
+            lines: vec![ClosedShift {
+                start_time: time_hm(8, 0),
+                stop_time: time_hm(12, 0),
+            }],
+        }],
+    };
+
+    assert_eq!(None, document.open_shift());
+}
+
 // Helpers
 
 fn time_hm(hour: u32, minute: u32) -> NaiveTime {

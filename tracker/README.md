@@ -33,6 +33,21 @@ The balance tells you that you have 4 hours and 48 minutes left to work this day
 
 While the normal mode of operation is to use `tracker start` and `tracker stop` to track your shifts, you may find that you sometimes forget to start your shift, or otherwise make an error that you wish to correct. Instead of offering a specific user interface to do such edits, `tracker` lets you open the data file for the current week in your text editor of choice (following the `EDITOR` environment variable) by using `tracker edit`.
 
+If you run `tracker start` while a shift is already open, it will tell you which one. A shift started earlier the same day is just reported back to you:
+
+```
+$ tracker start
+You are already tracking work since 07:23.
+```
+
+A shift left open on an earlier day is more likely to be a mistake, so `tracker` offers to open the week file for you to fix:
+
+```
+$ tracker start
+You have a shift from 2024-01-08 that is not closed.
+Open editor? (y/n)
+```
+
 Here is an example of what a file might look like after two days of tracking: 
 
 ```

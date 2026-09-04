@@ -3,7 +3,7 @@ use chrono::Datelike;
 use crate::document::{Day, Document, Line};
 use crate::paths::TrackerDirs;
 use crate::testutils::{naive_date, naive_date_time, naive_time};
-use crate::tracker::Tracker;
+use crate::tracker::{DocumentError, Tracker};
 
 use super::TrackerBuilder;
 
@@ -189,7 +189,39 @@ fn we_can_not_start_a_shift_if_one_is_already_started() {
         naive_date(2019, 12, 2),
         naive_time(12, 0),
     );
-    assert!(result.is_err());
+    assert!(matches!(
+        result,
+        Err(DocumentError::TrackerFileAlreadyHasOpenShift {
+            date,
+            start_time
+        }) if date == naive_date(2019, 12, 2) && start_time == naive_time(10, 0)
+    ));
+}
+
+#[test]
+fn an_open_shift_from_an_earlier_day_is_reported_with_that_day() {
+    let tracker = build_tracker().build();
+    let result = tracker.document_with_tracking_started(
+        &Document::new(
+            naive_date(2019, 12, 2).iso_week(),
+            vec![],
+            vec![Day {
+                date: naive_date(2019, 12, 2),
+                lines: vec![Line::OpenShift {
+                    start_time: naive_time(10, 0),
+                }],
+            }],
+        ),
+        naive_date(2019, 12, 3),
+        naive_time(8, 0),
+    );
+    assert!(matches!(
+        result,
+        Err(DocumentError::TrackerFileAlreadyHasOpenShift {
+            date,
+            start_time
+        }) if date == naive_date(2019, 12, 2) && start_time == naive_time(10, 0)
+    ));
 }
 
 #[test]
