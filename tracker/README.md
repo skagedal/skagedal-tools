@@ -1,6 +1,6 @@
 # tracker
 
-A simple command line program to help keep track of work time by storing data in a simple per-week text file. It is designed for the use case where you have flexible work hours, but wish to keep track that you work a certain number of hours per week. By default, it assumes that you work 8 hours per day, 5 days per week, but this can be configured.
+A command line program to help keep track of work time by storing data in a simple per-week text file. It is designed for the use case where you have flexible work hours, but wish to keep track that you work a certain number of hours per week. By default, it assumes that you work 8 hours per day, 5 days per week, but this can be configured.
 
 ## Usage
 
@@ -32,21 +32,6 @@ Balance: -4:48h
 The balance tells you that you have 4 hours and 48 minutes left to work this day in order to be in balance. 
 
 While the normal mode of operation is to use `tracker start` and `tracker stop` to track your shifts, you may find that you sometimes forget to start your shift, or otherwise make an error that you wish to correct. Instead of offering a specific user interface to do such edits, `tracker` lets you open the data file for the current week in your text editor of choice (following the `EDITOR` environment variable) by using `tracker edit`.
-
-If you run `tracker start` while a shift is already open, it will tell you which one. A shift started earlier the same day is just reported back to you:
-
-```
-$ tracker start
-You are already tracking work since 07:23.
-```
-
-A shift left open on an earlier day is more likely to be a mistake, so `tracker` offers to open the week file for you to fix:
-
-```
-$ tracker start
-You have a shift from 2024-01-08 that is not closed.
-Open editor? (y/n)
-```
 
 Here is an example of what a file might look like after two days of tracking: 
 
@@ -80,7 +65,7 @@ The normal form is *compound*: a single term with an optional sign, where hours 
 | `45m`      | 45 minutes                       |
 | `-45m`     | minus 45 minutes                 |
 
-The minutes after the colon must always be two digits, so `1:05h` – never `1:5h`. This is deliberate: it keeps `1:30h` from being read as one and a half hours in one place and one hour and thirty minutes in another.
+The minutes after the colon must always be two digits, so `1:05h` – never `1:5h`, which would be ambiguous.
 
 When writing a duration yourself, you may also use the *separated* form, where hours and minutes are given as separate terms, each with its own sign:
 
