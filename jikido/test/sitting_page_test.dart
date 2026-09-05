@@ -132,6 +132,80 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('a sitting can be held and taken up again', (tester) async {
+    withoutSettling();
+    await pumpPage(tester);
+
+    await tester.tap(find.text('Sit'));
+    await tester.pump();
+
+    clock.advance(const Duration(minutes: 2));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('13:00'), findsOneWidget);
+
+    await tester.tap(find.text('Pause'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.isPaused, isTrue);
+    expect(find.text('paused'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
+    expect(find.text('Pause'), findsNothing);
+    expect(find.text('End sitting'), findsOneWidget,
+        reason: 'the way out is still there while held');
+
+    clock.advance(const Duration(minutes: 10));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('13:00'), findsOneWidget,
+        reason: 'ten minutes of pause is not ten minutes of sitting');
+
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.isPaused, isFalse);
+    expect(find.text('13:00'), findsOneWidget);
+    expect(find.text('remaining'), findsOneWidget);
+
+    await tester.tap(find.text('End sitting'));
+    await tester.pump();
+    await tester.pump();
+    expect(controller.status, SittingStatus.idle);
+  });
+
+  testWidgets('the settling time can be held too', (tester) async {
+    controller.setPrepare(const Duration(minutes: 1));
+    await pumpPage(tester);
+
+    await tester.tap(find.text('Sit'));
+    await tester.pump();
+
+    clock.advance(const Duration(seconds: 20));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('0:40'), findsOneWidget);
+
+    await tester.tap(find.text('Pause'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('paused'), findsOneWidget);
+    expect(find.text('settling'), findsNothing);
+
+    clock.advance(const Duration(minutes: 5));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('0:40'), findsOneWidget);
+    expect(audio.strikes, isEmpty, reason: 'the bell waited');
+
+    await tester.tap(find.text('Resume'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('settling'), findsOneWidget);
+
+    await tester.tap(find.text('End sitting'));
+    await tester.pump();
+    await tester.pump();
+  });
+
   testWidgets('the bell can be rung on its own', (tester) async {
     withoutSettling();
     await pumpPage(tester);

@@ -48,6 +48,22 @@ class MeditationSession {
   final Bell bell;
   final double bellSize;
 
+  /// The same sitting, every instant of it moved later by [by].
+  ///
+  /// This is what pausing does. A paused sitting is not a sitting with a
+  /// counter that has stopped being decremented — there is no counter — it is
+  /// the same sitting, postponed. Everything here hangs off [beganAt], so
+  /// moving that moves the opening bell, the closing bell and the end
+  /// together, and whatever was left when the user paused is exactly what is
+  /// left when they carry on.
+  MeditationSession delayedBy(Duration by) => MeditationSession(
+        beganAt: beganAt.add(by),
+        duration: duration,
+        bell: bell,
+        bellSize: bellSize,
+        prepare: prepare,
+      );
+
   /// When the opening bell is struck, and the sitting proper begins.
   DateTime get startedAt => beganAt.add(prepare);
 

@@ -133,12 +133,14 @@ class _Face extends StatelessWidget {
         if (controller.isPreparing) {
           return _Stack(
             big: formatRemaining(controller.prepareRemaining),
-            small: 'settling',
+            small: controller.isPaused ? 'paused' : 'settling',
           );
         }
         return _Stack(
           big: formatRemaining(controller.remaining),
-          small: _phaseCaption(controller.phase),
+          small: controller.isPaused
+              ? 'paused'
+              : _phaseCaption(controller.phase),
         );
       case SittingStatus.complete:
         return const _Stack(big: '—', small: 'sitting complete');
@@ -205,12 +207,26 @@ class _Controls extends StatelessWidget {
         );
 
       case SittingStatus.running:
-        return TextButton(
-          onPressed: controller.cancel,
-          child: const Text(
-            'End sitting',
-            style: TextStyle(color: JikidoColors.faded, letterSpacing: 1),
-          ),
+        // Paused, the app is the one waiting, so carrying on is a lit
+        // button. Running, nothing down here is worth looking at, and both
+        // controls stay the same quiet grey as the way out always was.
+        if (controller.isPaused) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _PrimaryButton(label: 'Resume', onPressed: controller.resume),
+              const SizedBox(height: 8),
+              _QuietButton(label: 'End sitting', onPressed: controller.cancel),
+            ],
+          );
+        }
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (controller.canPause)
+              _QuietButton(label: 'Pause', onPressed: controller.pause),
+            _QuietButton(label: 'End sitting', onPressed: controller.cancel),
+          ],
         );
 
       case SittingStatus.complete:
@@ -230,6 +246,27 @@ class _Controls extends StatelessWidget {
         );
     }
   }
+}
+
+/// A control put where it can be found without asking to be looked at,
+/// which is what everything on the screen during a sitting should do.
+class _QuietButton extends StatelessWidget {
+  const _QuietButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+        onPressed: onPressed,
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: JikidoColors.faded,
+            letterSpacing: 1,
+          ),
+        ),
+      );
 }
 
 class _PresetRow extends StatelessWidget {

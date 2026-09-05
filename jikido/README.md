@@ -15,6 +15,14 @@ over the beginning of the sitting rather than before it, which is how it goes
 in a zendo: the countdown starts with the first strike, so twenty minutes
 means twenty minutes from the bell. The settling time is not taken out of it.
 
+A sitting can be paused, during the settling time as well as during the
+period itself. The pause costs nothing: whatever the countdown said when you
+pressed **Pause** is what it says when you press **Resume**. Nothing is
+credited back, because nothing was being decremented in the first place — the
+sitting is a set of wall-clock instants, and pausing moves them later. The
+opening bell, the closing bell, the countdown in the notification shade and
+the scheduled backstop all move together.
+
 Two bells are offered, and are chosen in settings:
 
 | Bell | |
@@ -71,7 +79,13 @@ set for the end of the period. If everything above fails and the app is
 killed outright, that still rings. It is cancelled as soon as the app rings
 the bell itself, so in the normal case you never see it. If the app comes
 back long after the sitting ended, it says so rather than ringing a bell at
-you minutes late.
+you minutes late. Pausing cancels it too, and arms it again on the way out
+for the ending the pause moved it to.
+
+The other layers are left running across a pause. Holding the audio session
+and the foreground service is what keeps the process alive, and a sitting
+lost to Android reclaiming the app while its owner answered the door would
+be a poor sort of pause.
 
 **Keeping the screen on**, optionally. Costs battery, and is the surest of
 all of them, so it is offered as an explicit choice in settings.
