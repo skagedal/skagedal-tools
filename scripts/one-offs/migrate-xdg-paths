@@ -181,6 +181,19 @@ for dir in \
     fi
 done
 
+# The chrome-page-notes native messaging host is registered with Chrome by
+# absolute path to a release binary, and ./install doesn't rebuild it (it is
+# not a cargo-install tool). So a host built before this change keeps looking
+# for the config this script just moved, and the extension quietly stops
+# working. Nothing here can fix that — it needs a rebuild — so say so.
+CHROME_HOST_MANIFEST="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/tech.skagedal.chrome_page_notes_host.json"
+if [[ -f "$CHROME_HOST_MANIFEST" ]]; then
+    say ""
+    say "The chrome-page-notes native host is registered with Chrome. Rebuild it,"
+    say "or it will keep looking for its config in the old location:"
+    say "    ./chrome-page-notes/register-host.sh"
+fi
+
 say ""
 if [[ $DRY_RUN -eq 1 ]]; then
     say "Dry run: $moved would move, $skipped skipped. Re-run without --dry-run to apply."
