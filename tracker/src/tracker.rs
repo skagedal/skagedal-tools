@@ -7,7 +7,7 @@ use crate::report::Report;
 use chrono::{Datelike, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 use std::env;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
@@ -51,10 +51,18 @@ impl Tracker {
 
         let document = match self.document_with_tracking_started(&document, date, time) {
             Ok(doc) => doc,
-            Err(DocumentError::TrackerFileAlreadyHasOpenShift) => {
-                eprintln!(
-                    "You are already tracking. Use `tracker stop` to end the current shift. If you forgot to stop tracking earlier, use `tracker edit`."
-                );
+            Err(DocumentError::TrackerFileAlreadyHasOpenShift {
+                date: open_date,
+                start_time,
+            }) => {
+                if open_date == date {
+                    eprintln!(
+                        "You are already tracking work since {}.",
+                        start_time.format("%H:%M")
+                    );
+                } else {
+                    self.offer_to_close_unclosed_shift(open_date);
+                }
                 std::process::exit(1);
             }
             Err(_) => {
@@ -66,6 +74,25 @@ impl Tracker {
 
         fs::write(path_buf.as_path(), document.to_string())
             .expect("Could not write document to file");
+    }
+
+    /// A shift from another day was never closed, so there is nothing sensible
+    /// to start right now. Say which day it was, and offer to open the week
+    /// file in the editor the way `tracker edit` does.
+    fn offer_to_close_unclosed_shift(&self, open_date: NaiveDate) {
+        eprintln!("You have a shift from {} that is not closed.", open_date);
+        if !io::stdin().is_terminal() {
+            eprintln!("Use `tracker edit` to close it.");
+            return;
+        }
+        eprint!("Open editor? (y/n) ");
+        let mut answer = String::new();
+        if io::stdin().read_line(&mut answer).is_err() {
+            return;
+        }
+        if answer.trim().eq_ignore_ascii_case("y") {
+            self.edit_file();
+        }
     }
 
     pub fn stop_tracking(&self) {
@@ -193,8 +220,11 @@ impl Tracker {
         date: NaiveDate,
         time: NaiveTime,
     ) -> Result<Document, DocumentError> {
-        if document.has_open_shift() {
-            return Err(DocumentError::TrackerFileAlreadyHasOpenShift);
+        if let Some((open_date, start_time)) = document.open_shift() {
+            return Err(DocumentError::TrackerFileAlreadyHasOpenShift {
+                date: open_date,
+                start_time,
+            });
         }
         if let Some(day) = document.days.iter().find(|day| day.date.eq(&date)) {
             return Ok(
@@ -313,7 +343,10 @@ impl Tracker {
 
 #[derive(Debug, Clone)]
 pub enum DocumentError {
-    TrackerFileAlreadyHasOpenShift,
+    TrackerFileAlreadyHasOpenShift {
+        date: NaiveDate,
+        start_time: NaiveTime,
+    },
     TrackerFileDoesNotHaveOpenShift,
 }
 

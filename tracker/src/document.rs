@@ -87,9 +87,15 @@ pub struct Day {
 
 impl Day {
     pub fn has_open_shift(&self) -> bool {
-        self.lines
-            .iter()
-            .any(|line| matches!(line, OpenShift { .. }))
+        self.open_shift_start().is_some()
+    }
+
+    /// The start time of the first open (never closed) shift of the day, if any.
+    pub fn open_shift_start(&self) -> Option<NaiveTime> {
+        self.lines.iter().find_map(|line| match line {
+            OpenShift { start_time } => Some(*start_time),
+            _ => None,
+        })
     }
 
     pub fn adding_shift(&self, line: Line) -> Self {
@@ -188,7 +194,14 @@ impl Document {
     }
 
     pub fn has_open_shift(&self) -> bool {
-        self.days.iter().any(|day| day.has_open_shift())
+        self.open_shift().is_some()
+    }
+
+    /// The date and start time of the first open (never closed) shift, if any.
+    pub fn open_shift(&self) -> Option<(NaiveDate, NaiveTime)> {
+        self.days
+            .iter()
+            .find_map(|day| day.open_shift_start().map(|time| (day.date, time)))
     }
 
     /// Find a day

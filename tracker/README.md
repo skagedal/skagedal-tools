@@ -1,6 +1,6 @@
 # tracker
 
-A simple command line program to help keep track of work time by storing data in a simple per-week text file. It is designed for the use case where you have flexible work hours, but wish to keep track that you work a certain number of hours per week. By default, it assumes that you work 8 hours per day, 5 days per week, but this can be configured.
+A command line program to help keep track of work time by storing data in a simple per-week text file. It is designed for the use case where you have flexible work hours, but wish to keep track that you work a certain number of hours per week. By default, it assumes that you work 8 hours per day, 5 days per week, but this can be configured.
 
 ## Usage
 
@@ -65,7 +65,7 @@ The normal form is *compound*: a single term with an optional sign, where hours 
 | `45m`      | 45 minutes                       |
 | `-45m`     | minus 45 minutes                 |
 
-The minutes after the colon must always be two digits, so `1:05h` – never `1:5h`. This is deliberate: it keeps `1:30h` from being read as one and a half hours in one place and one hour and thirty minutes in another.
+The minutes after the colon must always be two digits, so `1:05h` – never `1:5h`, which would be ambiguous.
 
 When writing a duration yourself, you may also use the *separated* form, where hours and minutes are given as separate terms, each with its own sign:
 

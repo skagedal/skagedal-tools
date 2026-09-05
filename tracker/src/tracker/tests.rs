@@ -1,9 +1,9 @@
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate, NaiveTime};
 
 use crate::document::{Day, Document, Line};
 use crate::paths::TrackerDirs;
 use crate::testutils::{naive_date, naive_date_time, naive_time};
-use crate::tracker::Tracker;
+use crate::tracker::{DocumentError, Tracker};
 
 use super::TrackerBuilder;
 
@@ -189,7 +189,27 @@ fn we_can_not_start_a_shift_if_one_is_already_started() {
         naive_date(2019, 12, 2),
         naive_time(12, 0),
     );
-    assert!(result.is_err());
+    assert_open_shift_error(result, naive_date(2019, 12, 2), naive_time(10, 0));
+}
+
+#[test]
+fn an_open_shift_from_an_earlier_day_is_reported_with_that_day() {
+    let tracker = build_tracker().build();
+    let result = tracker.document_with_tracking_started(
+        &Document::new(
+            naive_date(2019, 12, 2).iso_week(),
+            vec![],
+            vec![Day {
+                date: naive_date(2019, 12, 2),
+                lines: vec![Line::OpenShift {
+                    start_time: naive_time(10, 0),
+                }],
+            }],
+        ),
+        naive_date(2019, 12, 3),
+        naive_time(8, 0),
+    );
+    assert_open_shift_error(result, naive_date(2019, 12, 2), naive_time(10, 0));
 }
 
 #[test]
@@ -286,6 +306,22 @@ fn validation_passes_when_no_previous_shifts_exist() {
     let document = Document::empty(naive_date(2019, 12, 2).iso_week());
     let result = tracker.validate_start_time(&document, naive_date(2019, 12, 2), naive_time(8, 0));
     assert!(result.is_ok());
+}
+
+/// Assert that starting failed because a shift is already open, and that the
+/// error names the day and time that shift was started.
+fn assert_open_shift_error(
+    result: Result<Document, DocumentError>,
+    expected_date: NaiveDate,
+    expected_start_time: NaiveTime,
+) {
+    match result {
+        Err(DocumentError::TrackerFileAlreadyHasOpenShift { date, start_time }) => {
+            assert_eq!(expected_date, date);
+            assert_eq!(expected_start_time, start_time);
+        }
+        other => panic!("expected an open shift error, got {:?}", other),
+    }
 }
 
 fn build_tracker() -> TrackerBuilder {
