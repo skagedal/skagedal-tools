@@ -187,3 +187,155 @@ fn pr_create_args_prefers_draft_when_both_are_set() {
     assert!(args.iter().any(|a| a == "--fill"));
     assert!(!args.iter().any(|a| a == "--web"));
 }
+
+/// Builds a repository with one commit on `initial_branch`, no remote and no
+/// `origin/HEAD`, so each test can add exactly the state it is about to assert
+/// on. Repository-local config shadows the developer's global config, which
+/// keeps the `init.defaultBranch` tests hermetic.
+fn repo_with_initial_branch(initial_branch: &str) -> Result<(tempfile::TempDir, GitRepo)> {
+    let temp_dir = tempfile::tempdir()?;
+    let path = temp_dir.path().to_path_buf();
+    git(&path, &["init", "-q", "-b", initial_branch])?;
+    git(&path, &["config", "commit.gpgsign", "false"])?;
+    git(&path, &["config", "user.name", "Test"])?;
+    git(&path, &["config", "user.email", "test@example.com"])?;
+    std::fs::write(path.join("file.txt"), "hello")?;
+    git(&path, &["add", "file.txt"])?;
+    git(&path, &["commit", "-q", "-m", "Initial commit"])?;
+    Ok((temp_dir, GitRepo::new(path)))
+}
+
+fn git(dir: &PathBuf, args: &[&str]) -> Result<()> {
+    let status = Command::new("git").args(args).current_dir(dir).status()?;
+    if !status.success() {
+        return Err(anyhow::anyhow!("git {:?} failed", args));
+    }
+    Ok(())
+}
+
+#[test]
+fn default_branch_for_checkout_prefers_origin_head() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("main")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["branch", "trunk"])?;
+    // What `init.defaultBranch` says must lose against what this repository's
+    // remote actually calls its default branch.
+    git(&dir, &["config", "init.defaultBranch", "main"])?;
+    git(
+        &dir,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    )?;
+
+    assert_eq!(repo.default_branch_for_checkout()?, "trunk");
+    Ok(())
+}
+
+#[test]
+fn default_branch_for_checkout_handles_slashes_in_origin_head() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("main")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["branch", "release/stable"])?;
+    git(
+        &dir,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/release/stable",
+        ],
+    )?;
+
+    assert_eq!(repo.default_branch_for_checkout()?, "release/stable");
+    Ok(())
+}
+
+#[test]
+fn default_branch_for_checkout_falls_back_to_init_default_branch() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("master")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["branch", "custom-default"])?;
+    git(&dir, &["config", "init.defaultBranch", "custom-default"])?;
+
+    // No origin/HEAD: a repository made with `git init` never gets one.
+    assert_eq!(repo.default_branch_for_checkout()?, "custom-default");
+    Ok(())
+}
+
+#[test]
+fn default_branch_for_checkout_skips_candidates_missing_locally() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("fallback-branch")?;
+    let dir = repo.dir.clone();
+    // origin/HEAD can name a branch that was never fetched into this clone.
+    git(
+        &dir,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/never-fetched",
+        ],
+    )?;
+    git(&dir, &["config", "init.defaultBranch", "fallback-branch"])?;
+
+    assert_eq!(repo.default_branch_for_checkout()?, "fallback-branch");
+    Ok(())
+}
+
+#[test]
+fn default_branch_for_checkout_falls_back_to_main() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("main")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["config", "init.defaultBranch", "does-not-exist"])?;
+
+    assert_eq!(repo.default_branch_for_checkout()?, "main");
+    Ok(())
+}
+
+#[test]
+fn default_branch_for_checkout_errors_when_no_candidate_exists() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("only-branch")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["config", "init.defaultBranch", "does-not-exist"])?;
+
+    let error = repo
+        .default_branch_for_checkout()
+        .expect_err("no candidate branch exists locally");
+    let message = error.to_string();
+    assert!(message.contains("does-not-exist"), "{message}");
+    assert!(message.contains("main"), "{message}");
+    Ok(())
+}
+
+#[test]
+fn checkout_default_branch_uses_the_branch_the_remote_defaults_to() -> Result<()> {
+    // A real clone of a remote whose default branch is `trunk`, which is
+    // exactly the case `init.defaultBranch` alone gets wrong.
+    let (_upstream_temp, upstream) = repo_with_initial_branch("trunk")?;
+    git(&upstream.dir, &["checkout", "-q", "--detach"])?;
+
+    let clone_temp = tempfile::tempdir()?;
+    let clone_path = clone_temp.path().join("clone");
+    git(
+        &upstream.dir,
+        &[
+            "clone",
+            "-q",
+            upstream.dir.to_str().unwrap(),
+            clone_path.to_str().unwrap(),
+        ],
+    )?;
+    let repo = GitRepo::new(clone_path.clone());
+    git(&clone_path, &["config", "init.defaultBranch", "main"])?;
+    git(&clone_path, &["checkout", "-q", "-b", "feature"])?;
+
+    repo.checkout_default_branch()?;
+
+    let head = Command::new("git")
+        .args(["branch", "--show-current"])
+        .current_dir(&clone_path)
+        .output()?;
+    assert_eq!(String::from_utf8(head.stdout)?.trim(), "trunk");
+    Ok(())
+}

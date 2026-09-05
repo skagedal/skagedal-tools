@@ -84,12 +84,26 @@ The tool is worktree-aware:
 - When "Delete it" targets a branch checked out in a separate worktree, it removes
   that worktree first (`git worktree remove`, which refuses if the worktree is dirty)
   and then deletes the branch
+- Otherwise it checks out the default branch first, since git refuses to delete
+  the branch that is currently checked out
+
+### Choosing the Default Branch
+
+Two different questions, answered by two different methods on `GitRepo`:
+
+- `default_branch()` asks GitHub via `gh repo view` and is used for the base of a
+  new pull request, where a network round trip is acceptable
+- `default_branch_for_checkout()` runs in the delete flow and stays local. It
+  tries `refs/remotes/origin/HEAD` (repo-specific, but only written by
+  `git clone`), then `init.defaultBranch` (a preference for *new* repositories,
+  so only a guess), then `main`, and skips any candidate that does not exist as a
+  local branch
 
 ### External Tools
 
 The tool relies on these external commands:
 - `git`: All git operations
-- `gh`: Creating pull requests and fetching default branch
+- `gh`: Creating pull requests and fetching the default branch for a PR base
 - `tig`: Showing git log (optional, used by "Show git log" action)
 
 ### Exit Code Convention
