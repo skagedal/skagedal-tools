@@ -4,6 +4,14 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 
+/// The symbolic ref where git records the remote's default branch, and the
+/// prefix that the branch it points at is spelled with.
+const ORIGIN_HEAD_REF: &str = "refs/remotes/origin/HEAD";
+const ORIGIN_REF_PREFIX: &str = "refs/remotes/origin/";
+
+/// Last-resort branch name when nothing more specific is known.
+const DEFAULT_BRANCH_FALLBACK: &str = "main";
+
 #[derive(Debug, Clone)]
 pub struct Branch {
     pub refname: String,
@@ -165,7 +173,7 @@ impl GitRepo {
     }
 
     pub fn checkout_default_branch(&self) -> Result<()> {
-        let branch = self.init_default_branch()?;
+        let branch = self.default_branch_for_checkout()?;
         self.checkout_branch(&branch)
             .with_context(|| format!("failed to checkout default branch '{}'", branch))
     }
@@ -182,17 +190,75 @@ impl GitRepo {
         Ok(response.default_branch_ref.name.trim().to_string())
     }
 
-    fn init_default_branch(&self) -> Result<String> {
-        match self.run_and_capture("git", &["config", "--get", "init.defaultBranch"]) {
-            Ok(branch) => {
-                let branch = branch.trim();
-                if !branch.is_empty() {
-                    return Ok(branch.to_string());
-                }
-                Ok("main".to_string())
-            }
-            Err(_) => Ok("main".to_string()),
-        }
+    /// Picks the branch to check out when the branch we are standing on is
+    /// about to be deleted. Candidates are tried from the most
+    /// repository-specific to the most generic, and each one has to exist
+    /// locally to be accepted:
+    ///
+    /// 1. `refs/remotes/origin/HEAD`, the symbolic ref recording what the
+    ///    remote calls its default branch. Right for this repository and free
+    ///    to read, but only written by `git clone`.
+    /// 2. `init.defaultBranch`, which is really the user's preference for
+    ///    branch names in *new* repositories, so merely a good guess here.
+    /// 3. `main`, git's own modern default.
+    ///
+    /// No remote is contacted: this runs between two keystrokes of the delete
+    /// flow. Callers that can afford a round trip use `default_branch()`.
+    fn default_branch_for_checkout(&self) -> Result<String> {
+        let mut candidates: Vec<String> = [
+            self.origin_head_branch(),
+            self.configured_init_default_branch(),
+            Some(DEFAULT_BRANCH_FALLBACK.to_string()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        candidates.dedup();
+
+        candidates
+            .iter()
+            .find(|candidate| self.local_branch_exists(candidate))
+            .cloned()
+            .ok_or_else(|| {
+                anyhow!(
+                    "none of the candidate default branches exist in {}: {}",
+                    self.dir.display(),
+                    candidates.join(", ")
+                )
+            })
+    }
+
+    /// Reads the branch that `refs/remotes/origin/HEAD` points at. The symbolic
+    /// ref is absent in repositories that were made with `git init` rather than
+    /// cloned; `git remote set-head origin --auto` is what creates or refreshes
+    /// it.
+    fn origin_head_branch(&self) -> Option<String> {
+        let output = self
+            .run_and_capture("git", &["symbolic-ref", ORIGIN_HEAD_REF])
+            .ok()?;
+        let branch = output.trim().strip_prefix(ORIGIN_REF_PREFIX)?;
+        (!branch.is_empty()).then(|| branch.to_string())
+    }
+
+    fn configured_init_default_branch(&self) -> Option<String> {
+        let output = self
+            .run_and_capture("git", &["config", "--get", "init.defaultBranch"])
+            .ok()?;
+        let branch = output.trim();
+        (!branch.is_empty()).then(|| branch.to_string())
+    }
+
+    fn local_branch_exists(&self, branch: &str) -> bool {
+        self.run_and_capture(
+            "git",
+            &[
+                "show-ref",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{branch}"),
+            ],
+        )
+        .is_ok()
     }
 
     fn run_and_capture(&self, program: &str, args: &[&str]) -> Result<String> {
