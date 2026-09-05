@@ -45,7 +45,7 @@ enum Commands {
 }
 
 fn main() {
-    let environment = Environment::read().expect("Unexpected environment");
+    let environment = Environment::read();
 
     Logger::try_with_env_or_str("debug")
         .expect("Could not create logger")

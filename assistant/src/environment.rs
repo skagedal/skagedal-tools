@@ -5,34 +5,23 @@ use std::io::{ErrorKind, Read, Write};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
+const TOOL: &str = "assistant";
+
 pub struct Environment {
-    pub home: PathBuf,
-}
-
-#[derive(Debug)]
-pub struct Error {
-    #[allow(dead_code)]
-    message: String,
-}
-
-impl Error {
-    fn could_not_find_home() -> Error {
-        Error {
-            message: String::from("Could not find home directory, is HOME set?"),
-        }
-    }
+    config_dir: PathBuf,
+    data_dir: PathBuf,
 }
 
 impl Environment {
-    pub fn read() -> Result<Environment, Error> {
-        match dirs::home_dir() {
-            None => Err(Error::could_not_find_home()),
-            Some(path) => Ok(Environment { home: path }),
+    pub fn read() -> Environment {
+        Environment {
+            config_dir: skagedal_dirs::config_dir(TOOL),
+            data_dir: skagedal_dirs::data_dir(TOOL),
         }
     }
 
     pub fn tasks_yml(&self) -> PathBuf {
-        self.assistant_dir().join("tasks.yml")
+        self.config_dir.join("tasks.yml")
     }
 
     pub fn when_did_we_last_do(&self, task_id: &str) -> Option<SystemTime> {
@@ -70,34 +59,27 @@ impl Environment {
     }
 
     pub fn logs_dir(&self) -> PathBuf {
-        self.assistant_dir().join("logs")
+        self.data_dir.join("logs")
     }
 
     fn path_for_task(&self, task_id: &str) -> PathBuf {
-        self.data_dir().join(format!("{}.task", task_id))
-    }
-
-    fn data_dir(&self) -> PathBuf {
-        self.assistant_dir().join("data")
-    }
-    fn assistant_dir(&self) -> PathBuf {
-        self.home.join(".simons-assistant")
+        self.data_dir.join(format!("{}.task", task_id))
     }
 
     pub fn clear_failed_task(&self) {
-        let path = self.data_dir().join("last_failed_task");
+        let path = self.data_dir.join("last_failed_task");
         let _ = fs::remove_file(path);
     }
 
     pub fn record_failed_task(&self, task_id: &str) {
-        let path = self.data_dir().join("last_failed_task");
+        let path = self.data_dir.join("last_failed_task");
         if let Ok(mut file) = File::create(&path) {
             let _ = file.write_all(task_id.as_bytes());
         }
     }
 
     pub fn get_latest_failed_task(&self) -> Option<String> {
-        let path = self.data_dir().join("last_failed_task");
+        let path = self.data_dir.join("last_failed_task");
         let mut file = File::open(path).ok()?;
         let mut contents = String::new();
         file.read_to_string(&mut contents).ok()?;

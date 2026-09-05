@@ -92,13 +92,13 @@ mod tests {
         let tmp = tempdir().unwrap();
         // SAFETY: setting an env var is unsafe in concurrent tests; cargo test
         // runs each test in its own thread but other tests may also touch
-        // SKAGEDAL_TOOLS_HOME — cargo serializes file-system tests where it
+        // XDG_DATA_HOME — cargo serializes file-system tests where it
         // matters, so this is acceptable here.
         unsafe {
-            std::env::set_var("SKAGEDAL_TOOLS_HOME", tmp.path());
+            std::env::set_var("XDG_DATA_HOME", tmp.path());
         }
 
-        let result_path = paths::tool_base_dir()
+        let result_path = paths::data_dir()
             .join("queries")
             .join("repo")
             .join("results")
@@ -108,7 +108,7 @@ mod tests {
         let link = update_latest_symlink(&result_path).unwrap();
         assert_eq!(fs::read_link(&link).unwrap(), result_path);
 
-        let other = paths::tool_base_dir()
+        let other = paths::data_dir()
             .join("queries")
             .join("repo")
             .join("results")
@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(fs::read_link(&link).unwrap(), other);
 
         unsafe {
-            std::env::remove_var("SKAGEDAL_TOOLS_HOME");
+            std::env::remove_var("XDG_DATA_HOME");
         }
     }
 }

@@ -18,6 +18,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+/// Name of this tool's directory under the XDG roots (see `skagedal-dirs`).
+pub(crate) const TOOL: &str = "chrome-page-notes";
+
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 enum Request {
@@ -37,13 +40,7 @@ enum Request {
 }
 
 fn log_path() -> PathBuf {
-    let base = match std::env::var("SKAGEDAL_TOOLS_HOME") {
-        Ok(p) => PathBuf::from(p),
-        Err(_) => dirs::home_dir()
-            .expect("could not resolve home directory")
-            .join(".skagedal-tools"),
-    };
-    base.join("chrome-page-notes").join("host.log")
+    skagedal_dirs::data_dir(TOOL).join("host.log")
 }
 
 fn log_line(line: &str) -> io::Result<()> {

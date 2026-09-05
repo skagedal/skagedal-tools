@@ -107,7 +107,6 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
- "dirs",
  "filetime",
  "flexi_logger",
  "log",
@@ -116,6 +115,7 @@ dependencies = [
  "serde",
  "serde_yaml_ng",
  "shellexpand",
+ "skagedal-dirs",
 ]
 
 [[package]]
@@ -831,10 +831,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "dirs",
  "percent-encoding",
  "serde",
  "serde_json",
+ "skagedal-dirs",
  "toml 1.1.5+spec-1.1.0",
  "url",
 ]
@@ -909,11 +909,11 @@ dependencies = [
  "aws-sdk-cloudwatchlogs",
  "chrono",
  "clap",
- "dirs",
  "indexmap",
  "regex",
  "serde",
  "serde_json",
+ "skagedal-dirs",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -1312,15 +1312,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "directories"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16f5094c54661b38d03bd7e50df373292118db60b585c08a411c6d840017fe7d"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1347,10 +1338,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "dirs",
  "regex",
  "serde",
  "shellexpand",
+ "skagedal-dirs",
  "tempfile",
  "toml 1.1.5+spec-1.1.0",
 ]
@@ -1886,6 +1877,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "skagedal-dirs",
  "tempfile",
 ]
 
@@ -1895,10 +1887,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "crossterm",
- "dirs",
  "filetime",
  "ratatui",
  "rayon",
+ "skagedal-dirs",
 ]
 
 [[package]]
@@ -2478,6 +2470,7 @@ dependencies = [
  "clap",
  "serde",
  "shellexpand",
+ "skagedal-dirs",
  "tempfile",
  "toml 1.1.5+spec-1.1.0",
  "xmltree",
@@ -2713,6 +2706,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-escape",
+ "skagedal-dirs",
  "tao",
  "toml 1.1.5+spec-1.1.0",
  "wry",
@@ -4208,6 +4202,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
+name = "skagedal-dirs"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4864,10 +4865,10 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
- "directories",
  "num-traits",
  "regex",
  "serde",
+ "skagedal-dirs",
  "temp-dir",
  "toml 1.1.5+spec-1.1.0",
 ]

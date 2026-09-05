@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 clap.workspace = true
 crossterm.workspace = true
-dirs.workspace = true
 filetime.workspace = true
 ratatui.workspace = true
 rayon.workspace = true
+skagedal-dirs.workspace = true

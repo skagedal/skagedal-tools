@@ -1,4 +1,4 @@
-//! Per-tool state directory and config-file path resolution.
+//! Per-tool config and data paths.
 
 use std::path::{Path, PathBuf};
 
@@ -8,25 +8,19 @@ const TOOL: &str = "cloudwatch-insights";
 
 /// Absolute path to the config file. Resolution order:
 ///   1. `$CLOUDWATCH_INSIGHTS_CONFIG` (explicit override)
-///   2. `$SKAGEDAL_TOOLS_HOME/cloudwatch-insights/settings.toml`
-///   3. `~/.skagedal-tools/cloudwatch-insights/settings.toml`
+///   2. `$XDG_CONFIG_HOME/skagedal-tools/cloudwatch-insights/settings.toml`
+///   3. `~/.config/skagedal-tools/cloudwatch-insights/settings.toml`
 pub fn config_path() -> PathBuf {
     if let Ok(p) = std::env::var("CLOUDWATCH_INSIGHTS_CONFIG") {
         return PathBuf::from(p);
     }
-    tool_base_dir().join("settings.toml")
+    skagedal_dirs::config_dir(TOOL).join("settings.toml")
 }
 
-/// Per-tool base directory: `<base>/cloudwatch-insights`, where `<base>`
-/// is `$SKAGEDAL_TOOLS_HOME` or `~/.skagedal-tools`.
-pub fn tool_base_dir() -> PathBuf {
-    let base = match std::env::var("SKAGEDAL_TOOLS_HOME") {
-        Ok(p) => PathBuf::from(p),
-        Err(_) => dirs::home_dir()
-            .expect("could not resolve home directory")
-            .join(".skagedal-tools"),
-    };
-    base.join(TOOL)
+/// Where saved queries and downloaded results live:
+/// `~/.local/share/skagedal-tools/cloudwatch-insights`.
+pub fn data_dir() -> PathBuf {
+    skagedal_dirs::data_dir(TOOL)
 }
 
 /// Slot name used for the queries subtree — the repo's basename, or
@@ -43,19 +37,19 @@ pub fn current_slot(cwd: &Path) -> String {
 }
 
 pub fn current_insights_path(cwd: &Path) -> PathBuf {
-    tool_base_dir()
+    data_dir()
         .join("queries")
         .join(current_slot(cwd))
         .join("current.insights")
 }
 
 pub fn results_dir(cwd: &Path) -> PathBuf {
-    tool_base_dir()
+    data_dir()
         .join("queries")
         .join(current_slot(cwd))
         .join("results")
 }
 
 pub fn latest_run_path() -> PathBuf {
-    tool_base_dir().join("latest-run.jsonl")
+    data_dir().join("latest-run.jsonl")
 }

@@ -199,17 +199,7 @@ pub fn config_path() -> PathBuf {
     if let Ok(custom) = std::env::var("LOG_VIEWER_CONFIG") {
         return PathBuf::from(custom);
     }
-    base_dir().join("config.toml")
-}
-
-fn base_dir() -> PathBuf {
-    let home = std::env::var("SKAGEDAL_TOOLS_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| String::from("."));
-            PathBuf::from(home).join(".skagedal-tools")
-        });
-    home.join("log-viewer")
+    skagedal_dirs::config_dir("log-viewer").join("config.toml")
 }
 
 /// Create a starter config at `path` if it doesn't already exist. Returns

@@ -1,9 +1,10 @@
 //! disky — move big directories between this machine and a remote, and reclaim
 //! the local space once the remote copy has been proved correct.
 //!
-//! Local/remote pairs are declared in `~/.skagedal-tools/disky.toml`. Commands
-//! find the pair from the current directory, so inside `~/studio` a bare
-//! `disky list` shows what is here and what is on the Storage Box.
+//! Local/remote pairs are declared in
+//! `~/.config/skagedal-tools/disky/config.toml`. Commands find the pair from
+//! the current directory, so inside `~/studio` a bare `disky list` shows what
+//! is here and what is on the Storage Box.
 
 mod config;
 mod disk;

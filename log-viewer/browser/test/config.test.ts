@@ -88,7 +88,12 @@ test("configPath: respects LOG_VIEWER_CONFIG override", () => {
   );
 });
 
-test("configPath: respects SKAGEDAL_TOOLS_HOME", () => {
-  const path = configPath({ SKAGEDAL_TOOLS_HOME: "/tmp/skagedal" } as NodeJS.ProcessEnv);
-  assert.equal(path, "/tmp/skagedal/log-viewer/config.json5");
+test("configPath: respects XDG_CONFIG_HOME", () => {
+  const path = configPath({ XDG_CONFIG_HOME: "/tmp/xdg" } as NodeJS.ProcessEnv);
+  assert.equal(path, "/tmp/xdg/skagedal-tools/log-viewer/config.json5");
+});
+
+test("configPath: ignores a relative XDG_CONFIG_HOME", () => {
+  const path = configPath({ XDG_CONFIG_HOME: "relative/xdg" } as NodeJS.ProcessEnv);
+  assert.ok(path.endsWith("/.config/skagedal-tools/log-viewer/config.json5"));
 });

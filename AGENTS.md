@@ -91,23 +91,36 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
 ## Per-tool Config and State Directories
 
 When a tool needs to store user-scoped config or state on disk (config
-files, caches, snooze records, etc.), put it under:
+files, caches, snooze records, etc.), put it under the XDG base
+directories, namespaced by `skagedal-tools/<tool-name>`:
 
 ```
-~/.skagedal-tools/<tool-name>/
+~/.config/skagedal-tools/<tool-name>/       config
+~/.local/share/skagedal-tools/<tool-name>/  data and state
+~/.cache/skagedal-tools/<tool-name>/        throwaway caches
 ```
 
 For example, `git-dirty-checker` stores its snooze records in
-`~/.skagedal-tools/git-dirty-checker/snoozed/`, and `cloudwatch-insights`
-reads `~/.skagedal-tools/cloudwatch-insights/settings.toml`.
+`~/.local/share/skagedal-tools/git-dirty-checker/snoozed/`, and
+`cloudwatch-insights` reads
+`~/.config/skagedal-tools/cloudwatch-insights/settings.toml`.
 
-Do not use `~/.config/<tool>/` or `$XDG_CONFIG_HOME` — those aren't
-meaningfully portable to macOS (the OS convention there is
-`~/Library/Application Support/`), and keeping everything under
-`~/.skagedal-tools/` makes it easy to back up, wipe, or sync as a group.
+This is the XDG layout on macOS too, rather than Apple's
+`~/Library/Application Support/` convention: having the same paths on every
+machine matters more here than following the platform, and the reverse-DNS
+directory names the `directories` crate produces
+(`~/Library/Application Support/tech.skagedal.tracker/`) are a mouthful.
 
-Tools may honor a `SKAGEDAL_TOOLS_HOME` environment variable to
-override the base directory (primarily useful for tests).
+Rust crates get these paths from the workspace's `skagedal-dirs` crate —
+`skagedal_dirs::{config_dir, data_dir, cache_dir}("<tool-name>")` — rather
+than composing them by hand. Tools in other languages compose the same
+paths themselves; see `log-viewer/browser/src/config.ts`.
+
+The base directories honor `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME` and
+`$XDG_CACHE_HOME` when those hold an absolute path, per the XDG base
+directory specification. That is also how tests point a tool at a temporary
+directory. (The older single-root `SKAGEDAL_TOOLS_HOME` override is gone —
+it doesn't map onto three separate roots.)
 
 ## Flutter Projects
 

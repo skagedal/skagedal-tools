@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+#
+# One-shot migration for GitHub issue #56: move every tool's config and state
+# from the old ad-hoc locations to the XDG layout the tools now read.
+#
+#   ~/.skagedal-tools/<tool>/                          -> config and/or data
+#   ~/Library/Application Support/tech.skagedal.tracker -> config and data
+#   ~/.simons-assistant/                                -> config and data
+#   ~/.cache/git-branch-assistant/                      -> cache
+#
+# Idempotent: anything already moved is skipped. Run with --dry-run first to
+# see what it would do. Nothing is ever deleted or overwritten — if both the
+# old and the new path exist, the move is skipped and reported so you can
+# reconcile the two by hand.
+set -euo pipefail
+
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+    DRY_RUN=1
+    shift
+fi
+if [[ $# -gt 0 ]]; then
+    echo "usage: $0 [--dry-run]" >&2
+    exit 1
+fi
+
+OLD_HOME="$HOME/.skagedal-tools"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/skagedal-tools"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/skagedal-tools"
+CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}/skagedal-tools"
+
+moved=0
+skipped=0
+
+say() {
+    echo "$@"
+}
+
+# move <src> <dst> — move a file or directory, creating the parent of <dst>.
+move() {
+    local src="$1" dst="$2"
+    if [[ ! -e "$src" && ! -L "$src" ]]; then
+        return 0
+    fi
+    if [[ -e "$dst" || -L "$dst" ]]; then
+        say "  skip  $src"
+        say "        (destination already exists: $dst)"
+        skipped=$((skipped + 1))
+        return 0
+    fi
+    say "  move  $src"
+    say "     -> $dst"
+    if [[ $DRY_RUN -eq 0 ]]; then
+        mkdir -p "$(dirname "$dst")"
+        mv "$src" "$dst"
+    fi
+    moved=$((moved + 1))
+}
+
+# Tools whose entire old directory is config.
+say "== config =="
+move "$OLD_HOME/chrome-page-notes/config.toml" "$CONFIG_HOME/chrome-page-notes/config.toml"
+move "$OLD_HOME/cloudwatch-insights/settings.toml" "$CONFIG_HOME/cloudwatch-insights/settings.toml"
+move "$OLD_HOME/intellij-patch/config.toml" "$CONFIG_HOME/intellij-patch/config.toml"
+move "$OLD_HOME/log-viewer/config.toml" "$CONFIG_HOME/log-viewer/config.toml"
+move "$OLD_HOME/log-viewer/config.json5" "$CONFIG_HOME/log-viewer/config.json5"
+# disky's config was a bare file at the top level, and gains a tool directory
+# and the conventional name along with the move.
+move "$OLD_HOME/disky.toml" "$CONFIG_HOME/disky/config.toml"
+# Not skagedal-tools binaries, but they lived under the same roof: the zsh
+# snippets zshrc.sh sources, and the jdtls settings.
+move "$OLD_HOME/shell" "$CONFIG_HOME/shell"
+move "$OLD_HOME/jdtls" "$CONFIG_HOME/jdtls"
+
+say "== data =="
+move "$OLD_HOME/chrome-page-notes/host.log" "$DATA_HOME/chrome-page-notes/host.log"
+move "$OLD_HOME/cloudwatch-insights/queries" "$DATA_HOME/cloudwatch-insights/queries"
+move "$OLD_HOME/cloudwatch-insights/latest-run.jsonl" "$DATA_HOME/cloudwatch-insights/latest-run.jsonl"
+move "$OLD_HOME/git-dirty-checker/snoozed" "$DATA_HOME/git-dirty-checker/snoozed"
+
+# cloudwatch-insights' latest-run.jsonl is a symlink whose target is an
+# absolute path into the results tree, so moving the two independently leaves
+# it dangling. Repoint it at where the results now live.
+relink-latest-run() {
+    local link="$DATA_HOME/cloudwatch-insights/latest-run.jsonl"
+    if [[ ! -L "$link" ]]; then
+        return 0
+    fi
+    local target
+    target="$(readlink "$link")"
+    case "$target" in
+        "$OLD_HOME"/cloudwatch-insights/*) ;;
+        *) return 0 ;;
+    esac
+    local new_target="$DATA_HOME/cloudwatch-insights/${target#"$OLD_HOME"/cloudwatch-insights/}"
+    say "  relink $link"
+    say "      -> $new_target"
+    if [[ $DRY_RUN -eq 0 ]]; then
+        ln -fs "$new_target" "$link"
+    fi
+    moved=$((moved + 1))
+}
+relink-latest-run
+
+say "== cache =="
+move "$HOME/.cache/git-branch-assistant" "$CACHE_HOME/git-branch-assistant"
+
+say "== tracker =="
+TRACKER_OLD="$HOME/Library/Application Support/tech.skagedal.tracker"
+move "$TRACKER_OLD/config.toml" "$CONFIG_HOME/tracker/config.toml"
+move "$TRACKER_OLD/week-files" "$DATA_HOME/tracker/week-files"
+
+say "== assistant =="
+ASSISTANT_OLD="$HOME/.simons-assistant"
+move "$ASSISTANT_OLD/tasks.yml" "$CONFIG_HOME/assistant/tasks.yml"
+move "$ASSISTANT_OLD/data" "$DATA_HOME/assistant/data"
+move "$ASSISTANT_OLD/logs" "$DATA_HOME/assistant/logs"
+
+# Old roots are only removed when nothing is left in them, so a leftover file
+# this script doesn't know about is preserved rather than silently dropped.
+say "== cleanup =="
+for dir in \
+    "$OLD_HOME/chrome-page-notes" \
+    "$OLD_HOME/cloudwatch-insights" \
+    "$OLD_HOME/git-dirty-checker" \
+    "$OLD_HOME/intellij-patch" \
+    "$OLD_HOME/log-viewer" \
+    "$OLD_HOME" \
+    "$TRACKER_OLD" \
+    "$ASSISTANT_OLD"; do
+    if [[ -d "$dir" ]]; then
+        if [[ $DRY_RUN -eq 0 ]]; then
+            rmdir "$dir" 2>/dev/null && say "  rmdir $dir"
+        else
+            # `ls -A` is empty for a directory with nothing but . and ..
+            if [[ -z "$(ls -A "$dir")" ]]; then
+                say "  rmdir $dir"
+            fi
+        fi
+    fi
+done
+
+say ""
+if [[ $DRY_RUN -eq 1 ]]; then
+    say "Dry run: $moved would move, $skipped skipped. Re-run without --dry-run to apply."
+else
+    say "Migrated $moved path(s), skipped $skipped."
+fi
+if [[ $skipped -gt 0 ]]; then
+    say "Reconcile the skipped paths by hand — both the old and the new one exist."
+fi

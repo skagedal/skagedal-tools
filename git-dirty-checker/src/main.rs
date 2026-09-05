@@ -113,13 +113,8 @@ fn is_dirty_repository(path: &Path) -> bool {
 
 // --- Snooze ---
 
-fn snooze_dir() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(
-        home.join(".skagedal-tools")
-            .join("git-dirty-checker")
-            .join("snoozed"),
-    )
+fn snooze_dir() -> PathBuf {
+    skagedal_dirs::data_dir("git-dirty-checker").join("snoozed")
 }
 
 fn repo_snooze_key(path: &Path) -> String {
@@ -131,7 +126,7 @@ fn is_snoozed(path: &Path) -> bool {
 }
 
 fn get_snooze_expiry(path: &Path) -> Option<SystemTime> {
-    let dir = snooze_dir()?;
+    let dir = snooze_dir();
     let snooze_file = dir.join(repo_snooze_key(path));
     let metadata = fs::metadata(&snooze_file).ok()?;
     let mtime = metadata.modified().ok()?;
@@ -143,9 +138,7 @@ fn get_snooze_expiry(path: &Path) -> Option<SystemTime> {
 }
 
 fn snooze_repo(path: &Path) {
-    let Some(dir) = snooze_dir() else {
-        return;
-    };
+    let dir = snooze_dir();
     let _ = fs::create_dir_all(&dir);
     let snooze_file = dir.join(repo_snooze_key(path));
     let _ = fs::File::create(&snooze_file);
@@ -156,10 +149,7 @@ fn snooze_repo(path: &Path) {
 }
 
 fn unsnooze_repo(path: &Path) {
-    let Some(dir) = snooze_dir() else {
-        return;
-    };
-    let snooze_file = dir.join(repo_snooze_key(path));
+    let snooze_file = snooze_dir().join(repo_snooze_key(path));
     let _ = fs::remove_file(snooze_file);
 }
 

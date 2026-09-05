@@ -17,8 +17,8 @@ intellij-patch --config some.toml     # override the config path
 ```
 
 By default the config is read from
-`~/.skagedal-tools/intellij-patch/config.toml` (override with
-`SKAGEDAL_TOOLS_HOME` or `--config`).
+`~/.config/skagedal-tools/intellij-patch/config.toml` (override with
+`$XDG_CONFIG_HOME` or `--config`).
 
 Each run is idempotent — already-correct files are reported as `ok`; missing
 elements are added; the file is written back only when the resulting XML

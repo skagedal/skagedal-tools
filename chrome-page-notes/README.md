@@ -74,8 +74,8 @@ manifest embeds an absolute path to the built binary).
 
 ### Configuration
 
-The host reads `~/.skagedal-tools/chrome-page-notes/config.toml` (or
-`$SKAGEDAL_TOOLS_HOME/chrome-page-notes/config.toml`), per this repo's
+The host reads `~/.config/skagedal-tools/chrome-page-notes/config.toml`
+(or `$XDG_CONFIG_HOME/skagedal-tools/chrome-page-notes/config.toml`), per this repo's
 [convention](../AGENTS.md#per-tool-config-and-state-directories):
 
 ```toml
@@ -112,7 +112,7 @@ the same page collapse to the same note.
 Set `debug = true` in `config.toml` first (see above), then:
 
 ```bash
-tail -f ~/.skagedal-tools/chrome-page-notes/host.log
+tail -f ~/.local/share/skagedal-tools/chrome-page-notes/host.log
 ```
 
 Then click the extension's toolbar icon, or navigate to a new page in any

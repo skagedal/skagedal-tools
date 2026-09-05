@@ -14,6 +14,7 @@ members = [
     "package-json-merge",
     "protobuf-text-to-json",
     "simons-misc-helpers",
+    "skagedal-dirs",
     "sync-brewfile",
     "tracker",
     "x-java-home",
@@ -42,7 +43,6 @@ clap_complete = "*"
 console = "*"
 crossterm = "*"
 dialoguer = "*"
-directories = "*"
 dirs = "*"
 filetime = "*"
 flexi_logger = "*"
@@ -64,6 +64,7 @@ serde_json = "*"
 serde_yaml_ng = "*"
 shell-escape = "*"
 shellexpand = "*"
+skagedal-dirs = { path = "skagedal-dirs" }
 tao = "*"
 temp-dir = "*"
 tempfile = "*"

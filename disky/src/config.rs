@@ -96,18 +96,12 @@ impl ResolvedPair {
 }
 
 /// Path to the config file: `$DISKY_CONFIG`, else
-/// `$SKAGEDAL_TOOLS_HOME/disky.toml`, else `~/.skagedal-tools/disky.toml`.
+/// `~/.config/skagedal-tools/disky/config.toml`.
 pub fn config_path() -> PathBuf {
     if let Ok(p) = std::env::var("DISKY_CONFIG") {
         return PathBuf::from(p);
     }
-    let base = match std::env::var("SKAGEDAL_TOOLS_HOME") {
-        Ok(p) => PathBuf::from(p),
-        Err(_) => dirs::home_dir()
-            .expect("could not resolve home directory")
-            .join(".skagedal-tools"),
-    };
-    base.join("disky.toml")
+    skagedal_dirs::config_dir("disky").join("config.toml")
 }
 
 pub fn load(path: &Path) -> Result<Config> {
