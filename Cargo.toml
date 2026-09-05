@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "assistant",
-    "chrome-page-notes/host",
+    "chrome-page-notes",
     "cloudwatch-insights",
     "disky",
     "gh-pr",
