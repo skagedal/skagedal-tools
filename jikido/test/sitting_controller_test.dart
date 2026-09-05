@@ -405,6 +405,209 @@ void main() {
     });
   });
 
+  group('pausing', () {
+    test('holds the countdown, and gives the time back on resume', () {
+      fakeAsync((async) {
+        final controller = makeController()
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        clock.advance(const Duration(minutes: 4));
+        async.elapse(const Duration(minutes: 4));
+        expect(controller.remaining, const Duration(minutes: 11));
+
+        controller.pause();
+        async.flushMicrotasks();
+        expect(controller.isPaused, isTrue);
+        expect(controller.status, SittingStatus.running,
+            reason: 'a paused sitting is still a sitting');
+
+        clock.advance(const Duration(minutes: 7));
+        async.elapse(const Duration(minutes: 7));
+        expect(controller.remaining, const Duration(minutes: 11),
+            reason: 'the sitting is held, not quietly running underneath');
+        expect(audio.strikes.length, 1, reason: 'only the opening bell');
+
+        controller.resume();
+        async.flushMicrotasks();
+        expect(controller.isPaused, isFalse);
+        expect(controller.remaining, const Duration(minutes: 11));
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+
+    test('leaves the layers that keep the sitting alive up', () {
+      fakeAsync((async) {
+        final controller = makeController();
+        controller.start();
+        async.flushMicrotasks();
+
+        controller.pause();
+        async.flushMicrotasks();
+
+        expect(audio.keepAliveRunning, isTrue,
+            reason: 'a process reclaimed during a pause is a sitting lost');
+        expect(service.running, isTrue);
+        expect(service.text, 'Paused');
+        expect(notification.isScheduled, isFalse,
+            reason: 'the backstop is set for an instant that is no longer '
+                'the end of anything');
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+
+    test('re-arms the backstop for the closing bell\'s new time', () {
+      fakeAsync((async) {
+        final controller = makeController()
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        clock.advance(const Duration(minutes: 4));
+        async.elapse(const Duration(minutes: 4));
+        controller.pause();
+        async.flushMicrotasks();
+
+        clock.advance(const Duration(minutes: 7));
+        async.elapse(const Duration(minutes: 7));
+        controller.resume();
+        async.flushMicrotasks();
+
+        expect(
+          notification.scheduledFor,
+          DateTime.utc(2026, 3, 1, 7, 22, 0)
+              .add(ClosingBellNotification.backstopDelay),
+          reason: 'the pause moved the closing bell seven minutes later',
+        );
+        expect(service.text, '11 minutes left',
+            reason: 'the notification says where the sitting actually is');
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+
+    test('the closing bell waits for the pause to end', () {
+      fakeAsync((async) {
+        final controller = makeController()
+          ..setDuration(const Duration(minutes: 5));
+        controller.start();
+        async.flushMicrotasks();
+
+        clock.advance(const Duration(minutes: 1));
+        async.elapse(const Duration(minutes: 1));
+        controller.pause();
+        async.flushMicrotasks();
+
+        // Well past when the bell would have been due, and past the point
+        // where the app would give up and leave it to the backstop.
+        clock.advance(const Duration(minutes: 30));
+        async.elapse(const Duration(minutes: 30));
+        expect(audio.strikes.length, 1, reason: 'no bell into a held sitting');
+        expect(controller.status, SittingStatus.running);
+        expect(controller.notice, isNull,
+            reason: 'nothing was missed — the sitting was paused');
+
+        controller.resume();
+        async.flushMicrotasks();
+
+        // The four minutes that were left when the pause began.
+        for (var i = 0; i < 4 * 60 * 5; i++) {
+          clock.advance(const Duration(milliseconds: 200));
+          async.elapse(const Duration(milliseconds: 200));
+        }
+        expect(audio.sequences,
+            <BellSequence>[BellSequence.opening, BellSequence.closing]);
+
+        controller.dispose();
+      });
+    });
+
+    test('holds the settling time, and opens the period on the way out', () {
+      fakeAsync((async) {
+        final controller = makeController(prepare: const Duration(minutes: 1))
+          ..setDuration(const Duration(minutes: 15));
+        controller.start();
+        async.flushMicrotasks();
+
+        clock.advance(const Duration(seconds: 20));
+        async.elapse(const Duration(seconds: 20));
+        controller.pause();
+        async.flushMicrotasks();
+        expect(controller.prepareRemaining, const Duration(seconds: 40));
+
+        clock.advance(const Duration(minutes: 5));
+        async.elapse(const Duration(minutes: 5));
+        expect(audio.strikes, isEmpty,
+            reason: 'the settling time is held along with everything else');
+        expect(controller.prepareRemaining, const Duration(seconds: 40));
+
+        controller.resume();
+        async.flushMicrotasks();
+        expect(audio.strikes, isEmpty,
+            reason: 'forty seconds of settling still to go, and no stale '
+                'bell for the five minutes the app was holding');
+
+        for (var i = 0; i < 40 * 5; i++) {
+          clock.advance(const Duration(milliseconds: 200));
+          async.elapse(const Duration(milliseconds: 200));
+        }
+        expect(audio.sequences, <BellSequence>[BellSequence.opening]);
+        expect(controller.remaining, const Duration(minutes: 15));
+
+        controller.cancel();
+        async.flushMicrotasks();
+        controller.dispose();
+      });
+    });
+
+    test('is not offered once the closing bell is due', () {
+      fakeAsync((async) {
+        final controller = makeController()
+          ..setDuration(const Duration(minutes: 1));
+        controller.start();
+        async.flushMicrotasks();
+        expect(controller.canPause, isTrue);
+
+        for (var i = 0; i < 60 * 5; i++) {
+          clock.advance(const Duration(milliseconds: 200));
+          async.elapse(const Duration(milliseconds: 200));
+        }
+
+        expect(controller.canPause, isFalse,
+            reason: 'the sitting is over bar the ring; there is nothing '
+                'left to hold');
+        controller.pause();
+        async.flushMicrotasks();
+        expect(controller.isPaused, isFalse);
+
+        controller.dispose();
+      });
+    });
+
+    test('is not offered when no sitting is running', () {
+      fakeAsync((async) {
+        final controller = makeController();
+        expect(controller.canPause, isFalse);
+        controller.pause();
+        controller.resume();
+        async.flushMicrotasks();
+        expect(controller.isPaused, isFalse);
+        expect(controller.status, SittingStatus.idle);
+
+        controller.dispose();
+      });
+    });
+  });
+
   group('the free-play bell', () {
     test('strikes overlap rather than cutting each other off', () {
       fakeAsync((async) {

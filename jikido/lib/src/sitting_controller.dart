@@ -58,12 +58,13 @@ class SittingController extends ChangeNotifier {
   Settings _settings = const Settings();
   SittingStatus _status = SittingStatus.idle;
   MeditationSession? _session;
+  DateTime? _pausedAt;
   Timer? _ticker;
   bool _openingBellStruck = false;
   bool _closingBellStruck = false;
   bool _permissionsRequested = false;
   String? _notice;
-  int _notifiedMinutesLeft = -1;
+  int _notifiedMinutesLeft = _unwritten;
 
   Settings get settings => _settings;
   SittingStatus get status => _status;
@@ -73,20 +74,39 @@ class SittingController extends ChangeNotifier {
   /// case where the app was killed and came back after the sitting ended.
   String? get notice => _notice;
 
-  Duration get remaining =>
-      _session?.remainingAt(_now()) ?? _settings.duration;
+  /// Whether the sitting is held. A paused sitting is still a sitting: the
+  /// audio session and the foreground service stay up, because letting the
+  /// process be reclaimed while the user is answering the door would lose
+  /// the sitting they meant to come back to.
+  bool get isPaused => _pausedAt != null;
 
-  double get progress => _session?.progressAt(_now()) ?? 0;
+  /// Whether there is anything left to hold. Available from pressing Sit
+  /// until the closing bell is due; past that the sitting is over bar the
+  /// ring, and pausing it would only mean a bell left hanging.
+  bool get canPause =>
+      _status == SittingStatus.running &&
+      !isPaused &&
+      !(_session?.closingBellIsDueAt(_now()) ?? true);
+
+  /// The instant everything shown is worked out from. While paused it is the
+  /// instant the user paused at, so the countdown, the ensō and the phase all
+  /// hold still rather than the sitting running on quietly underneath.
+  DateTime _shownNow() => _pausedAt ?? _now();
+
+  Duration get remaining =>
+      _session?.remainingAt(_shownNow()) ?? _settings.duration;
+
+  double get progress => _session?.progressAt(_shownNow()) ?? 0;
 
   /// How long until the opening bell. Only meaningful while settling.
   Duration get prepareRemaining =>
-      _session?.prepareRemainingAt(_now()) ?? _settings.prepare;
+      _session?.prepareRemainingAt(_shownNow()) ?? _settings.prepare;
 
   /// Whether the sitting has not started yet because the settling time is
   /// still running.
   bool get isPreparing => phase == SessionPhase.preparing;
 
-  SessionPhase? get phase => _session?.phaseAt(_now());
+  SessionPhase? get phase => _session?.phaseAt(_shownNow());
 
   /// Set when something the sitting depends on could not be set up. The user
   /// is told: a meditation timer that has quietly lost the ability to make a
@@ -204,6 +224,7 @@ class SittingController extends ChangeNotifier {
     );
     _session = session;
     _status = SittingStatus.running;
+    _pausedAt = null;
     _openingBellStruck = false;
     _closingBellStruck = false;
     _notice = null;
@@ -214,11 +235,15 @@ class SittingController extends ChangeNotifier {
     // right from the instant the session exists — and starting it first
     // means a plugin that throws or takes its time cannot leave the user
     // watching a sitting whose clock never moves.
-    _ticker?.cancel();
-    _ticker = Timer.periodic(_tickInterval, (_) => _tick());
+    _startTicker();
     notifyListeners();
 
     await _engageLayers(session);
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(_tickInterval, (_) => _tick());
   }
 
   /// Engages everything that keeps a sitting alive to the closing bell: the
@@ -256,16 +281,21 @@ class SittingController extends ChangeNotifier {
             : _serviceText(session.remainingAt(now)),
       );
     });
-    await _engage(
-      () => _notification.schedule(
-        // Deliberately a little after the app would ring the bell itself; see
-        // ClosingBellNotification.backstopDelay.
-        at: session.closingBellAt.add(ClosingBellNotification.backstopDelay),
-        bell: session.bell,
-        sittingLength: session.duration,
-      ),
-    );
+    await _armBackstop(session);
   }
+
+  /// Hands the operating system the bell to ring if Jikido is not around to
+  /// ring it. Re-armed rather than adjusted whenever the closing bell moves,
+  /// which pausing makes it do.
+  Future<void> _armBackstop(MeditationSession session) => _engage(
+        () => _notification.schedule(
+          // Deliberately a little after the app would ring the bell itself;
+          // see ClosingBellNotification.backstopDelay.
+          at: session.closingBellAt.add(ClosingBellNotification.backstopDelay),
+          bell: session.bell,
+          sittingLength: session.duration,
+        ),
+      );
 
   /// Engages one layer, and carries on if it throws.
   ///
@@ -291,6 +321,58 @@ class SittingController extends ChangeNotifier {
     }
   }
 
+  /// Holds the sitting where it is. Works during the settling time too: what
+  /// is held is whichever countdown is running.
+  ///
+  /// Nothing is ended here. The audio session, the foreground service and the
+  /// wakelock all stay as they were, so a pause is a pause rather than a
+  /// quiet way of losing the sitting to the process being reclaimed. What
+  /// does go is the backstop notification: it is set for an instant that is
+  /// no longer the end of anything, and it is armed again on the way back.
+  Future<void> pause() async {
+    if (!canPause) {
+      return;
+    }
+    _pausedAt = _now();
+    _ticker?.cancel();
+    _ticker = null;
+    // Force the notification to be rewritten on the first tick after
+    // resuming, whatever it said before.
+    _notifiedMinutesLeft = _unwritten;
+    notifyListeners();
+
+    await _engage(() => _notification.cancel());
+    // A bell still ringing into a paused sitting would be the app carrying
+    // on without the user.
+    await _engage(() => _audio.silence());
+    await _engage(() => _service.update(text: 'Paused'));
+  }
+
+  /// Carries on, giving back exactly as long as the pause lasted.
+  ///
+  /// The sitting is moved rather than credited: see
+  /// [MeditationSession.delayedBy]. Everything derived from it — the opening
+  /// bell if the pause was during the settling time, the closing bell, the
+  /// end — moves with it, and the wall clock stays the only source of when.
+  Future<void> resume() async {
+    final session = _session;
+    final pausedAt = _pausedAt;
+    if (session == null ||
+        pausedAt == null ||
+        _status != SittingStatus.running) {
+      return;
+    }
+    final resumed = session.delayedBy(_now().difference(pausedAt));
+    _session = resumed;
+    _pausedAt = null;
+    _startTicker();
+    // Puts the countdown, the ensō and the service notification back where
+    // they belong now rather than up to a tick later.
+    _tick();
+
+    await _armBackstop(resumed);
+  }
+
   /// Ends the sitting early, at the user's request. No bell: the sitting did
   /// not finish, and pretending otherwise would be a small lie told by a
   /// tool whose whole job is to mark time honestly.
@@ -300,6 +382,7 @@ class SittingController extends ChangeNotifier {
     }
     await _teardown();
     _session = null;
+    _pausedAt = null;
     _status = SittingStatus.idle;
     _notice = null;
     notifyListeners();
@@ -311,6 +394,7 @@ class SittingController extends ChangeNotifier {
       return;
     }
     _session = null;
+    _pausedAt = null;
     _status = SittingStatus.idle;
     _notice = null;
     notifyListeners();
@@ -328,7 +412,7 @@ class SittingController extends ChangeNotifier {
 
   void _tick() {
     final session = _session;
-    if (session == null || _status != SittingStatus.running) {
+    if (session == null || _status != SittingStatus.running || isPaused) {
       return;
     }
     final now = _now();
@@ -417,6 +501,11 @@ class SittingController extends ChangeNotifier {
   /// Stands in for a minute count while settling, so that the notification is
   /// written once rather than on every tick. No real count collides with it.
   static const int _settling = -2;
+
+  /// Stands in for "the notification does not say a minute count at all", so
+  /// that the next tick writes one whatever it happens to be. No real count
+  /// collides with it either.
+  static const int _unwritten = -1;
 
   static int _wholeMinutes(Duration remaining) =>
       (remaining.inSeconds / 60).ceil();

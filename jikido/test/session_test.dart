@@ -98,6 +98,48 @@ void main() {
     });
   });
 
+  group('delayedBy', () {
+    test('postpones the whole sitting rather than shortening it', () {
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      final held = session.delayedBy(const Duration(minutes: 3));
+
+      expect(held.startedAt, session.startedAt.add(const Duration(minutes: 3)));
+      expect(
+        held.closingBellAt,
+        session.closingBellAt.add(const Duration(minutes: 3)),
+      );
+      expect(held.endsAt, session.endsAt.add(const Duration(minutes: 3)));
+      expect(held.duration, session.duration,
+          reason: 'fifteen minutes of sitting is still fifteen minutes');
+    });
+
+    test('gives back exactly what was left when it was held', () {
+      // The point of pausing: whatever the countdown said stays what it
+      // says, however long the pause turns out to be.
+      final session = sessionOf();
+      final pausedAt = start.add(const Duration(minutes: 4));
+      final left = session.remainingAt(pausedAt);
+
+      final resumedAt = pausedAt.add(const Duration(minutes: 7));
+      final held = session.delayedBy(const Duration(minutes: 7));
+
+      expect(held.remainingAt(resumedAt), left);
+      expect(held.progressAt(resumedAt), session.progressAt(pausedAt));
+      expect(held.phaseAt(resumedAt), session.phaseAt(pausedAt));
+    });
+
+    test('holds the settling time too', () {
+      final session = sessionOf(prepare: const Duration(minutes: 1));
+      final pausedAt = start.add(const Duration(seconds: 20));
+      final held = session.delayedBy(const Duration(minutes: 5));
+      final resumedAt = pausedAt.add(const Duration(minutes: 5));
+
+      expect(held.prepareRemainingAt(resumedAt), const Duration(seconds: 40));
+      expect(held.openingBellIsDueAt(resumedAt), isFalse,
+          reason: 'the pause does not use up the settling time');
+    });
+  });
+
   group('the opening bell', () {
     test('is due the moment the settling time is up', () {
       final session = sessionOf(prepare: const Duration(minutes: 1));
