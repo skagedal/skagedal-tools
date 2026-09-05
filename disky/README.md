@@ -18,7 +18,7 @@ Commands find their pair from the current directory, so inside `~/studio` a bare
 
 ## Configuration
 
-`~/.skagedal-tools/disky.toml` (override with `$DISKY_CONFIG`):
+`~/.config/skagedal-tools/disky/config.toml` (override with `$DISKY_CONFIG`):
 
 ```toml
 [remotes.hetzner]

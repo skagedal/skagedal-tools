@@ -25,8 +25,12 @@ impl BranchCache {
         Self { root }
     }
 
-    pub fn from_env() -> Option<Self> {
-        default_cache_root().map(Self::new)
+    pub fn from_env() -> Self {
+        Self::new(skagedal_dirs::cache_dir("git-branch-assistant"))
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     pub fn read_fresh(&self, path: &Path) -> Option<Vec<BranchListEntry>> {
@@ -60,20 +64,6 @@ impl BranchCache {
         let key = format!("{:016x}", hash_path(path));
         self.root.join("branches").join(format!("{key}.json"))
     }
-}
-
-fn default_cache_root() -> Option<PathBuf> {
-    if let Ok(xdg) = std::env::var("XDG_CACHE_HOME")
-        && !xdg.is_empty()
-    {
-        return Some(PathBuf::from(xdg).join("git-branch-assistant"));
-    }
-    let home = std::env::var("HOME").ok()?;
-    Some(
-        PathBuf::from(home)
-            .join(".cache")
-            .join("git-branch-assistant"),
-    )
 }
 
 fn hash_path(path: &Path) -> u64 {

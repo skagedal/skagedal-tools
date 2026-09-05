@@ -1,5 +1,5 @@
-//! Vault configuration, read from a dotfile following this repo's per-tool
-//! config convention (see `AGENTS.md`).
+//! Vault configuration, read from this repo's per-tool config directory
+//! (see `AGENTS.md`).
 
 use std::path::PathBuf;
 
@@ -25,18 +25,8 @@ fn default_folder() -> String {
     "webnotes".to_string()
 }
 
-fn tool_base_dir() -> PathBuf {
-    let base = match std::env::var("SKAGEDAL_TOOLS_HOME") {
-        Ok(p) => PathBuf::from(p),
-        Err(_) => dirs::home_dir()
-            .expect("could not resolve home directory")
-            .join(".skagedal-tools"),
-    };
-    base.join("chrome-page-notes")
-}
-
 pub fn config_path() -> PathBuf {
-    tool_base_dir().join("config.toml")
+    skagedal_dirs::config_dir(crate::TOOL).join("config.toml")
 }
 
 pub fn load() -> Result<Config> {

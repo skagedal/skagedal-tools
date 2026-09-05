@@ -119,7 +119,7 @@ $ git-branch-assistant repos --list
 
 Add `--interactive` (`-i`) to pick a branch from the list. The selected branch is checked out in its repo, and the repo path is written to the suggested-cd file (just like the existing flow), so a shell wrapper can `cd` into it.
 
-In interactive mode the listing is also cached under `$XDG_CACHE_HOME/git-branch-assistant/branches/` (or `~/.cache/...`), keyed by the directory the command was invoked from. If a fresh cache (less than an hour old) is available, the picker opens immediately on the cached data, runs a background rescan with a `Refreshing...` indicator, and updates the list in place when the rescan finishes — keeping the cursor on the same branch when it still exists, or falling back to the first entry otherwise.
+In interactive mode the listing is also cached under `~/.cache/skagedal-tools/git-branch-assistant/branches/` (or `$XDG_CACHE_HOME/skagedal-tools/...`), keyed by the directory the command was invoked from. If a fresh cache (less than an hour old) is available, the picker opens immediately on the cached data, runs a background rescan with a `Refreshing...` indicator, and updates the list in place when the rescan finishes — keeping the cursor on the same branch when it still exists, or falling back to the first entry otherwise.
 
 ### Bulk actions
 

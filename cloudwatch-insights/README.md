@@ -52,10 +52,10 @@ cloudwatch-insights query -t "yesterday 17-18" -e systest
 Results are written as JSONL to:
 
 ```
-~/.skagedal-tools/cloudwatch-insights/queries/<repo>/results/run-<timestamp>.jsonl
+~/.local/share/skagedal-tools/cloudwatch-insights/queries/<repo>/results/run-<timestamp>.jsonl
 ```
 
-After every successful run the symlink `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file. Use `cloudwatch-insights show` to stream that file to stdout (see below).
+After every successful run the symlink `~/.local/share/skagedal-tools/cloudwatch-insights/latest-run.jsonl` is updated to point at the new file. Use `cloudwatch-insights show` to stream that file to stdout (see below).
 
 While the query runs, a single status line on stderr (`status: Running (scanned 1.2M records, 456 MiB)`) is rewritten in place from the polled `GetQueryResults` statistics. On a non-TTY stderr, status changes are appended one per line instead.
 
@@ -116,7 +116,7 @@ cloudwatch-insights show | jq .
 cloudwatch-insights show --path        # print the path to latest-run.jsonl instead
 ```
 
-Streams `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` to stdout. Handy for re-inspecting or re-formatting the most recent run without re-querying. Pass `--path` to print just the file path (useful for piping into other tools).
+Streams `~/.local/share/skagedal-tools/cloudwatch-insights/latest-run.jsonl` to stdout. Handy for re-inspecting or re-formatting the most recent run without re-querying. Pass `--path` to print just the file path (useful for piping into other tools).
 
 ### `edit-config`
 
@@ -124,7 +124,7 @@ Streams `~/.skagedal-tools/cloudwatch-insights/latest-run.jsonl` to stdout. Hand
 cloudwatch-insights edit-config
 ```
 
-Opens `~/.skagedal-tools/cloudwatch-insights/settings.toml` in `$EDITOR`, creating the file (and a commented placeholder section for the current git repository) on first use.
+Opens `~/.config/skagedal-tools/cloudwatch-insights/settings.toml` in `$EDITOR`, creating the file (and a commented placeholder section for the current git repository) on first use.
 
 ## The `.insights` file format
 
@@ -181,10 +181,10 @@ Default: **1h** (last hour) if neither CLI nor front-matter specifies one.
 The tool detects the git repository you're running it from (via `git rev-parse --show-toplevel`) and looks up a section keyed by the repo's directory name in:
 
 ```
-~/.skagedal-tools/cloudwatch-insights/settings.toml
+~/.config/skagedal-tools/cloudwatch-insights/settings.toml
 ```
 
-Per the skagedal-tools convention, per-tool state lives under `~/.skagedal-tools/<tool-name>/`. Override the whole base directory with `$SKAGEDAL_TOOLS_HOME`, or point at an arbitrary config file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
+Per the skagedal-tools convention, config lives under `~/.config/skagedal-tools/<tool-name>/` and saved queries and results under `~/.local/share/skagedal-tools/<tool-name>/`. Override the roots with `$XDG_CONFIG_HOME` / `$XDG_DATA_HOME`, or point at an arbitrary config file with `$CLOUDWATCH_INSIGHTS_CONFIG`.
 
 The file has a top-level `[defaults]` block that applies to every repo, plus per-repo `[repo.<name>]` blocks. Per-repo values fully replace the corresponding `[defaults]` value (arrays are not merged).
 
@@ -243,8 +243,10 @@ Substituted into `{{ env }}` in the query and log group template (from CLI, fron
 ## Directory layout
 
 ```
-~/.skagedal-tools/cloudwatch-insights/
-├── settings.toml                       # per-repo defaults
+~/.config/skagedal-tools/cloudwatch-insights/
+└── settings.toml                       # per-repo defaults
+
+~/.local/share/skagedal-tools/cloudwatch-insights/
 ├── latest-run.jsonl                    # symlink to the most recent run
 └── queries/
     ├── <repo-name>/

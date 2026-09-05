@@ -107,7 +107,7 @@ This program is, as far as I'm aware, only used by myself. Please file an issue 
 
 ## Configuration
 
-`tracker` can be customized with a configuration file. Currently, you can set the number of hours in a work day and the number of work days in a week. The location of the file is system-dependent; on Linux, it is expected to be located at `~/.config/tracker/config.toml`. Here is an example of what it might look like: 
+`tracker` can be customized with a configuration file. Currently, you can set the number of hours in a work day and the number of work days in a week. It lives at `~/.config/skagedal-tools/tracker/config.toml` on every platform, macOS included (override the root with `$XDG_CONFIG_HOME`). Week files are stored alongside, under `~/.local/share/skagedal-tools/tracker/week-files/`. Here is an example of what the config might look like: 
 
 ```toml
 [workweek]

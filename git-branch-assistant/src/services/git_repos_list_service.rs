@@ -50,11 +50,25 @@ impl BranchStatus {
 
 pub struct GitReposListService {
     interactive: bool,
+    cache: BranchCache,
 }
 
 impl GitReposListService {
     pub fn new(interactive: bool) -> Self {
-        Self { interactive }
+        Self {
+            interactive,
+            cache: BranchCache::from_env(),
+        }
+    }
+
+    /// Same, but caching into `cache_root` instead of the user's real cache
+    /// directory — so tests don't scribble into `~/.cache`.
+    #[cfg(test)]
+    fn with_cache_root(interactive: bool, cache_root: PathBuf) -> Self {
+        Self {
+            interactive,
+            cache: BranchCache::new(cache_root),
+        }
     }
 
     pub fn list_all_branches(&self, path: &Path) -> Result<TaskResult> {
@@ -68,26 +82,22 @@ impl GitReposListService {
     fn run_non_interactive(&self, path: &Path) -> Result<TaskResult> {
         eprintln!("Collecting branches...");
         let entries = collect_and_sort(path)?;
-        if let Some(cache) = BranchCache::from_env() {
-            let _ = cache.write(path, &entries);
-        }
+        let _ = self.cache.write(path, &entries);
         print_entries(&entries);
         Ok(TaskResult::Proceed)
     }
 
     fn run_interactive(&self, path: &Path) -> Result<TaskResult> {
-        let cache = BranchCache::from_env();
-        let cached = cache.as_ref().and_then(|c| c.read_fresh(path));
+        let cached = self.cache.read_fresh(path);
 
         let (initial, refresh_rx) = match cached {
             Some(cache_entries) => {
                 let (tx, rx) = mpsc::channel();
                 let scan_path = path.to_path_buf();
+                let cache_root = self.cache.root().to_path_buf();
                 thread::spawn(move || {
                     let entries = collect_and_sort(&scan_path).unwrap_or_default();
-                    if let Some(cache) = BranchCache::from_env() {
-                        let _ = cache.write(&scan_path, &entries);
-                    }
+                    let _ = BranchCache::new(cache_root).write(&scan_path, &entries);
                     let _ = tx.send(entries);
                 });
                 (cache_entries, Some(rx))
@@ -95,9 +105,7 @@ impl GitReposListService {
             None => {
                 eprintln!("Collecting branches...");
                 let entries = collect_and_sort(path)?;
-                if let Some(cache) = cache {
-                    let _ = cache.write(path, &entries);
-                }
+                let _ = self.cache.write(path, &entries);
                 (entries, None)
             }
         };
@@ -305,7 +313,8 @@ mod tests {
     #[test]
     fn non_interactive_list_proceeds() -> Result<()> {
         let temp = tempfile::tempdir()?;
-        let service = GitReposListService::new(false);
+        let cache = tempfile::tempdir()?;
+        let service = GitReposListService::with_cache_root(false, cache.path().to_path_buf());
         let result = service.list_all_branches(temp.path())?;
         assert!(matches!(result, TaskResult::Proceed));
         Ok(())

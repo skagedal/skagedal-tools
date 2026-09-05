@@ -11,7 +11,8 @@ struct Args {
     /// Path to the IntelliJ project to patch. Defaults to the current directory.
     project: Option<PathBuf>,
 
-    /// Path to the config file. Defaults to ~/.skagedal-tools/intellij-patch/config.toml.
+    /// Path to the config file. Defaults to
+    /// ~/.config/skagedal-tools/intellij-patch/config.toml.
     #[arg(long)]
     config: Option<PathBuf>,
 
@@ -56,7 +57,7 @@ fn main() -> Result<()> {
 
     let config_path = match args.config {
         Some(p) => p,
-        None => default_config_path()?,
+        None => default_config_path(),
     };
 
     let config_text = fs::read_to_string(&config_path)
@@ -367,18 +368,8 @@ fn eval_match(elem: &Element, path: &MatchPath) -> Option<String> {
     cur.attributes.get(&path.attribute).cloned()
 }
 
-fn default_config_path() -> Result<PathBuf> {
-    if let Ok(home) = std::env::var("SKAGEDAL_TOOLS_HOME") {
-        return Ok(PathBuf::from(home)
-            .join("intellij-patch")
-            .join("config.toml"));
-    }
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| anyhow!("HOME is not set; cannot resolve default config path"))?;
-    Ok(PathBuf::from(home)
-        .join(".skagedal-tools")
-        .join("intellij-patch")
-        .join("config.toml"))
+fn default_config_path() -> PathBuf {
+    skagedal_dirs::config_dir("intellij-patch").join("config.toml")
 }
 
 #[cfg(test)]

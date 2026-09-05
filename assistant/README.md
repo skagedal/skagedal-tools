@@ -12,7 +12,7 @@ You can use the `assistant` tool directly. However, if you would like some tight
 
 ## Configuration
 
-Create a file called ~/.simons-assistant/tasks.yml. This should be an YML array of tasks that `assistant` checks for you. Example:
+Create a file called ~/.config/skagedal-tools/assistant/tasks.yml. This should be an YML array of tasks that `assistant` checks for you. Example:
 
 ```yaml
 - id: check-github-notifications # Needs to be something unique

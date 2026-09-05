@@ -26,6 +26,7 @@ ratatui.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 shell-escape.workspace = true
+skagedal-dirs.workspace = true
 tao = { workspace = true, optional = true }
 toml.workspace = true
 wry = { workspace = true, optional = true }

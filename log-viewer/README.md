@@ -47,7 +47,7 @@ log-viewer -w --exec kubectl logs -f my-pod
 | Flag | Description |
 |------|-------------|
 | `-f`, `--file <path>` | Read JSONL from a file. Use `-` for stdin. |
-| `-c`, `--config <path>` | Path to a config file (overrides `~/.skagedal-tools/log-viewer/config.toml` and `$LOG_VIEWER_CONFIG`). |
+| `-c`, `--config <path>` | Path to a config file (overrides `~/.config/skagedal-tools/log-viewer/config.toml` and `$LOG_VIEWER_CONFIG`). |
 | `--profile <name>` | Activate a profile defined in the config file. |
 | `-e`, `--exec <cmd> [args...]` | Run an executable; its stdout is parsed as JSONL. Every argv after `--exec` is forwarded to it, so `--exec kubectl logs -f pod` runs `kubectl logs -f pod`. Put log-viewer's own flags before `--exec`. |
 | `-w`, `--web` | Open the React app in a wry webview (only available with the `web` Cargo feature; `./install` enables it). |
@@ -64,8 +64,8 @@ If no input flag and no positional argument are given but stdin is piped,
 ## Configuration
 
 The config file is **TOML** and lives at
-`~/.skagedal-tools/log-viewer/config.toml` by default. Override the
-base directory with `SKAGEDAL_TOOLS_HOME`, or set `LOG_VIEWER_CONFIG`
+`~/.config/skagedal-tools/log-viewer/config.toml` by default. Override the
+base directory with `$XDG_CONFIG_HOME`, or set `LOG_VIEWER_CONFIG`
 to point at a specific file.
 
 ```toml

@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
-import { dirname, join } from "path";
+import { dirname, isAbsolute, join } from "path";
 import JSON5 from "json5";
 import type { TriggerConfig } from "./triggers.js";
 
 /**
  * Configuration for log-viewer. The config file lives at
- *   ~/.skagedal-tools/log-viewer/config.json5
- * (override via $SKAGEDAL_TOOLS_HOME for tests, or $LOG_VIEWER_CONFIG for an
- * explicit path).
+ *   ~/.config/skagedal-tools/log-viewer/config.json5
+ * (override via $XDG_CONFIG_HOME, or $LOG_VIEWER_CONFIG for an explicit
+ * path).
  *
  * JSON5 lets the file have comments, trailing commas, and unquoted keys.
  *
@@ -67,8 +67,10 @@ export class ConfigError extends Error {
 
 export function configPath(env: NodeJS.ProcessEnv = process.env): string {
   if (env.LOG_VIEWER_CONFIG) return env.LOG_VIEWER_CONFIG;
-  const base = env.SKAGEDAL_TOOLS_HOME || join(homedir(), ".skagedal-tools");
-  return join(base, "log-viewer", "config.json5");
+  // XDG base directory spec: a relative $XDG_CONFIG_HOME is invalid and ignored.
+  const xdg = env.XDG_CONFIG_HOME;
+  const base = xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".config");
+  return join(base, "skagedal-tools", "log-viewer", "config.json5");
 }
 
 export function loadConfig(path: string = configPath()): Config {

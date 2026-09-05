@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use directories::ProjectDirs;
+const TOOL: &str = "tracker";
 
 pub struct TrackerDirs {
     config_dir: PathBuf,
@@ -9,10 +9,9 @@ pub struct TrackerDirs {
 
 impl TrackerDirs {
     pub fn real() -> TrackerDirs {
-        let proj_dirs = ProjectDirs::from("tech", "skagedal", "tracker").unwrap();
         TrackerDirs {
-            config_dir: proj_dirs.config_dir().to_path_buf(),
-            data_dir: proj_dirs.data_dir().to_path_buf(),
+            config_dir: skagedal_dirs::config_dir(TOOL),
+            data_dir: skagedal_dirs::data_dir(TOOL),
         }
     }
 

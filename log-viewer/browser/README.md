@@ -47,10 +47,10 @@ pnpm run build:web
 
 ## Configuration
 
-The Node CLI reads `~/.skagedal-tools/log-viewer/config.json5` (JSON5)
+The Node CLI reads `~/.config/skagedal-tools/log-viewer/config.json5` (JSON5)
 — the same path and format the original TS log-viewer used. Note that
 the Rust binary reads a TOML config at
-`~/.skagedal-tools/log-viewer/config.toml`. The two configs are
+`~/.config/skagedal-tools/log-viewer/config.toml`. The two configs are
 parallel during the transition and can hold the same fields/profiles/
 triggers if you want.
 

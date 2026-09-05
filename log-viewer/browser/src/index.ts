@@ -28,7 +28,7 @@ const main = define({
     config: {
       type: "string",
       short: "c",
-      description: "path to config file (overrides ~/.skagedal-tools/log-viewer/config.json5 and $LOG_VIEWER_CONFIG)",
+      description: "path to config file (overrides ~/.config/skagedal-tools/log-viewer/config.json5 and $LOG_VIEWER_CONFIG)",
     },
     profile: {
       type: "string",
