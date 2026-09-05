@@ -116,6 +116,47 @@ move "$ASSISTANT_OLD/tasks.yml" "$CONFIG_HOME/assistant/tasks.yml"
 move "$ASSISTANT_OLD/data" "$DATA_HOME/assistant/data"
 move "$ASSISTANT_OLD/logs" "$DATA_HOME/assistant/logs"
 
+# The task markers used to sit in a `data/` subdirectory of the tool's own
+# home; under XDG the data directory *is* that place, so they move up a
+# level. A `.task` file is empty — its mtime is the whole record of when the
+# task last ran — so where the same task exists in both places, the later
+# mtime is the one to keep and the other carries no information.
+flatten-assistant-data() {
+    local nested="$DATA_HOME/assistant/data"
+    if [[ ! -d "$nested" ]]; then
+        return 0
+    fi
+    local file name dest
+    for file in "$nested"/*; do
+        if [[ ! -e "$file" ]]; then
+            continue
+        fi
+        name="$(basename "$file")"
+        dest="$DATA_HOME/assistant/$name"
+        if [[ -e "$dest" ]]; then
+            if [[ "$dest" -nt "$file" ]]; then
+                say "  drop  $file"
+                say "        (superseded by a later $name)"
+                if [[ $DRY_RUN -eq 0 ]]; then
+                    rm -f "$file"
+                fi
+                moved=$((moved + 1))
+                continue
+            fi
+            say "  drop  $dest"
+            say "        (superseded by a later $name)"
+            if [[ $DRY_RUN -eq 0 ]]; then
+                rm -f "$dest"
+            fi
+        fi
+        move "$file" "$dest"
+    done
+    if [[ $DRY_RUN -eq 0 ]]; then
+        rmdir "$nested" 2>/dev/null && say "  rmdir $nested"
+    fi
+}
+flatten-assistant-data
+
 # Old roots are only removed when nothing is left in them, so a leftover file
 # this script doesn't know about is preserved rather than silently dropped.
 say "== cleanup =="
