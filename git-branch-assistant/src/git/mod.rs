@@ -172,6 +172,13 @@ impl GitRepo {
         Ok(())
     }
 
+    /// The branch HEAD is on, or `None` when HEAD is detached.
+    pub fn current_branch(&self) -> Result<Option<String>> {
+        let output = self.run_and_capture("git", &["branch", "--show-current"])?;
+        let branch = output.trim();
+        Ok((!branch.is_empty()).then(|| branch.to_string()))
+    }
+
     pub fn checkout_default_branch(&self) -> Result<()> {
         let branch = self.default_branch_for_checkout()?;
         self.checkout_branch(&branch)
