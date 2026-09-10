@@ -28,6 +28,7 @@ INSTALLED_RUST_TOOLS=(
     simons-misc-helpers
     sync-brewfile
     tracker
+    trafikverket
     x-java-home
 )
 
