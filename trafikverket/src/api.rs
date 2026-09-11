@@ -86,6 +86,16 @@ impl Client {
         .await
     }
 
+    /// Ask for the smallest answer the API will give, to find out whether
+    /// the key is one it accepts. A key it rejects comes back as an error
+    /// from `send`, so a successful reply is the whole result.
+    pub async fn check_key(&self) -> Result<()> {
+        let schema = query::default_schema("TrainStation").expect("TrainStation has a schema");
+        self.raw_object("TrainStation", schema, Some(1), None)
+            .await?;
+        Ok(())
+    }
+
     async fn post(&self, body: String) -> Result<Vec<ResultItem>> {
         let text = self.send(body).await?;
         parse_response(&text)
@@ -113,8 +123,8 @@ impl Client {
             bail!(
                 "Trafikverket rejected the API key ({status}). \
                  Get one from Trafikverket's data portal at \
-                 https://data.trafikverket.se and set it in the config file or \
-                 in ${}",
+                 https://data.trafikverket.se, then run `trafikverket auth` \
+                 (or set ${})",
                 crate::config::API_KEY_ENV
             );
         }

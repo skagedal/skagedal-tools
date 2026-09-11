@@ -22,6 +22,8 @@ pub enum Command {
     Stations(StationsArgs),
     /// Show or edit the configuration file
     Config(ConfigArgs),
+    /// Put the API key in the keychain
+    Auth(AuthArgs),
     /// Post a query to the API and print the reply, for finding out what the
     /// API really calls things
     Raw(RawArgs),
@@ -109,6 +111,24 @@ pub struct StationsArgs {
     /// Fetch the station list again instead of using the cached copy
     #[arg(long)]
     pub refresh: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub action: Option<AuthAction>,
+
+    /// Store the key without first checking it against the API
+    #[arg(long)]
+    pub no_verify: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AuthAction {
+    /// Say which key is in use and where it comes from
+    Status,
+    /// Remove the key from the keychain
+    Forget,
 }
 
 #[derive(Debug, Args)]
@@ -285,6 +305,23 @@ mod tests {
             Some(Command::Stations(args)) => assert_eq!(args.query.as_deref(), Some("uppsala")),
             other => panic!("expected stations, got {other:?}"),
         }
+        let cli = Cli::try_parse_from(["trafikverket", "auth"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Auth(AuthArgs {
+                action: None,
+                no_verify: false
+            }))
+        ));
+        let cli = Cli::try_parse_from(["trafikverket", "auth", "forget"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Auth(AuthArgs {
+                action: Some(AuthAction::Forget),
+                ..
+            }))
+        ));
+
         let cli = Cli::try_parse_from(["trafikverket", "config", "edit"]).unwrap();
         assert!(matches!(
             cli.command,
