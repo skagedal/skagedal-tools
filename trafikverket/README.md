@@ -40,10 +40,13 @@ train that has gone.
 
 ## Getting a key
 
-The data is CC0 but the endpoint needs a key, free from
-[api.trafikinfo.trafikverket.se](https://api.trafikinfo.trafikverket.se). Put
-it in the configuration file as `api-key`, or in `$TRAFIKVERKET_API_KEY`,
-which wins.
+The data is CC0 but the endpoint needs a key, which is free. Register in
+Trafikverket's data portal, [data.trafikverket.se](https://data.trafikverket.se),
+and create a key under your account. Put it in the configuration file as
+`api-key`, or in `$TRAFIKVERKET_API_KEY`, which wins.
+
+`api.trafikinfo.trafikverket.se` is the API endpoint itself, not a sign-up
+page — there is nothing to browse to there.
 
 ## Configuring a route
 

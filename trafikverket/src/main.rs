@@ -209,8 +209,8 @@ fn edit(path: &std::path::Path) -> Result<()> {
 fn require_api_key(config: &Config) -> Result<String> {
     config.api_key().with_context(|| {
         format!(
-            "no API key. Get one free at https://api.trafikinfo.trafikverket.se, then \
-             set ${} or put `api-key = \"…\"` in {}",
+            "no API key. Get one free from Trafikverket's data portal at \
+             https://data.trafikverket.se, then set ${} or put `api-key = \"…\"` in {}",
             config::API_KEY_ENV,
             config::config_path().display()
         )

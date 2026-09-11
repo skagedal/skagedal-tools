@@ -394,10 +394,7 @@ fn a_missing_api_key_says_where_to_get_one() {
         .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("api.trafikinfo.trafikverket.se"),
-        "{stderr}"
-    );
+    assert!(stderr.contains("https://data.trafikverket.se"), "{stderr}");
 }
 
 #[test]

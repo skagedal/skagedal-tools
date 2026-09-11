@@ -80,8 +80,9 @@ impl Client {
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             bail!(
                 "Trafikverket rejected the API key ({status}). \
-                 Get one at https://api.trafikinfo.trafikverket.se and set it \
-                 in the config file or in ${}",
+                 Get one from Trafikverket's data portal at \
+                 https://data.trafikverket.se and set it in the config file or \
+                 in ${}",
                 crate::config::API_KEY_ENV
             );
         }

@@ -117,9 +117,11 @@ impl Config {
 /// edit rather than a blank page.
 pub const TEMPLATE: &str = r##"# trafikverket — the next trains between two stations, and how late they are.
 #
-# The data comes from Trafikverket's open API. A key is free from
-# https://api.trafikinfo.trafikverket.se — put it here, or in
-# $TRAFIKVERKET_API_KEY, which takes precedence.
+# The data comes from Trafikverket's open API. A key is free: register in
+# Trafikverket's data portal at https://data.trafikverket.se, then create a key
+# under your account. Put it here, or in $TRAFIKVERKET_API_KEY, which takes
+# precedence. (api.trafikinfo.trafikverket.se is the API endpoint itself; there
+# is nothing to sign up for there.)
 
 # api-key = "..."
 
