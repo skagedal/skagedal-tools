@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
+use crate::keychain;
 use crate::ticket::Ticket;
 
 /// The name this tool's directories are namespaced under.
@@ -58,19 +59,62 @@ pub fn load(path: &Path) -> Result<Config> {
     parse(&contents).with_context(|| format!("could not parse {}", path.display()))
 }
 
+fn from_env() -> Option<String> {
+    std::env::var(API_KEY_ENV)
+        .ok()
+        .map(|key| key.trim().to_string())
+        .filter(|key| !key.is_empty())
+}
+
 pub fn parse(contents: &str) -> Result<Config> {
     Ok(toml::from_str(contents)?)
 }
 
+/// Where a key that was found came from. Worth reporting: three places can
+/// hold one, and which of them answered decides where to go to change it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeySource {
+    Environment,
+    Keychain,
+    File,
+}
+
+impl KeySource {
+    pub fn describe(self) -> String {
+        match self {
+            KeySource::Environment => format!("${API_KEY_ENV}"),
+            KeySource::Keychain => "the keychain".to_string(),
+            KeySource::File => format!("{}", config_path().display()),
+        }
+    }
+}
+
 impl Config {
-    /// The API key, preferring the environment over the file so a key can be
-    /// supplied per invocation.
-    pub fn api_key(&self) -> Option<String> {
-        std::env::var(API_KEY_ENV)
-            .ok()
-            .map(|k| k.trim().to_string())
-            .filter(|k| !k.is_empty())
-            .or_else(|| self.api_key.clone())
+    /// The API key and where it came from. The environment wins so a key can
+    /// be supplied per invocation; the keychain beats the file, because
+    /// `trafikverket auth` is the way the key is meant to be kept and a line
+    /// left behind in the file should not quietly override it.
+    pub fn api_key(&self) -> Result<Option<(String, KeySource)>> {
+        if let Some(key) = from_env() {
+            return Ok(Some((key, KeySource::Environment)));
+        }
+        if let Some(key) = keychain::get()? {
+            return Ok(Some((key, KeySource::Keychain)));
+        }
+        Ok(self
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|key| !key.is_empty())
+            .map(|key| (key.to_string(), KeySource::File)))
+    }
+
+    /// Whether the file itself carries a key, which `auth` mentions because
+    /// it is a secret sitting in a file that can be committed by accident.
+    pub fn file_has_key(&self) -> bool {
+        self.api_key
+            .as_deref()
+            .is_some_and(|key| !key.trim().is_empty())
     }
 
     /// Pick the route to report on: the one named, else the configured
@@ -119,11 +163,11 @@ pub const TEMPLATE: &str = r##"# trafikverket — the next trains between two st
 #
 # The data comes from Trafikverket's open API. A key is free: register in
 # Trafikverket's data portal at https://data.trafikverket.se, then create a key
-# under your account. Put it here, or in $TRAFIKVERKET_API_KEY, which takes
-# precedence. (api.trafikinfo.trafikverket.se is the API endpoint itself; there
-# is nothing to sign up for there.)
-
-# api-key = "..."
+# under your account. Run `trafikverket auth` to put it in the keychain, which
+# is where it belongs — this file is the kind of thing that ends up in a
+# dotfiles repository. An `api-key = "..."` line here still works, and
+# $TRAFIKVERKET_API_KEY beats both. (api.trafikinfo.trafikverket.se is the API
+# endpoint itself; there is nothing to sign up for there.)
 
 # The route reported when none is named with --route. Not needed when there
 # is only one route.
@@ -184,6 +228,7 @@ to = "G"
     fn parses_routes_and_key() {
         let config = parse(SAMPLE).unwrap();
         assert_eq!(config.api_key.as_deref(), Some("abc123"));
+        assert!(config.file_has_key());
         let (name, route) = config.resolve_route(None).unwrap();
         assert_eq!(name, "commute");
         assert_eq!(route.from, "U");

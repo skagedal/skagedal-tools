@@ -210,6 +210,12 @@ to = "Cst"
 products = ["Mälartåg", "SJ Regional"]
 "#;
 
+/// A keychain service name no real key is stored under, so a lookup during a
+/// test reliably finds nothing.
+fn keychain_service() -> String {
+    format!("trafikverket-tests-{}", std::process::id())
+}
+
 struct Fixture {
     home: tempfile::TempDir,
     endpoint: String,
@@ -238,6 +244,9 @@ impl Fixture {
             .env("XDG_CONFIG_HOME", root.join("config"))
             .env("XDG_CACHE_HOME", root.join("cache"))
             .env("TRAFIKVERKET_API_KEY", "test-key")
+            // Never let a test see, or touch, the key on the machine it runs
+            // on: the service name is one nothing has filed anything under.
+            .env("TRAFIKVERKET_KEYCHAIN_SERVICE", keychain_service())
             .env("TRAFIKVERKET_API_ENDPOINT", &self.endpoint)
             .env("NO_COLOR", "1")
             // The stub is on loopback; a proxy in the environment must not
@@ -401,6 +410,7 @@ fn a_missing_api_key_says_where_to_get_one() {
         .env("XDG_CONFIG_HOME", home.path().join("config"))
         .env("XDG_CACHE_HOME", home.path().join("cache"))
         .env_remove("TRAFIKVERKET_API_KEY")
+        .env("TRAFIKVERKET_KEYCHAIN_SERVICE", keychain_service())
         .output()
         .unwrap();
     assert!(!output.status.success());
@@ -417,4 +427,39 @@ fn config_path_points_into_the_xdg_config_directory() {
             .ends_with("skagedal-tools/trafikverket/config.toml"),
         "{out}"
     );
+}
+
+#[test]
+fn auth_status_names_the_source_of_the_key_in_use() {
+    let fixture = Fixture::new();
+    let out = fixture.stdout(&["auth", "status"]);
+    assert!(out.contains("in use: $TRAFIKVERKET_API_KEY"), "{out}");
+    assert!(out.contains("no api-key line"), "{out}");
+}
+
+#[test]
+fn a_key_in_the_file_is_reported_as_coming_from_there() {
+    let fixture = Fixture::new();
+    let path = fixture
+        .home
+        .path()
+        .join("config")
+        .join("skagedal-tools")
+        .join("trafikverket")
+        .join("config.toml");
+    let contents = format!("api-key = \"from-the-file\"\n{CONFIG}");
+    std::fs::write(&path, contents).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_trafikverket"))
+        .args(["auth", "status"])
+        .env("XDG_CONFIG_HOME", fixture.home.path().join("config"))
+        .env("XDG_CACHE_HOME", fixture.home.path().join("cache"))
+        .env("TRAFIKVERKET_KEYCHAIN_SERVICE", keychain_service())
+        .env_remove("TRAFIKVERKET_API_KEY")
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&output.stdout);
+    assert!(out.contains("in use: "), "{out}");
+    assert!(out.contains("config.toml"), "{out}");
+    assert!(out.contains("has an api-key line"), "{out}");
 }

@@ -1,6 +1,7 @@
 //! `trafikverket` — the next trains between two stations, and how late they
 //! are, from Trafikverket's open API.
 
+use std::io::{BufRead, IsTerminal};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
@@ -11,13 +12,16 @@ mod api;
 mod cli;
 mod config;
 mod journeys;
+mod keychain;
 mod model;
 mod output;
 mod query;
 mod stations;
 mod ticket;
 
-use cli::{Cli, Command, ConfigAction, ConfigArgs, NextArgs, RawArgs, StationsArgs};
+use cli::{
+    AuthAction, AuthArgs, Cli, Command, ConfigAction, ConfigArgs, NextArgs, RawArgs, StationsArgs,
+};
 use config::Config;
 use ticket::Ticket;
 
@@ -35,6 +39,7 @@ async fn main() -> ExitCode {
     let result = match cli.command {
         Some(Command::Stations(args)) => run_stations(args).await,
         Some(Command::Config(args)) => run_config(args),
+        Some(Command::Auth(args)) => run_auth(args).await,
         Some(Command::Raw(args)) => run_raw(args).await,
         None => run_next(cli.next).await,
     };
@@ -213,14 +218,10 @@ fn run_config(args: ConfigArgs) -> Result<()> {
                 println!("(not created yet — run `trafikverket config edit`)");
                 return Ok(());
             }
-            println!(
-                "api key: {}",
-                if config.api_key().is_some() {
-                    "set"
-                } else {
-                    "missing"
-                }
-            );
+            match config.api_key()? {
+                Some((_, source)) => println!("api key: set, from {}", source.describe()),
+                None => println!("api key: missing — run `trafikverket auth`"),
+            }
             let names = config.route_names();
             if names.is_empty() {
                 println!("routes: none");
@@ -250,12 +251,132 @@ fn edit(path: &std::path::Path) -> Result<()> {
 }
 
 fn require_api_key(config: &Config) -> Result<String> {
-    config.api_key().with_context(|| {
-        format!(
+    match config.api_key()? {
+        Some((key, _)) => Ok(key),
+        None => bail!(
             "no API key. Get one free from Trafikverket's data portal at \
-             https://data.trafikverket.se, then set ${} or put `api-key = \"…\"` in {}",
-            config::API_KEY_ENV,
+             https://data.trafikverket.se, then run `trafikverket auth` to put it in \
+             the keychain (or set ${})",
+            config::API_KEY_ENV
+        ),
+    }
+}
+
+async fn run_auth(args: AuthArgs) -> Result<()> {
+    let config = config::load(&config::config_path())?;
+    match args.action {
+        Some(AuthAction::Status) => auth_status(&config),
+        Some(AuthAction::Forget) => auth_forget(),
+        None => auth_set(&config, args.no_verify).await,
+    }
+}
+
+/// Ask for the key, check that Trafikverket accepts it, and file it in the
+/// keychain.
+async fn auth_set(config: &Config, no_verify: bool) -> Result<()> {
+    if !keychain::is_available() {
+        bail!(
+            "there is no keychain here — that is a macOS thing. Set ${} instead",
+            config::API_KEY_ENV
+        );
+    }
+    let key = read_key()?;
+    if key.is_empty() {
+        bail!("no key given");
+    }
+
+    if no_verify {
+        eprintln!("not checking the key against the API.");
+    } else {
+        api::Client::new(key.clone())?
+            .check_key()
+            .await
+            .context("the key was not stored — pass --no-verify to store it unchecked")?;
+        eprintln!("Trafikverket accepts the key.");
+    }
+
+    keychain::set(&key)?;
+    eprintln!(
+        "stored in the keychain as {} for {}.",
+        keychain::service(),
+        keychain::ACCOUNT
+    );
+
+    if config.file_has_key() {
+        eprintln!(
+            "note: {} still has an api-key line. The keychain wins, but the file is \
+             the copy that gets committed by accident — remove it.",
             config::config_path().display()
-        )
-    })
+        );
+    }
+    if std::env::var_os(config::API_KEY_ENV).is_some() {
+        eprintln!(
+            "note: ${} is set in this shell, and it takes precedence over the keychain.",
+            config::API_KEY_ENV
+        );
+    }
+    Ok(())
+}
+
+/// Read the key without echoing it. A pipe works too, so the key can come
+/// from a password manager rather than a paste.
+fn read_key() -> Result<String> {
+    if !std::io::stdin().is_terminal() {
+        let mut line = String::new();
+        std::io::stdin()
+            .lock()
+            .read_line(&mut line)
+            .context("could not read the key from stdin")?;
+        return Ok(line.trim().to_string());
+    }
+    let key = dialoguer::Password::new()
+        .with_prompt("Trafikverket API key")
+        .interact()
+        .context("could not read the key")?;
+    Ok(key.trim().to_string())
+}
+
+fn auth_status(config: &Config) -> Result<()> {
+    match config.api_key()? {
+        Some((_, source)) => println!("in use: {}", source.describe()),
+        None => println!("in use: no key — run `trafikverket auth`"),
+    }
+    println!(
+        "${}: {}",
+        config::API_KEY_ENV,
+        if std::env::var_os(config::API_KEY_ENV).is_some() {
+            "set"
+        } else {
+            "not set"
+        }
+    );
+    println!(
+        "keychain: {}",
+        if !keychain::is_available() {
+            "not available on this platform".to_string()
+        } else if keychain::get()?.is_some() {
+            format!("a key is stored as {}", keychain::service())
+        } else {
+            "nothing stored".to_string()
+        }
+    );
+    println!(
+        "{}: {}",
+        config::config_path().display(),
+        if config.file_has_key() {
+            "has an api-key line"
+        } else {
+            "no api-key line"
+        }
+    );
+    Ok(())
+}
+
+fn auth_forget() -> Result<()> {
+    if keychain::delete()? {
+        eprintln!("removed the key from the keychain.");
+    } else {
+        eprintln!("there was no key in the keychain.");
+    }
+    Ok(())
 }

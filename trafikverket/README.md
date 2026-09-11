@@ -52,8 +52,38 @@ train that has gone.
 
 The data is CC0 but the endpoint needs a key, which is free. Register in
 Trafikverket's data portal, [data.trafikverket.se](https://data.trafikverket.se),
-and create a key under your account. Put it in the configuration file as
-`api-key`, or in `$TRAFIKVERKET_API_KEY`, which wins.
+and create a key under your account. Then:
+
+```console
+$ trafikverket auth
+Trafikverket API key: [hidden]
+Trafikverket accepts the key.
+stored in the keychain as trafikverket for api-key.
+```
+
+The key goes into the macOS keychain, not into the configuration file — that
+file is the kind of thing that ends up in a dotfiles repository, and a secret
+in it is a secret one `git add` away from being published. The key is checked
+against the API before it is stored, so a mistyped one is an error rather than
+a puzzle later; `--no-verify` skips that when there is no network. The prompt
+does not echo, and a piped key works too, so it can come straight out of a
+password manager:
+
+```console
+$ op read "op://Private/Trafikverket/api key" | trafikverket auth
+```
+
+Three places can hold the key, and the first one that has it wins:
+
+| Where | Set with |
+|-------|----------|
+| `$TRAFIKVERKET_API_KEY` | the environment, per invocation |
+| the keychain | `trafikverket auth` |
+| `api-key` in the configuration file | an editor — still supported, not recommended |
+
+`trafikverket auth status` says which of them is answering, and
+`trafikverket auth forget` takes the key out of the keychain. There is no
+keychain off macOS, so `$TRAFIKVERKET_API_KEY` is the way to hold a key there.
 
 `api.trafikinfo.trafikverket.se` is the API endpoint itself, not a sign-up
 page — there is nothing to browse to there.
@@ -69,7 +99,6 @@ template and opens it. A route is two station signatures and, optionally, the
 products the ticket for that route covers:
 
 ```toml
-api-key = "…"
 default-route = "commute"
 
 [route.commute]
@@ -117,6 +146,7 @@ trafikverket [OPTIONS] [COMMAND]
 
   stations [QUERY]     list station signatures
   config [path|edit]   show or edit the configuration file
+  auth [status|forget] keep the API key in the keychain
   raw                  post a query and print the reply
 ```
 
