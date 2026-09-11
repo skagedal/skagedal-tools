@@ -52,12 +52,33 @@ pub fn render(report: &Report, color: bool) -> String {
         out.push_str(&table(report, color));
     }
 
-    if let Some(note) = hidden_note(&report.selection.hidden) {
+    let notes = [
+        hidden_note(&report.selection.hidden),
+        beyond_count_note(report),
+    ];
+    let notes: Vec<&String> = notes.iter().flatten().collect();
+    if !notes.is_empty() {
         out.push('\n');
-        out.push_str(&paint(&note, Ink::Dim, color));
-        out.push('\n');
+        for note in notes {
+            out.push_str(&paint(note, Ink::Dim, color));
+            out.push('\n');
+        }
     }
     out
+}
+
+/// Journeys that fit the ticket and the window but not `--count`. Without
+/// this line, widening `--window` appears to do nothing.
+fn beyond_count_note(report: &Report) -> Option<String> {
+    let more = report.selection.beyond_count;
+    if more == 0 {
+        return None;
+    }
+    Some(format!(
+        "{more} more within {} — raise -n to see {}.",
+        format_window(report.window_minutes),
+        if more == 1 { "it" } else { "them" }
+    ))
 }
 
 fn header(report: &Report, color: bool) -> String {
@@ -307,6 +328,7 @@ pub fn render_json(report: &Report) -> serde_json::Value {
             "canceled": report.selection.hidden.canceled,
             "uncovered": report.selection.hidden.uncovered,
         },
+        "beyondCount": report.selection.beyond_count,
     })
 }
 
@@ -360,7 +382,11 @@ mod tests {
     }
 
     fn selection(journeys: Vec<Journey>, hidden: Hidden) -> Selection {
-        Selection { journeys, hidden }
+        Selection {
+            journeys,
+            hidden,
+            beyond_count: 0,
+        }
     }
 
     #[test]
@@ -507,6 +533,41 @@ mod tests {
         let sel = selection(vec![j], Hidden::default());
         assert!(!render(&report(&sel, &ticket), false).contains('\x1b'));
         assert!(render(&report(&sel, &ticket), true).contains('\x1b'));
+    }
+
+    #[test]
+    fn says_how_many_more_the_count_cut() {
+        let ticket = Ticket::unrestricted();
+        let mut sel = selection(vec![], Hidden::default());
+        sel.beyond_count = 5;
+        let text = render(&report(&sel, &ticket), false);
+        assert!(
+            text.contains("5 more within 3 h — raise -n to see them."),
+            "{text}"
+        );
+
+        sel.beyond_count = 1;
+        let text = render(&report(&sel, &ticket), false);
+        assert!(
+            text.contains("1 more within 3 h — raise -n to see it."),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn both_notes_can_appear() {
+        let ticket = Ticket::for_products(["Mälartåg"]);
+        let mut sel = selection(
+            vec![],
+            Hidden {
+                uncovered: 2,
+                ..Default::default()
+            },
+        );
+        sel.beyond_count = 3;
+        let text = render(&report(&sel, &ticket), false);
+        assert!(text.contains("pass --all"), "{text}");
+        assert!(text.contains("raise -n"), "{text}");
     }
 
     #[test]

@@ -298,11 +298,22 @@ fn all_shows_what_was_filtered_out_but_not_what_has_left() {
 }
 
 #[test]
-fn count_limits_the_answer() {
+fn count_limits_the_answer_and_says_so() {
     let fixture = Fixture::new();
     let out = fixture.stdout(&["-n", "1"]);
     assert!(out.contains("Mälartåg 2137"), "{out}");
     assert!(!out.contains("SJ Regional 634"), "{out}");
+    assert!(
+        out.contains("1 more within 3 h — raise -n to see it."),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_count_that_fits_says_nothing_about_more() {
+    let fixture = Fixture::new();
+    let out = fixture.stdout(&[]);
+    assert!(!out.contains("raise -n"), "{out}");
 }
 
 #[test]

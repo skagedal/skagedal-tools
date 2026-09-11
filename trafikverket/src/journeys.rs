@@ -175,6 +175,10 @@ pub struct Hidden {
 pub struct Selection {
     pub journeys: Vec<Journey>,
     pub hidden: Hidden,
+    /// Journeys that passed every filter but fell outside `--count`. Counted
+    /// separately from `hidden` because the remedy is a different flag, and
+    /// because silently cutting the list makes a wider `--window` look broken.
+    pub beyond_count: usize,
 }
 
 /// Pick the journeys worth showing: the ones still catchable, and — unless
@@ -202,10 +206,12 @@ pub fn select(
         }
         kept.push(journey);
     }
+    let beyond_count = kept.len().saturating_sub(limit);
     kept.truncate(limit);
     Selection {
         journeys: kept,
         hidden,
+        beyond_count,
     }
 }
 
@@ -449,10 +455,20 @@ mod tests {
     }
 
     #[test]
-    fn selection_respects_the_limit() {
+    fn selection_respects_the_limit_and_says_what_it_cut() {
         let now = time("2026-09-10T09:10:00+02:00");
         let selection = select(journeys_for_selection(), now, 1, false);
         assert_eq!(selection.journeys.len(), 1);
         assert_eq!(selection.journeys[0].train, "OK1");
+        assert_eq!(selection.beyond_count, 1);
+    }
+
+    #[test]
+    fn nothing_is_beyond_a_limit_that_fits() {
+        let now = time("2026-09-10T09:10:00+02:00");
+        assert_eq!(
+            select(journeys_for_selection(), now, 10, false).beyond_count,
+            0
+        );
     }
 }

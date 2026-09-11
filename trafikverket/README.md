@@ -16,7 +16,12 @@ Uppsala C → Stockholm C · Fri 11 Sep 06:35 · Mälartåg, SJ Regional
   in 32 min  07:08 → 07:47  Mälartåg 915    track 4
 
 4 departures hidden (4 not covered) — pass --all to see them.
+5 more within 3 h — raise -n to see them.
 ```
+
+It shows three departures by default and says how many more it had. Both
+footer lines name the flag that brings the rest back, so a wider `--window`
+never looks like it did nothing.
 
 ## What it filters out
 
