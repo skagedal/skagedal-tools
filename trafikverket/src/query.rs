@@ -37,15 +37,17 @@ pub fn announcements(
                <AND>\
                  <EQ name=\"ActivityType\" value=\"{activity}\"/>\
                  <EQ name=\"LocationSignature\" value=\"{location}\"/>\
+                 <EQ name=\"Advertised\" value=\"true\"/>\
+                 <EQ name=\"Deleted\" value=\"false\"/>\
                  <GT name=\"AdvertisedTimeAtLocation\" value=\"{from}\"/>\
                  <LT name=\"AdvertisedTimeAtLocation\" value=\"{to}\"/>\
                </AND>\
              </FILTER>\
              <INCLUDE>AdvertisedTrainIdent</INCLUDE>\
-             <INCLUDE>ScheduledDepartureDate</INCLUDE>\
+             <INCLUDE>ScheduledDepartureDateTime</INCLUDE>\
              <INCLUDE>AdvertisedTimeAtLocation</INCLUDE>\
              <INCLUDE>EstimatedTimeAtLocation</INCLUDE>\
-             <INCLUDE>ActualTimeAtLocation</INCLUDE>\
+             <INCLUDE>TimeAtLocation</INCLUDE>\
              <INCLUDE>TrackAtLocation</INCLUDE>\
              <INCLUDE>Canceled</INCLUDE>\
              <INCLUDE>ToLocation</INCLUDE>\
@@ -80,6 +82,71 @@ pub fn stations(api_key: &str) -> String {
         key = escape(api_key),
         schema = TRAIN_STATION_SCHEMA,
     )
+}
+
+/// The default schema version for the object types this tool knows about.
+/// Asking for the wrong one is how you get "Invalid query attribute", so a
+/// type we have no default for has to be told explicitly.
+pub fn default_schema(objecttype: &str) -> Option<&'static str> {
+    match objecttype {
+        "TrainAnnouncement" => Some(TRAIN_ANNOUNCEMENT_SCHEMA),
+        "TrainStation" => Some(TRAIN_STATION_SCHEMA),
+        _ => None,
+    }
+}
+
+/// A query with no `INCLUDE` at all, so the API answers with every field the
+/// object has. This is how you find out what a field is really called.
+pub fn raw_object(
+    api_key: &str,
+    objecttype: &str,
+    schema: &str,
+    limit: Option<u32>,
+    filter: Option<&str>,
+) -> String {
+    let limit = limit.map(|n| format!(" limit=\"{n}\"")).unwrap_or_default();
+    let filter = filter
+        .map(|f| format!("<FILTER>{f}</FILTER>"))
+        .unwrap_or_default();
+    wrap(
+        api_key,
+        &format!(
+            "<QUERY objecttype=\"{}\" schemaversion=\"{}\"{limit}>{filter}</QUERY>",
+            escape(objecttype),
+            escape(schema),
+        ),
+    )
+}
+
+/// Put one or more `<QUERY>` elements into a `<REQUEST>` with the key. Any
+/// `<REQUEST>` wrapper or `<LOGIN>` the caller already wrote is replaced, so
+/// a document copied out of the API documentation works as it stands.
+pub fn wrap(api_key: &str, document: &str) -> String {
+    let mut body = document.trim();
+    if let Some(rest) = body.strip_prefix("<REQUEST>") {
+        body = rest
+            .trim_end()
+            .strip_suffix("</REQUEST>")
+            .unwrap_or(rest)
+            .trim();
+    }
+    let body = strip_login(body);
+    format!(
+        "<REQUEST><LOGIN authenticationkey=\"{}\"/>{}</REQUEST>",
+        escape(api_key),
+        body.trim()
+    )
+}
+
+/// Remove a `<LOGIN .../>` element, whatever key it carries.
+fn strip_login(document: &str) -> String {
+    let Some(start) = document.find("<LOGIN") else {
+        return document.to_string();
+    };
+    let Some(end) = document[start..].find('>') else {
+        return document.to_string();
+    };
+    format!("{}{}", &document[..start], &document[start + end + 1..])
 }
 
 /// The API's `$dateadd` filter function, whose argument is a signed
@@ -139,6 +206,10 @@ mod tests {
             xml.contains("<LT name=\"AdvertisedTimeAtLocation\" value=\"$dateadd(03:00:00)\"/>")
         );
         assert!(xml.contains("<INCLUDE>ProductInformation</INCLUDE>"));
+        // Rows that are not for passengers, and ones withdrawn from the
+        // timetable, are filtered out by the API rather than here.
+        assert!(xml.contains("<EQ name=\"Advertised\" value=\"true\"/>"));
+        assert!(xml.contains("<EQ name=\"Deleted\" value=\"false\"/>"));
     }
 
     #[test]
@@ -147,6 +218,58 @@ mod tests {
         assert!(xml.contains("objecttype=\"TrainStation\""));
         assert!(xml.contains("<EQ name=\"Advertised\" value=\"true\"/>"));
         assert!(xml.contains("<INCLUDE>AdvertisedLocationName</INCLUDE>"));
+    }
+
+    #[test]
+    fn raw_object_asks_for_every_field() {
+        let xml = raw_object("k", "TrainStation", "1.4", Some(1), None);
+        assert!(
+            xml.contains("<QUERY objecttype=\"TrainStation\" schemaversion=\"1.4\" limit=\"1\">")
+        );
+        assert!(!xml.contains("<INCLUDE>"));
+        assert!(!xml.contains("<FILTER>"));
+    }
+
+    #[test]
+    fn raw_object_takes_a_filter() {
+        let xml = raw_object(
+            "k",
+            "TrainAnnouncement",
+            "1.9",
+            None,
+            Some("<EQ name=\"LocationSignature\" value=\"U\"/>"),
+        );
+        assert!(xml.contains("<FILTER><EQ name=\"LocationSignature\" value=\"U\"/></FILTER>"));
+        assert!(!xml.contains("limit="));
+    }
+
+    #[test]
+    fn wrap_adds_the_login() {
+        let xml = wrap("k", "<QUERY objecttype=\"TrainStation\"/>");
+        assert_eq!(
+            xml,
+            "<REQUEST><LOGIN authenticationkey=\"k\"/><QUERY objecttype=\"TrainStation\"/></REQUEST>"
+        );
+    }
+
+    #[test]
+    fn wrap_replaces_a_request_and_login_already_written() {
+        let xml = wrap(
+            "k",
+            "<REQUEST><LOGIN authenticationkey=\"theirs\"/><QUERY objecttype=\"X\"/></REQUEST>",
+        );
+        assert_eq!(
+            xml,
+            "<REQUEST><LOGIN authenticationkey=\"k\"/><QUERY objecttype=\"X\"/></REQUEST>"
+        );
+        assert!(!xml.contains("theirs"));
+    }
+
+    #[test]
+    fn known_object_types_have_a_default_schema() {
+        assert_eq!(default_schema("TrainAnnouncement"), Some("1.9"));
+        assert_eq!(default_schema("TrainStation"), Some("1.4"));
+        assert_eq!(default_schema("RoadCondition"), None);
     }
 
     #[test]

@@ -41,15 +41,15 @@ pub struct TrainAnnouncement {
     /// The date the train left its origin. Together with the train number
     /// this identifies a run, which matters around midnight when the same
     /// number is in the air on two dates at once.
-    #[serde(rename = "ScheduledDepartureDate")]
+    #[serde(rename = "ScheduledDepartureDateTime")]
     pub scheduled_departure_date: Option<String>,
     #[serde(rename = "AdvertisedTimeAtLocation")]
     pub advertised: Option<DateTime<FixedOffset>>,
     /// The current forecast. Absent when the train is running to plan.
     #[serde(rename = "EstimatedTimeAtLocation")]
     pub estimated: Option<DateTime<FixedOffset>>,
-    /// When it actually happened. Set once the train has gone.
-    #[serde(rename = "ActualTimeAtLocation")]
+    /// When it actually happened. Set once the train has been and gone.
+    #[serde(rename = "TimeAtLocation")]
     pub actual: Option<DateTime<FixedOffset>>,
     #[serde(rename = "TrackAtLocation")]
     pub track: Option<String>,
@@ -165,7 +165,7 @@ mod tests {
     fn parses_an_announcement() {
         let json = r#"{
             "AdvertisedTrainIdent": "2137",
-            "ScheduledDepartureDate": "2026-09-10T00:00:00.000+02:00",
+            "ScheduledDepartureDateTime": "2026-09-10T00:00:00.000+02:00",
             "AdvertisedTimeAtLocation": "2026-09-10T09:12:00.000+02:00",
             "EstimatedTimeAtLocation": "2026-09-10T09:16:00.000+02:00",
             "TrackAtLocation": "3",

@@ -88,7 +88,7 @@ fn empty_response() -> String {
 fn stations_response() -> String {
     r#"{"RESPONSE":{"RESULT":[{"TrainStation":[
         {"LocationSignature":"U","AdvertisedLocationName":"Uppsala C"},
-        {"LocationSignature":"Cst","AdvertisedLocationName":"Stockholm Central"},
+        {"LocationSignature":"Cst","AdvertisedLocationName":"Stockholm C"},
         {"LocationSignature":"Gä","AdvertisedLocationName":"Gävle C"}
     ]}]}}"#
         .to_string()
@@ -268,7 +268,7 @@ fn reports_only_the_trains_the_ticket_covers() {
     let fixture = Fixture::new();
     let out = fixture.stdout(&[]);
 
-    assert!(out.contains("Uppsala C → Stockholm Central"), "{out}");
+    assert!(out.contains("Uppsala C → Stockholm C"), "{out}");
     assert!(out.contains("Mälartåg 2137"), "{out}");
     assert!(out.contains("track 3"), "{out}");
     assert!(out.contains("SJ Regional 634"), "{out}");
@@ -319,7 +319,7 @@ fn json_output_is_machine_readable() {
     let out = fixture.stdout(&["--json"]);
     let value: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(value["from"]["signature"], "U");
-    assert_eq!(value["to"]["name"], "Stockholm Central");
+    assert_eq!(value["to"]["name"], "Stockholm C");
     assert_eq!(value["journeys"][0]["train"], "2137");
     assert_eq!(value["journeys"][0]["coverage"], "covered");
     assert_eq!(value["journeys"][1]["train"], "634");
@@ -335,7 +335,7 @@ fn reverse_swaps_the_ends() {
     // reversed route finds nothing — which is itself the check that the
     // signatures were swapped.
     let out = fixture.stdout(&["--reverse"]);
-    assert!(out.contains("Stockholm Central → Uppsala C"), "{out}");
+    assert!(out.contains("Stockholm C → Uppsala C"), "{out}");
     assert!(out.contains("No departures to Uppsala C"), "{out}");
 }
 
@@ -368,8 +368,8 @@ fn the_station_list_is_cached_between_runs() {
 #[test]
 fn an_ad_hoc_route_takes_station_names() {
     let fixture = Fixture::new();
-    let out = fixture.stdout(&["--from", "Uppsala C", "--to", "Stockholm Central"]);
-    assert!(out.contains("Uppsala C → Stockholm Central"), "{out}");
+    let out = fixture.stdout(&["--from", "Uppsala C", "--to", "Stockholm C"]);
+    assert!(out.contains("Uppsala C → Stockholm C"), "{out}");
     // No route from the file, so no product filter: the fast train shows up.
     assert!(out.contains("SJ Snabbtåg 424"), "{out}");
 }

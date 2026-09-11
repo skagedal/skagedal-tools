@@ -9,13 +9,13 @@ and how late is it?*
 
 ```
 $ trafikverket
-Uppsala C → Stockholm Central · Thu 10 Sep 07:13 · Mälartåg, SJ Regional
+Uppsala C → Stockholm C · Fri 11 Sep 06:35 · Mälartåg, SJ Regional
 
-       in 5 min  07:19 → 07:58  Mälartåg 2137    track 3
-      in 32 min  07:46 → 08:27  SJ Regional 634  track 9  4 min late (timetabled 07:42)
-  in 1 h 35 min  08:49 → 09:28  Mälartåg 2141    track 3
+   in 4 min  06:40 → 07:17  Mälartåg 813    track 8a
+  in 24 min  07:00 → 07:37  Mälartåg 10961  track 8a
+  in 32 min  07:08 → 07:47  Mälartåg 915    track 4
 
-2 departures hidden (1 not covered, 1 cancelled) — pass --all to see them.
+4 departures hidden (4 not covered) — pass --all to see them.
 ```
 
 ## What it filters out
@@ -81,9 +81,7 @@ Signatures are the API's own, not guesses:
 
 ```console
 $ trafikverket stations uppsala
-U     Uppsala C
-Ualu  Uppsala Almunge
-…
+U  Uppsala C
 ```
 
 The list is cached under `~/.cache/skagedal-tools/trafikverket/` and refreshed
@@ -109,6 +107,7 @@ trafikverket [OPTIONS] [COMMAND]
 
   stations [QUERY]     list station signatures
   config [path|edit]   show or edit the configuration file
+  raw                  post a query and print the reply
 ```
 
 `--from`/`--to` name a route the configuration file says nothing about, so no
@@ -122,6 +121,34 @@ $ trafikverket --json | jq -r '.journeys[0] | "\(.products[0]) \(.train) at \(.d
 Mälartåg 2137 at 2026-09-10T07:19:00+02:00
 ```
 
+## Asking the API directly
+
+The API rejects a query that names a field the schema version does not have,
+and the field names are not always the obvious ones — the timetable date is
+`ScheduledDepartureDateTime`, and the time a train actually went is
+`TimeAtLocation`, not `ActualTimeAtLocation`. `raw` is how you find that out:
+it signs a query with your key, posts it, and prints the reply untouched.
+
+```console
+$ trafikverket raw --object TrainAnnouncement --limit 1 --pretty \
+      --filter '<EQ name="LocationSignature" value="U"/>'
+```
+
+With no `INCLUDE` in the query, the API answers with every field the object
+has, which is the list you want when something is called what you did not
+expect. `--object` knows the schema version for the types this tool uses;
+anything else needs `--schema`.
+
+For full control, write the `<QUERY>` yourself and pass it in a file, or on
+stdin with `-`. Any `<REQUEST>` wrapper or `<LOGIN>` element you include is
+replaced with one carrying your configured key, so a document copied out of
+the API documentation works as it stands:
+
+```console
+$ echo '<QUERY objecttype="TrainStation" schemaversion="1.4" limit="1"/>' |
+      trafikverket raw --query -
+```
+
 ## Notes
 
 Queries go to `https://api.trafikinfo.trafikverket.se/v2/data.json` as XML
@@ -131,3 +158,7 @@ arrivals at the destination — and lets the API's `$dateadd` decide the window,
 so a clock that disagrees with Trafikverket's does not shift the results.
 `$TRAFIKVERKET_API_ENDPOINT` points the client elsewhere, which is only useful
 for testing against a stub.
+
+A query the API rejects comes back as HTTP 400 carrying its own error object,
+which names the field it objects to. That message is what the tool reports,
+rather than the status line.

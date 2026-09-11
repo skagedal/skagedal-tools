@@ -22,6 +22,9 @@ pub enum Command {
     Stations(StationsArgs),
     /// Show or edit the configuration file
     Config(ConfigArgs),
+    /// Post a query to the API and print the reply, for finding out what the
+    /// API really calls things
+    Raw(RawArgs),
 }
 
 #[derive(Debug, Args)]
@@ -34,7 +37,7 @@ pub struct NextArgs {
     #[arg(long, value_name = "STATION", requires = "to")]
     pub from: Option<String>,
 
-    /// Destination: a signature such as Cst, or a name such as "Stockholm Central"
+    /// Destination: a signature such as Cst, or a name such as "Stockholm C"
     #[arg(long, value_name = "STATION", requires = "from")]
     pub to: Option<String>,
 
@@ -67,6 +70,34 @@ pub struct NextArgs {
     /// Print JSON instead of a table
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+#[command(group = clap::ArgGroup::new("what").required(true))]
+pub struct RawArgs {
+    /// Object type to dump every field of, e.g. TrainAnnouncement
+    #[arg(long, value_name = "TYPE", group = "what")]
+    pub object: Option<String>,
+
+    /// Read the <QUERY> document from a file, or from stdin with -
+    #[arg(long, value_name = "FILE", group = "what")]
+    pub query: Option<String>,
+
+    /// Schema version (defaults to the one this tool uses for known types)
+    #[arg(long, value_name = "VERSION", conflicts_with = "query")]
+    pub schema: Option<String>,
+
+    /// Ask for at most this many rows
+    #[arg(long, value_name = "N", conflicts_with = "query")]
+    pub limit: Option<u32>,
+
+    /// Filter elements to put inside <FILTER>, as XML
+    #[arg(long, value_name = "XML", conflicts_with = "query")]
+    pub filter: Option<String>,
+
+    /// Pretty-print the JSON reply
+    #[arg(long, short = 'p')]
+    pub pretty: bool,
 }
 
 #[derive(Debug, Args)]
@@ -219,6 +250,32 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(cli.next.products, vec!["Mälartåg", "SJ Regional"]);
+    }
+
+    #[test]
+    fn raw_needs_something_to_ask_for() {
+        assert!(Cli::try_parse_from(["trafikverket", "raw"]).is_err());
+        assert!(Cli::try_parse_from(["trafikverket", "raw", "--object", "TrainStation"]).is_ok());
+        assert!(Cli::try_parse_from(["trafikverket", "raw", "--query", "q.xml"]).is_ok());
+    }
+
+    #[test]
+    fn raw_cannot_mix_a_document_with_a_built_query() {
+        assert!(
+            Cli::try_parse_from([
+                "trafikverket",
+                "raw",
+                "--query",
+                "q.xml",
+                "--object",
+                "TrainStation"
+            ])
+            .is_err()
+        );
+        assert!(
+            Cli::try_parse_from(["trafikverket", "raw", "--query", "q.xml", "--limit", "1"])
+                .is_err()
+        );
     }
 
     #[test]

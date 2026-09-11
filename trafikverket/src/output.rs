@@ -350,7 +350,7 @@ mod tests {
             },
             to: Endpoint {
                 signature: "Cst",
-                name: "Stockholm Central",
+                name: "Stockholm C",
             },
             now: time("2026-09-10T09:10:00+02:00"),
             window_minutes: 180,
@@ -392,7 +392,7 @@ mod tests {
         let text = render(&report(&sel, &ticket), false);
         assert_eq!(
             text,
-            "Uppsala C → Stockholm Central · Thu 10 Sep 09:10 · Mälartåg, SJ Regional\n\
+            "Uppsala C → Stockholm C · Thu 10 Sep 09:10 · Mälartåg, SJ Regional\n\
              \n\
              \x20\x20 in 2 min  09:12 → 09:51  Mälartåg 2137    track 3\n\
              \x20\x20in 29 min  09:39 → 10:18  SJ Regional 634  track 9  4 min late (timetabled 09:35)\n"
@@ -454,9 +454,7 @@ mod tests {
         let sel = selection(vec![], Hidden::default());
         let text = render(&report(&sel, &ticket), false);
         assert!(
-            text.contains(
-                "No departures to Stockholm Central in the next 3 h that this ticket covers."
-            ),
+            text.contains("No departures to Stockholm C in the next 3 h that this ticket covers."),
             "{text}"
         );
     }
@@ -555,7 +553,7 @@ mod tests {
         let sel = selection(vec![j], Hidden::default());
         let value = render_json(&report(&sel, &ticket));
         assert_eq!(value["from"]["signature"], "U");
-        assert_eq!(value["to"]["name"], "Stockholm Central");
+        assert_eq!(value["to"]["name"], "Stockholm C");
         assert_eq!(value["journeys"][0]["train"], "2137");
         assert_eq!(value["journeys"][0]["coverage"], "covered");
         assert_eq!(value["journeys"][0]["departure"]["track"], "3");

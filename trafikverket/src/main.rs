@@ -17,7 +17,7 @@ mod query;
 mod stations;
 mod ticket;
 
-use cli::{Cli, Command, ConfigAction, ConfigArgs, NextArgs, StationsArgs};
+use cli::{Cli, Command, ConfigAction, ConfigArgs, NextArgs, RawArgs, StationsArgs};
 use config::Config;
 use ticket::Ticket;
 
@@ -35,6 +35,7 @@ async fn main() -> ExitCode {
     let result = match cli.command {
         Some(Command::Stations(args)) => run_stations(args).await,
         Some(Command::Config(args)) => run_config(args),
+        Some(Command::Raw(args)) => run_raw(args).await,
         None => run_next(cli.next).await,
     };
     match result {
@@ -146,6 +147,48 @@ async fn run_stations(args: StationsArgs) -> Result<()> {
         .unwrap_or(0);
     for station in hits {
         println!("{:width$}  {}", station.signature, station.name);
+    }
+    Ok(())
+}
+
+async fn run_raw(args: RawArgs) -> Result<()> {
+    let config = config::load(&config::config_path())?;
+    let client = api::Client::new(require_api_key(&config)?)?;
+
+    let body = match (&args.object, &args.query) {
+        (Some(objecttype), _) => {
+            let schema = match args.schema.as_deref() {
+                Some(schema) => schema.to_string(),
+                None => query::default_schema(objecttype)
+                    .with_context(|| {
+                        format!("no default schema version for {objecttype} — give --schema")
+                    })?
+                    .to_string(),
+            };
+            client
+                .raw_object(objecttype, &schema, args.limit, args.filter.as_deref())
+                .await?
+        }
+        (None, Some(path)) => {
+            let document = if path == "-" {
+                std::io::read_to_string(std::io::stdin())
+                    .context("could not read the query from stdin")?
+            } else {
+                std::fs::read_to_string(path).with_context(|| format!("could not read {path}"))?
+            };
+            client.raw(&document).await?
+        }
+        // clap's argument group makes one of the two mandatory.
+        (None, None) => unreachable!("--object or --query is required"),
+    };
+
+    if args.pretty {
+        match serde_json::from_str::<serde_json::Value>(&body) {
+            Ok(value) => println!("{}", serde_json::to_string_pretty(&value)?),
+            Err(_) => println!("{body}"),
+        }
+    } else {
+        println!("{body}");
     }
     Ok(())
 }

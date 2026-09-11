@@ -186,7 +186,7 @@ mod tests {
             fetched_at: Utc::now(),
             stations: vec![
                 station("U", "Uppsala C"),
-                station("Cst", "Stockholm Central"),
+                station("Cst", "Stockholm C"),
                 station("Sci", "Stockholm City"),
                 station("Arnc", "Arlanda C"),
                 station("Knä", "Knivsta"),
@@ -196,16 +196,19 @@ mod tests {
 
     #[test]
     fn resolves_a_signature_regardless_of_case() {
-        assert_eq!(sample().resolve("cst").unwrap().name, "Stockholm Central");
+        assert_eq!(sample().resolve("cst").unwrap().name, "Stockholm C");
         assert_eq!(sample().resolve("U").unwrap().name, "Uppsala C");
     }
 
     #[test]
+    fn an_exact_name_wins_over_the_longer_names_it_prefixes() {
+        // "Stockholm C" is also the start of "Stockholm City".
+        assert_eq!(sample().resolve("Stockholm C").unwrap().signature, "Cst");
+    }
+
+    #[test]
     fn resolves_an_exact_name() {
-        assert_eq!(
-            sample().resolve("Stockholm Central").unwrap().signature,
-            "Cst"
-        );
+        assert_eq!(sample().resolve("Stockholm C").unwrap().signature, "Cst");
         assert_eq!(sample().resolve("  uppsala   c ").unwrap().signature, "U");
     }
 
@@ -219,7 +222,7 @@ mod tests {
     fn an_ambiguous_name_lists_the_candidates() {
         let err = sample().resolve("stockholm").unwrap_err();
         let text = format!("{err:#}");
-        assert!(text.contains("Stockholm Central (Cst)"), "{text}");
+        assert!(text.contains("Stockholm C (Cst)"), "{text}");
         assert!(text.contains("Stockholm City (Sci)"), "{text}");
     }
 

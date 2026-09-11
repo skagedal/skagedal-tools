@@ -61,7 +61,39 @@ impl Client {
         Ok(results.into_iter().flat_map(|r| r.train_stations).collect())
     }
 
+    /// Post a `<QUERY>` (or a whole `<REQUEST>`) and hand back the response
+    /// body as it came, without interpreting it. For working out what the API
+    /// really calls things.
+    pub async fn raw(&self, document: &str) -> Result<String> {
+        self.send(query::wrap(&self.api_key, document)).await
+    }
+
+    /// Every field of an object type, which is the question `raw` exists for.
+    pub async fn raw_object(
+        &self,
+        objecttype: &str,
+        schema: &str,
+        limit: Option<u32>,
+        filter: Option<&str>,
+    ) -> Result<String> {
+        self.send(query::raw_object(
+            &self.api_key,
+            objecttype,
+            schema,
+            limit,
+            filter,
+        ))
+        .await
+    }
+
     async fn post(&self, body: String) -> Result<Vec<ResultItem>> {
+        let text = self.send(body).await?;
+        parse_response(&text)
+    }
+
+    /// Post a document and return the response body. An API error in the body
+    /// is raised here; anything else is left for the caller to make sense of.
+    async fn send(&self, body: String) -> Result<String> {
         let response = self
             .http
             .post(&self.endpoint)
@@ -86,10 +118,16 @@ impl Client {
                 crate::config::API_KEY_ENV
             );
         }
-        if !status.is_success() {
-            bail!("{} returned {status}: {}", self.endpoint, excerpt(&text));
+        // A rejected query comes back as 400 carrying the API's own ERROR
+        // object, which names the field it objects to. That says far more than
+        // the status line, so a JSON body is read first either way.
+        if text.trim_start().starts_with('{') {
+            parse_response(&text)?;
+            if status.is_success() {
+                return Ok(text);
+            }
         }
-        parse_response(&text)
+        bail!("{} returned {status}: {}", self.endpoint, excerpt(&text))
     }
 }
 
@@ -97,18 +135,24 @@ impl Client {
 pub fn parse_response(text: &str) -> Result<Vec<ResultItem>> {
     let parsed: ApiResponse = serde_json::from_str(text)
         .with_context(|| format!("could not parse the API response: {}", excerpt(text)))?;
-    for item in &parsed.response.result {
-        if let Some(error) = &item.error {
-            let message = error.message.as_deref().unwrap_or("no message given");
-            return match error.source.as_deref() {
-                Some(source) => Err(anyhow!(
-                    "Trafikverket rejected the query ({source}): {message}"
-                )),
-                None => Err(anyhow!("Trafikverket rejected the query: {message}")),
-            };
-        }
+    match first_error(&parsed) {
+        Some(error) => Err(error),
+        None => Ok(parsed.response.result),
     }
-    Ok(parsed.response.result)
+}
+
+/// The first error the API reported, if it reported one.
+fn first_error(parsed: &ApiResponse) -> Option<anyhow::Error> {
+    let error = parsed
+        .response
+        .result
+        .iter()
+        .find_map(|r| r.error.as_ref())?;
+    let message = error.message.as_deref().unwrap_or("no message given");
+    Some(match error.source.as_deref() {
+        Some(source) => anyhow!("Trafikverket rejected the query ({source}): {message}"),
+        None => anyhow!("Trafikverket rejected the query: {message}"),
+    })
 }
 
 /// A short, single-line sample of a response body, for error messages.
