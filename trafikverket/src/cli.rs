@@ -54,7 +54,7 @@ pub struct NextArgs {
     pub any_product: bool,
 
     /// How many departures to show
-    #[arg(long, short = 'n', value_name = "N", default_value_t = 3,
+    #[arg(long, short = 'n', value_name = "N", default_value_t = 10,
           value_parser = clap::value_parser!(u32).range(1..=50))]
     pub count: u32,
 
@@ -209,10 +209,10 @@ mod tests {
     }
 
     #[test]
-    fn defaults_are_a_three_hour_window_and_three_departures() {
+    fn defaults_are_a_three_hour_window_and_ten_departures() {
         let cli = Cli::try_parse_from(["trafikverket"]).unwrap();
         assert_eq!(cli.next.window, 180);
-        assert_eq!(cli.next.count, 3);
+        assert_eq!(cli.next.count, 10);
         assert!(!cli.next.all);
     }
 

@@ -9,19 +9,24 @@ and how late is it?*
 
 ```
 $ trafikverket
-Uppsala C → Stockholm C · Fri 11 Sep 06:35 · Mälartåg, SJ Regional
+Uppsala C → Stockholm C · Fri 11 Sep 06:44 · Mälartåg, SJ Regional
 
-   in 4 min  06:40 → 07:17  Mälartåg 813    track 8a
-  in 24 min  07:00 → 07:37  Mälartåg 10961  track 8a
-  in 32 min  07:08 → 07:47  Mälartåg 915    track 4
+      in 15 min  07:00 → 07:37  Mälartåg 10961  track 8a
+      in 23 min  07:08 → 07:47  Mälartåg 915    track 4
+      in 45 min  07:30 → 08:07  Mälartåg 10963  track 8a
+      in 55 min  07:40 → 08:19  Mälartåg 817    track 4
+   in 1 h 4 min  07:49 → 08:33  Mälartåg 10965  track 7
+  in 1 h 25 min  08:10 → 08:49  Mälartåg 919    track 4
+  in 1 h 59 min  08:44 → 09:22  Mälartåg 821    track 4
+  in 2 h 24 min  09:09 → 09:46  Mälartåg 925    track 7a
+  in 2 h 59 min  09:44 → 10:21  Mälartåg 825    track 4
 
 4 departures hidden (4 not covered) — pass --all to see them.
-5 more within 3 h — raise -n to see them.
 ```
 
-It shows three departures by default and says how many more it had. Both
-footer lines name the flag that brings the rest back, so a wider `--window`
-never looks like it did nothing.
+Whatever the tool leaves out, it says so and names the flag that brings it
+back: `--all` for the cancelled and uncovered ones, `-n` for departures beyond
+the count, `-w` for a longer reach.
 
 ## What it filters out
 
@@ -105,7 +110,7 @@ trafikverket [OPTIONS] [COMMAND]
   -r, --reverse        travel the other way
   --product <NAME>     a product the ticket covers; repeat for several
   --any-product        report every train, whatever its product
-  -n, --count <N>      how many departures to show (default 3)
+  -n, --count <N>      how many departures to show (default 10)
   -w, --window <DUR>   how far ahead to look: 45m, 3h, 1h30m (default 3h)
   -a, --all            include cancelled and uncovered departures
   --json               print JSON instead of a table
