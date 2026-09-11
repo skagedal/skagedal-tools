@@ -17,6 +17,7 @@ members = [
     "skagedal-dirs",
     "sync-brewfile",
     "tracker",
+    "trafikverket",
     "x-java-home",
 ]
 
@@ -58,6 +59,7 @@ plist = "*"
 ratatui = "*"
 rayon = "*"
 regex = "*"
+reqwest = { version = "*", default-features = false, features = ["rustls", "json", "charset", "http2", "system-proxy"] }
 semver = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"

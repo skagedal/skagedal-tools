@@ -28,4 +28,5 @@ A collection of small tools.
 | [chrome-page-notes](chrome-page-notes/) | Chrome extension for attaching your own notes to a page |
 | [appicon-generator](appicon-generator/) | Generates placeholder app icons from an emoji, for Xcode and Flutter projects |
 | [jikido](jikido/) | Zazen timer for iOS and Android: three strikes of the bell, a silent period, two strikes to close |
+| [trafikverket](trafikverket/) | The next trains between two stations, with live delays, filtered to the ones your ticket covers |
 | [skagedal-dirs](skagedal-dirs/) | Shared library: the XDG config/data/cache directories every tool stores its files in |
