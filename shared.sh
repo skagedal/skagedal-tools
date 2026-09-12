@@ -56,8 +56,8 @@ SWIFT_TOOLS=(
     "${INSTALLED_SWIFT_TOOLS[@]}"
 )
 
-# Flutter apps. Not installable — they get built onto a phone, not into
-# ~/.cargo/bin — so they only show up in ./check and ./update.
+# Flutter apps. They go onto a phone rather than into ~/.cargo/bin, so
+# ./install skips them and ./install-to-mobile is what puts them there.
 FLUTTER_TOOLS=(
     jikido
 )
