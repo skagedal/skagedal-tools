@@ -19,9 +19,29 @@ main() {
     for tool in "${FLUTTER_TOOLS[@]}"; do
         update-flutter "$tool"
     done
+    update-actions
     echo "==> Dependency changes"
     show-dependency-changes
     echo "==> Done"
+}
+
+# pinact rewrites every `uses:` in .github/workflows to the commit SHA its
+# tag points at, keeping the version in a trailing comment, and honours the
+# three-day min_age in .pinact.yaml. Exit 1 means it found something to pin
+# and 2 that something needs a person to decide; neither is a reason to stop
+# the rest of the run.
+#
+# Unauthenticated GitHub API calls are capped at 60 an hour, which one run
+# can get through, so lend it the gh token when there is one.
+update-actions() {
+    echo "==> Updating GitHub Actions"
+    if [[ -z "${PINACT_GITHUB_TOKEN:-}" && -z "${GITHUB_TOKEN:-}" ]] &&
+        command -v gh >/dev/null 2>&1; then
+        PINACT_GITHUB_TOKEN="$(gh auth token 2>/dev/null || true)"
+        [[ -n "$PINACT_GITHUB_TOKEN" ]] && export PINACT_GITHUB_TOKEN
+    fi
+    (cd "$SCRIPT_DIR" && pinact run --update) ||
+        echo "    pinact exited $?, see above"
 }
 
 # Capture git-pkgs output sequentially, then feed it into the formatter only
