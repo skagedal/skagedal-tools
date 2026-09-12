@@ -19,9 +19,41 @@ main() {
     for tool in "${FLUTTER_TOOLS[@]}"; do
         update-flutter "$tool"
     done
+    update-actions
     echo "==> Dependency changes"
     show-dependency-changes
     echo "==> Done"
+}
+
+# pinact rewrites every `uses:` in .github/workflows to the commit SHA its
+# tag points at, keeping the version in a trailing comment, and honours the
+# three-day min_age in .pinact.yaml. Exit 1 means it found something to pin
+# and 2 that something needs a person to decide; neither is a reason to stop
+# the rest of the run.
+#
+# Unauthenticated GitHub API calls are capped at 60 an hour, which one run
+# can get through, so lend it the gh token when there is one.
+update-actions() {
+    echo "==> Updating GitHub Actions"
+    if [[ -z "${PINACT_GITHUB_TOKEN:-}" && -z "${GITHUB_TOKEN:-}" ]] &&
+        command -v gh >/dev/null 2>&1; then
+        PINACT_GITHUB_TOKEN="$(gh auth token 2>/dev/null || true)"
+        [[ -n "$PINACT_GITHUB_TOKEN" ]] && export PINACT_GITHUB_TOKEN
+    fi
+    (cd "$SCRIPT_DIR" && pinact run --update) ||
+        echo "    pinact exited $?, see above"
+}
+
+# git-pkgs keeps its index in .git/pkgs.sqlite3 and leaves creating it to the
+# caller. An index written by an older git-pkgs is worse than none: its schema
+# is one the current binary cannot write to, and that surfaces only at diff
+# time, as "table dependency_snapshots has no column named direct". Both
+# commands below do nothing when there is nothing to do, so running them every
+# time is the cheap way to never think about it again. --no-hooks keeps
+# git-pkgs from installing post-commit and post-merge hooks behind your back;
+# this repository already has a pair from an earlier `git pkgs init`.
+pkgs-index-ready() {
+    git pkgs init --no-hooks -q && git pkgs upgrade -q
 }
 
 # Capture git-pkgs output sequentially, then feed it into the formatter only
@@ -37,6 +69,10 @@ main() {
 # branch of this can be dropped and we can go back to a simple pipe.
 show-dependency-changes() {
     cd "$SCRIPT_DIR"
+    if ! pkgs-index-ready; then
+        echo "(could not prepare .git/pkgs.sqlite3 — skipping)"
+        return 0
+    fi
     local diff_json
     if ! diff_json="$(git pkgs diff --format=json 2>&1)"; then
         echo "(git pkgs diff failed — skipping)"

@@ -7,6 +7,7 @@
 //! stdout — so it stays out of `ps` output.
 
 use std::io::Write;
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
@@ -83,7 +84,8 @@ pub fn set(key: &str) -> Result<()> {
 
 fn set_in(service: &str, key: &str) -> Result<()> {
     require_keychain()?;
-    let mut child = Command::new(SECURITY)
+    let mut command = Command::new(SECURITY);
+    command
         .args([
             "add-generic-password",
             "-s",
@@ -100,7 +102,9 @@ fn set_in(service: &str, key: &str) -> Result<()> {
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    detach_from_terminal(&mut command);
+    let mut child = command
         .spawn()
         .with_context(|| format!("could not run {SECURITY}"))?;
     {
@@ -143,6 +147,20 @@ fn delete_in(service: &str) -> Result<bool> {
         );
     }
     Ok(true)
+}
+
+/// `security` asks for the passphrase with `readpassphrase`, which takes it
+/// from `/dev/tty` whenever there is one and never looks at the stdin we piped
+/// it — so run from a terminal it would block on a prompt forever. Its own
+/// session leaves it no terminal to ask on, and it falls back to stdin.
+fn detach_from_terminal(command: &mut Command) {
+    unsafe {
+        command.pre_exec(|| {
+            // Fails only for a session leader, which a fresh child is not.
+            libc::setsid();
+            Ok(())
+        });
+    }
 }
 
 fn require_keychain() -> Result<()> {
@@ -193,9 +211,16 @@ mod tests {
 
     /// The point of the module is the three `security` invocations, so the
     /// one test worth having runs them. It files its item under a service
-    /// name nothing else uses, so the real key is never in reach.
+    /// name nothing else uses, so the real key is never in reach — but it is
+    /// still the login keychain it writes to, which is no business of an
+    /// ordinary `cargo test`. Hence ignored by default. Run it deliberately:
+    ///
+    /// ```text
+    /// cargo test -p trafikverket keychain -- --ignored
+    /// ```
     #[test]
     #[cfg(target_os = "macos")]
+    #[ignore = "writes to the real login keychain; run with --ignored"]
     fn a_key_survives_a_round_trip_through_the_keychain() {
         let service = format!("trafikverket-test-{}", std::process::id());
         // Whatever happened last time, start from nothing.

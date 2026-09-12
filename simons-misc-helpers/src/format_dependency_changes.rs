@@ -101,12 +101,22 @@ pub fn write_dependency_changes(
         }
     };
 
-    let (major, minor): (Vec<&DependencyChange>, Vec<&DependencyChange>) =
-        changes.modified.iter().partition(|c| {
-            let from = c.from_requirement.as_deref().unwrap_or("");
-            let to = c.to_requirement.as_deref().unwrap_or("");
-            matches!(is_major_bump(from, to), Some(true))
-        });
+    // Three buckets, not two. A change whose versions don't parse says nothing
+    // about how big it is, and folding those in with the minor ones asserts
+    // something we don't know: a GitHub Action pinned to a commit SHA moving
+    // v6 -> v7 is a major bump wearing two opaque strings.
+    let mut major: Vec<&DependencyChange> = Vec::new();
+    let mut minor: Vec<&DependencyChange> = Vec::new();
+    let mut indeterminate: Vec<&DependencyChange> = Vec::new();
+    for c in &changes.modified {
+        let from = c.from_requirement.as_deref().unwrap_or("");
+        let to = c.to_requirement.as_deref().unwrap_or("");
+        match is_major_bump(from, to) {
+            Some(true) => major.push(c),
+            Some(false) => minor.push(c),
+            None => indeterminate.push(c),
+        }
+    }
 
     let write_modified_line =
         |w: &mut dyn Write, c: &DependencyChange, highlight_to: bool| -> io::Result<()> {
@@ -163,6 +173,17 @@ pub fn write_dependency_changes(
         }
         writeln!(w, "{}", bold("Modified (minor version updates):"))?;
         for c in &minor {
+            write_modified_line(w, c, false)?;
+        }
+        wrote_section = true;
+    }
+
+    if !indeterminate.is_empty() {
+        if wrote_section {
+            writeln!(w)?;
+        }
+        writeln!(w, "{}", bold("Modified (indeterminate version updates):"))?;
+        for c in &indeterminate {
             write_modified_line(w, c, false)?;
         }
         wrote_section = true;
