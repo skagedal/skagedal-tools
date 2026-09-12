@@ -42,10 +42,6 @@ RUST_TOOLS=(
     "${NOT_INSTALLED_RUST_TOOLS[@]}"
 )
 
-MAVEN_TOOLS=(
-    git-repos-latest-activity
-)
-
 # Swift packages. macOS-only — appicon-generator draws through AppKit and Core
 # Text — so ./check skips them anywhere else, and CI runs them on a separate
 # macOS job.
@@ -158,12 +154,6 @@ update-swift() {
     (cd "$SCRIPT_DIR/$dir" && swift package update)
 }
 
-check-maven() {
-    local dir="$1"
-    echo "==> Checking $dir"
-    (cd "$SCRIPT_DIR/$dir" && mvn --batch-mode test)
-}
-
 # Runs the Flutter SDK version the app pins in its .fvmrc. Locally that means
 # going through fvm; CI installs the pinned version onto PATH instead (see
 # .github/workflows/tests.yml), where there is no fvm and plain flutter is
@@ -234,12 +224,6 @@ update-rust() {
 update-rust-workspace() {
     echo "==> Updating Rust workspace"
     (cd "$SCRIPT_DIR" && cargo update)
-}
-
-update-maven() {
-    local dir="$1"
-    echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && mvn versions:use-latest-releases)
 }
 
 update-flutter() {
