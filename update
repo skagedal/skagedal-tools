@@ -44,6 +44,18 @@ update-actions() {
         echo "    pinact exited $?, see above"
 }
 
+# git-pkgs keeps its index in .git/pkgs.sqlite3 and leaves creating it to the
+# caller. An index written by an older git-pkgs is worse than none: its schema
+# is one the current binary cannot write to, and that surfaces only at diff
+# time, as "table dependency_snapshots has no column named direct". Both
+# commands below do nothing when there is nothing to do, so running them every
+# time is the cheap way to never think about it again. --no-hooks keeps
+# git-pkgs from installing post-commit and post-merge hooks behind your back;
+# this repository already has a pair from an earlier `git pkgs init`.
+pkgs-index-ready() {
+    git pkgs init --no-hooks -q && git pkgs upgrade -q
+}
+
 # Capture git-pkgs output sequentially, then feed it into the formatter only
 # if we got JSON. Avoids two failure modes:
 #   * Piping directly runs both processes concurrently, so a `git pkgs diff`
@@ -57,6 +69,10 @@ update-actions() {
 # branch of this can be dropped and we can go back to a simple pipe.
 show-dependency-changes() {
     cd "$SCRIPT_DIR"
+    if ! pkgs-index-ready; then
+        echo "(could not prepare .git/pkgs.sqlite3 — skipping)"
+        return 0
+    fi
     local diff_json
     if ! diff_json="$(git pkgs diff --format=json 2>&1)"; then
         echo "(git pkgs diff failed — skipping)"
