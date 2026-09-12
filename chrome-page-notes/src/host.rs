@@ -1,14 +1,11 @@
-//! Native messaging host for the chrome-page-notes extension.
+//! The native messaging host itself: the stdin/stdout message loop Chrome
+//! talks to.
 //!
-//! Chrome spawns this process per `chrome.runtime.sendNativeMessage` call
-//! and talks to it over stdin/stdout using length-prefixed JSON: each
+//! Chrome spawns the host process per `chrome.runtime.sendNativeMessage`
+//! call and talks to it over stdin/stdout using length-prefixed JSON: each
 //! message is preceded by its byte length as a 32-bit integer in native
 //! byte order. See
 //! <https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging>.
-
-mod cli;
-mod config;
-mod notes;
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
@@ -18,8 +15,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-/// Name of this tool's directory under the XDG roots (see `skagedal-dirs`).
-pub(crate) const TOOL: &str = "chrome-page-notes";
+use crate::TOOL;
+use crate::{config, notes, obsidian};
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -39,7 +36,7 @@ enum Request {
     OpenApp,
 }
 
-fn log_path() -> PathBuf {
+pub fn log_path() -> PathBuf {
     skagedal_dirs::data_dir(TOOL).join("host.log")
 }
 
@@ -130,13 +127,14 @@ fn handle(request: Request, cfg: &Result<config::Config>) -> serde_json::Value {
             }
         }
         Request::OpenApp => {
-            cli::activate_app();
+            obsidian::activate_app();
             json!({"status": "ok"})
         }
     }
 }
 
-fn main() {
+/// Serves messages until Chrome closes the pipe.
+pub fn run() {
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
     let cfg = config::load();

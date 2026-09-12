@@ -16,6 +16,7 @@ NODE_TOOLS=(
 
 INSTALLED_RUST_TOOLS=(
     assistant
+    chrome-page-notes
     cloudwatch-insights
     disky
     gh-pr
