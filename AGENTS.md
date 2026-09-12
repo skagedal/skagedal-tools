@@ -2,6 +2,14 @@
 
 When working on this repository, please follow these guidelines:
 
+## Specs
+
+Changes too big for a GitHub issue — ones that reach past a single tool,
+or whose interesting part is a decision — get a written spec under
+`specs/`, drafted in `specs/drafts/` and numbered into
+`specs/implemented/` when they ship. See `specs/README.md` for when to
+write one, how, and why a numbered spec is never rewritten afterwards.
+
 ## Tools Table Maintenance
 
 The README.md file contains a table listing all tools in the repository. **This table must be kept up-to-date** whenever:
