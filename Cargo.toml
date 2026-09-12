@@ -48,6 +48,7 @@ dirs = "*"
 filetime = "*"
 flexi_logger = "*"
 include_dir = "*"
+libc = "*"
 indexmap = { version = "*", features = ["serde"] }
 log = "*"
 node-semver = "*"
