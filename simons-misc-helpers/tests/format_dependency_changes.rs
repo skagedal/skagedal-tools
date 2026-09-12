@@ -22,7 +22,7 @@ Modified (major version updates):
   ~ clap_lex 0.2.4 -> 1.1.0 (Cargo.lock)
   ~ strsim 0.10.0 -> 0.11.1 (Cargo.lock)
 
-Modified (minor version updates):
+Modified (indeterminate version updates):
   ~ clap 3 -> * (Cargo.toml)
 
 Removed:
@@ -61,7 +61,7 @@ fn formats_fixture_with_color_emits_ansi_codes() {
     // Bold section headers (crossterm: \x1b[1m...\x1b[0m).
     assert!(actual.contains("\x1b[1mAdded:\x1b[0m"));
     assert!(actual.contains("\x1b[1mModified (major version updates):\x1b[0m"));
-    assert!(actual.contains("\x1b[1mModified (minor version updates):\x1b[0m"));
+    assert!(actual.contains("\x1b[1mModified (indeterminate version updates):\x1b[0m"));
     assert!(actual.contains("\x1b[1mRemoved:\x1b[0m"));
     // Green for added (crossterm Stylize::green: \x1b[38;5;10m...\x1b[39m).
     assert!(actual.contains("\x1b[38;5;10m+\x1b[39m"));
@@ -141,7 +141,7 @@ fn only_minor_section_appears_when_no_major_bumps() {
 }
 
 #[test]
-fn unparseable_versions_classified_as_minor() {
+fn unparseable_versions_are_indeterminate() {
     let json = r#"{
         "added": [],
         "modified": [
@@ -160,8 +160,38 @@ fn unparseable_versions_classified_as_minor() {
     let mut out = Vec::new();
     write_dependency_changes(&mut out, &changes, false).unwrap();
     let actual = String::from_utf8(out).unwrap();
-    assert!(actual.contains("Modified (minor version updates):"));
+    assert!(actual.contains("Modified (indeterminate version updates):"));
+    assert!(!actual.contains("Modified (minor version updates):"));
     assert!(!actual.contains("Modified (major version updates):"));
+}
+
+/// The case this bucket exists for: git-pkgs reports a SHA-pinned action as a
+/// change between two commit hashes, dropping the `# v7.0.1` comment pinact
+/// writes next to them. Nothing in that pair says whether a major bound was
+/// crossed, and this one did cross v6 -> v7.
+#[test]
+fn sha_pinned_github_action_is_indeterminate() {
+    let json = r#"{
+        "added": [],
+        "modified": [
+            {
+                "name": "actions/checkout",
+                "ecosystem": "github-actions",
+                "manifest_path": ".github/workflows/tests.yml",
+                "dependency_type": "runtime",
+                "from_requirement": "fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+                "to_requirement": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+            }
+        ],
+        "removed": []
+    }"#;
+    let changes: DependencyChanges = serde_json::from_str(json).unwrap();
+    let mut out = Vec::new();
+    write_dependency_changes(&mut out, &changes, false).unwrap();
+    let actual = String::from_utf8(out).unwrap();
+    assert!(actual.starts_with("Modified (indeterminate version updates):\n"));
+    assert!(actual.contains("actions/checkout"));
+    assert!(!actual.contains("Modified (minor version updates):"));
 }
 
 #[test]
