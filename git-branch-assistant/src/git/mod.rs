@@ -26,6 +26,12 @@ pub struct BranchCommitInfo {
     pub committer: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct RepoCommitInfo {
+    pub commit_timestamp: i64,
+    pub commit_date: String,
+}
+
 impl Branch {
     pub fn needs_action(&self) -> bool {
         self.upstream
@@ -133,6 +139,23 @@ impl GitRepo {
             );
         }
         Ok(map)
+    }
+
+    /// The commit HEAD points at, as a unix timestamp for sorting and an ISO
+    /// 8601 string for display. Fails in a directory that is not a git
+    /// repository, or in one without any commits.
+    pub fn latest_commit_info(&self) -> Result<RepoCommitInfo> {
+        let output = self.run_and_capture("git", &["log", "-1", "--format=%ct|%cI"])?;
+        let line = output.trim();
+        let (timestamp, date) = line
+            .split_once('|')
+            .ok_or_else(|| anyhow!("unexpected output from git log: {line}"))?;
+        Ok(RepoCommitInfo {
+            commit_timestamp: timestamp
+                .parse()
+                .with_context(|| format!("failed to parse committer timestamp: {timestamp}"))?,
+            commit_date: date.to_string(),
+        })
     }
 
     pub fn push(&self, refname: &str) -> Result<()> {

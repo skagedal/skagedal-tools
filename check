@@ -10,9 +10,6 @@ main() {
         check-node "$tool"
     done
     check-rust-workspace
-    for tool in "${MAVEN_TOOLS[@]}"; do
-        check-maven "$tool"
-    done
     for tool in "${SWIFT_TOOLS[@]}"; do
         check-swift "$tool"
     done

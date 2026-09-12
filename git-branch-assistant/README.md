@@ -164,6 +164,19 @@ without changing anything.
 
 After confirming, selected branches are processed in turn. If any branches were left unselected they remain in the list and the picker re-opens; otherwise the flow moves on to the next state group.
 
+## Repository activity
+
+The `git-branch-assistant activity` command lists the git repositories directly under each given directory, sorted by the date of their latest commit, oldest first. With no arguments it scans the current directory.
+
+```
+$ git-branch-assistant activity ~/aira ~/code
+2020-08-10T15:26:29+02:00  /Users/simon/code/simons-things
+2023-02-13T13:34:21+01:00  /Users/simon/code/normalscore
+2026-07-30T16:29:29+02:00  /Users/simon/code/bonband
+```
+
+Unlike `repos --list`, this is a per-repository view rather than a per-branch one: it reports the commit `HEAD` points at, read with `git log -1`. Subdirectories that are not git repositories, and repositories without any commits, are skipped.
+
 ---
 
 [^1]: See for example [myrepos](https://myrepos.branchable.com/) and its list of [related tools](https://myrepos.branchable.com/related/)

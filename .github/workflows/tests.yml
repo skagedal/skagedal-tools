@@ -22,11 +22,6 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: '**/pnpm-lock.yaml'
-      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: maven
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           # The version jikido pins with fvm, so CI and local builds agree.
@@ -38,7 +33,7 @@ jobs:
   # appicon-generator draws through AppKit and Core Text, so it can only be
   # built and tested on macOS. Kept as its own job rather than moving the whole
   # check onto a macOS runner, which is slower and more expensive for the Rust,
-  # Node, Java and Flutter tools that do not need it.
+  # Node and Flutter tools that do not need it.
   check-swift:
     runs-on: macos-latest
     steps:

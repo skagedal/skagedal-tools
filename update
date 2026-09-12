@@ -10,9 +10,6 @@ main() {
     for tool in "${NODE_TOOLS[@]}"; do
         update-node "$tool"
     done
-    for tool in "${MAVEN_TOOLS[@]}"; do
-        update-maven "$tool"
-    done
     for tool in "${SWIFT_TOOLS[@]}"; do
         update-swift "$tool"
     done

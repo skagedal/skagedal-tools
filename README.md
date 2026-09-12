@@ -7,9 +7,8 @@ A collection of small tools.
 | Tool | Description |
 |------|-------------|
 | [assistant](assistant/) | Drives a daily routine by running configured tasks when they're due |
-| [git-branch-assistant](git-branch-assistant/) | Interactively syncs local git branches with their upstreams across one or many repos |
+| [git-branch-assistant](git-branch-assistant/) | Interactively syncs local git branches with their upstreams across one or many repos, and lists repos by latest commit |
 | [git-dirty-checker](git-dirty-checker/) | Checks git repositories for uncommitted changes |
-| [git-repos-latest-activity](git-repos-latest-activity/) | Lists git repositories sorted by date of latest commit |
 | [log-jsonify](log-jsonify/) | Processes JSONL streams, wrapping non-JSON lines in JSON envelopes |
 | [log-viewer](log-viewer/) | View JSONL logs in a TUI or in a webview-embedded React app, with vi-like navigation and JSON drill-down |
 | [comparison-typescript-cli-arguments](comparison-typescript-cli-arguments/) | Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript |

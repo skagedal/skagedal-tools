@@ -57,6 +57,11 @@ enum Command {
         #[arg(long, conflicts_with_all = ["list", "interactive", "dry"])]
         bulk: bool,
     },
+    /// List git repositories sorted by the date of their latest commit, oldest first.
+    Activity {
+        /// Directories to scan for git repositories (defaults to current directory)
+        paths: Vec<PathBuf>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -76,6 +81,7 @@ fn main() -> Result<()> {
                 commands::git_repos::run(path, dry, skip_dirty_repos, list, interactive, bulk)?;
             std::process::exit(exit_code);
         }
+        Command::Activity { paths } => commands::repo_activity::run(paths)?,
     }
 
     Ok(())
