@@ -3,7 +3,7 @@ use crate::document::Line::{self, OpenShift};
 use crate::document::{Day, Document, Parser};
 use crate::duration::{format_duration, format_signed_duration};
 use crate::paths::TrackerDirs;
-use crate::report::Report;
+use crate::report::{Report, closing_balance};
 use chrono::{Datelike, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 use std::env;
 use std::fs::OpenOptions;
@@ -28,15 +28,7 @@ impl Tracker {
             Some(time_str) => self.parse_time(&time_str),
             None => self.now.time(),
         };
-        let path_buf = if self.config.experimental_features.auto_transfer_balance {
-            week_tracker_file_create_if_needed_with_transfer(
-                date.iso_week(),
-                self.week_tracker_file(date),
-                self.week_to_transfer_from(date),
-            )
-        } else {
-            week_tracker_file_create_if_needed(date.iso_week(), self.week_tracker_file(date))
-        };
+        let path_buf = self.week_file_created_if_needed(date);
         let document = self
             .read_document(date.iso_week(), path_buf.as_path())
             .unwrap_or_else(|err| {
@@ -129,16 +121,12 @@ impl Tracker {
 
     pub fn show_weekfile_path(&self) {
         let date = self.now.date();
-        let path =
-            week_tracker_file_create_if_needed(date.iso_week(), self.week_tracker_file(date));
+        let path = self.week_file_created_if_needed(date);
         println!("{}", path.display());
     }
 
     pub fn edit_file(&self) {
-        let path = week_tracker_file_create_if_needed(
-            self.now.iso_week(),
-            self.week_tracker_file(self.now.date()),
-        );
+        let path = self.week_file_created_if_needed(self.now.date());
 
         let editor = env::var("EDITOR").unwrap();
         Command::new(editor)
@@ -148,10 +136,7 @@ impl Tracker {
     }
 
     pub fn show_report(&self, is_working: bool) {
-        let path = week_tracker_file_create_if_needed(
-            self.active_week(self.now.date()),
-            self.week_tracker_file(self.now.date()),
-        );
+        let path = self.week_file_created_if_needed(self.now.date());
         let result = fs::read_to_string(path);
         match result {
             Ok(content) => self.process_report_of_content(content, self.now, is_working),
@@ -165,13 +150,50 @@ impl Tracker {
             .unwrap_or_else(|| self.week_tracker_file_for_date(date, self.weekdiff))
     }
 
-    // transfer only happens from previous week when no explicit week file or week diff has been set
-    fn week_to_transfer_from(&self, date: NaiveDate) -> Option<IsoWeek> {
-        if self.explicit_weekfile.is_none() && self.weekdiff.is_none() {
-            Some((date - TimeDelta::try_days(7).unwrap()).iso_week())
-        } else {
-            None
+    fn week_file_created_if_needed(&self, date: NaiveDate) -> PathBuf {
+        let path = self.week_tracker_file(date);
+        create_file_if_needed(&path, || self.initial_document(self.active_week(date)));
+        path
+    }
+
+    /// A new week starts with the balance the latest earlier week ended with.
+    /// Weeks without a file in between are skipped, not counted as unworked.
+    /// Future weeks get nothing, since the week before them is not over.
+    fn initial_document(&self, week: IsoWeek) -> Document {
+        if self.explicit_weekfile.is_some() || week > self.now.iso_week() {
+            return Document::empty(week);
         }
+        let Some((previous_week, path)) = self.latest_week_file_before(week) else {
+            return Document::empty(week);
+        };
+        let content = fs::read_to_string(&path).expect("Could not read previous week file");
+        let previous = self.parser.parse_document(previous_week, &content);
+        let balance = closing_balance(&previous, &self.config.workweek);
+        Document::new(
+            week,
+            vec![
+                Line::Comment {
+                    text: format!("balance carried over from {}", format_week(previous_week)),
+                },
+                Line::DurationShift {
+                    text: String::from("balance"),
+                    duration: balance,
+                },
+                Line::Blank,
+            ],
+            vec![],
+        )
+    }
+
+    fn latest_week_file_before(&self, week: IsoWeek) -> Option<(IsoWeek, PathBuf)> {
+        let entries = fs::read_dir(self.week_files_dir()).ok()?;
+        entries
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                let file_week = parse_week_file_name(path.file_name()?.to_str()?)?;
+                (file_week < week).then_some((file_week, path))
+            })
+            .max_by_key(|(file_week, _)| *file_week)
     }
 
     fn read_document(&self, week: IsoWeek, path: &Path) -> io::Result<Document> {
@@ -334,10 +356,12 @@ impl Tracker {
             .map(|d| date + TimeDelta::try_days(d as i64 * 7).unwrap())
             .unwrap_or(date);
 
-        self.dirs
-            .data_dir()
-            .join("week-files")
+        self.week_files_dir()
             .join(date.format("%G-W%V.txt").to_string())
+    }
+
+    fn week_files_dir(&self) -> PathBuf {
+        self.dirs.data_dir().join("week-files")
     }
 }
 
@@ -405,21 +429,14 @@ impl TrackerBuilder {
 
 // Week tracker file
 
-fn week_tracker_file_create_if_needed_with_transfer(
-    week: IsoWeek,
-    path: PathBuf,
-    last_week: Option<IsoWeek>,
-) -> PathBuf {
-    // Create parents if needed
+fn create_file_if_needed(path: &Path, initial_document: impl FnOnce() -> Document) {
     if let Some(parent_path) = path.parent() {
         fs::create_dir_all(parent_path).unwrap_or_else(|err| eprintln!("Error: {}", err));
     }
-
-    match OpenOptions::new().write(true).create_new(true).open(&path) {
+    match OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut file) => {
-            let initial_document = default_document(week, last_week);
-            file.write_all(initial_document.to_string().as_bytes())
-                .expect("Could not write example document to file");
+            file.write_all(initial_document().to_string().as_bytes())
+                .expect("Could not write initial document to file");
         }
         Err(err) => {
             if err.kind() != io::ErrorKind::AlreadyExists {
@@ -427,22 +444,20 @@ fn week_tracker_file_create_if_needed_with_transfer(
             }
         }
     }
-
-    path
 }
 
-fn default_document(week: IsoWeek, last_week: Option<IsoWeek>) -> Document {
-    if let Some(_last_week) = last_week {
-        // let content = fs::read_to_string(path).expect("Could not read last week file");
-        // let last_week_document = Parser::new().parse_document(last_week, &content);
-        // return Document::empty_with_balance(last_week_document);
-        return Document::empty(week);
+fn format_week(week: IsoWeek) -> String {
+    format!("{}-W{:02}", week.year(), week.week())
+}
+
+/// The week of a file named like `2024-W04.txt`.
+fn parse_week_file_name(name: &str) -> Option<IsoWeek> {
+    let (year, week) = name.strip_suffix(".txt")?.split_once("-W")?;
+    if week.len() != 2 {
+        return None;
     }
-    Document::empty(week)
-}
-
-fn week_tracker_file_create_if_needed(week: IsoWeek, path: PathBuf) -> PathBuf {
-    week_tracker_file_create_if_needed_with_transfer(week, path, None)
+    NaiveDate::from_isoywd_opt(year.parse().ok()?, week.parse().ok()?, chrono::Weekday::Mon)
+        .map(|date| date.iso_week())
 }
 
 #[cfg(test)]
