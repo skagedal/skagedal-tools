@@ -3,7 +3,7 @@ use chrono::{Datelike, NaiveDate};
 use crate::{
     config::WorkWeekConfig,
     document::{Day, Document, Line},
-    report::Report,
+    report::{Report, closing_balance},
     testutils::{iso_date, iso_week, naive_date, naive_date_time, naive_time},
 };
 
@@ -171,5 +171,40 @@ fn report_for_earlier_week() {
             balance: chrono::Duration::hours(0)
         },
         Report::from_document(&document, &now, &WorkWeekConfig::default())
+    )
+}
+
+#[test]
+fn closing_balance_counts_the_whole_week_and_the_incoming_balance() {
+    let document = Document::new(
+        iso_week(2023, 50),
+        vec![Line::DurationShift {
+            text: String::from("balance"),
+            duration: chrono::Duration::minutes(-90),
+        }],
+        vec![
+            Day {
+                date: iso_date(2023, 50, chrono::Weekday::Mon),
+                lines: vec![Line::ClosedShift {
+                    start_time: naive_time(8, 0),
+                    stop_time: naive_time(18, 0),
+                }],
+            },
+            Day {
+                date: iso_date(2023, 50, chrono::Weekday::Tue),
+                lines: vec![
+                    Line::SpecialDay {
+                        text: String::from("vacation"),
+                    },
+                    Line::OpenShift {
+                        start_time: naive_time(20, 0),
+                    },
+                ],
+            },
+        ],
+    );
+    assert_eq!(
+        chrono::Duration::minutes((10 + 8 - 40) * 60 - 90),
+        closing_balance(&document, &WorkWeekConfig::default())
     )
 }
