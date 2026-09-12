@@ -24,7 +24,7 @@ A collection of small tools.
 | [simons-misc-helpers](simons-misc-helpers/) | Miscellaneous helpers; currently formats the JSON output of `git pkgs diff --format=json` with colors |
 | [tracker](tracker/) | Tracks weekly work hours in a simple per-week text file with start/stop/report commands |
 | [disky](disky/) | Offload and onload big directories between this machine and a remote, deleting locally only after checksum verification |
-| [chrome-page-notes](chrome-page-notes/) | Chrome extension for attaching your own notes to a page |
+| [chrome-page-notes](chrome-page-notes/) | Chrome extension, plus the CLI that registers and serves it, for attaching your own notes to a page |
 | [appicon-generator](appicon-generator/) | Generates placeholder app icons from an emoji, for Xcode and Flutter projects |
 | [jikido](jikido/) | Zazen timer for iOS and Android: three strikes of the bell, a silent period, two strikes to close |
 | [trafikverket](trafikverket/) | The next trains between two stations, with live delays, filtered to the ones your ticket covers |

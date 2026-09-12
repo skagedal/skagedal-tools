@@ -837,11 +837,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "chrome-page-notes-host"
+name = "chrome-page-notes"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "clap",
+ "dirs",
+ "include_dir",
  "percent-encoding",
  "serde",
  "serde_json",

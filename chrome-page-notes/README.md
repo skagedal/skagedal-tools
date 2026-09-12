@@ -1,11 +1,7 @@
 # chrome-page-notes
 
-A Chrome extension for attaching your own notes to a page.
-
-## Purpose
-
-Attaches your own notes to the pages you visit, stored as plain markdown
-files in an Obsidian vault:
+Attach your own notes to the pages you visit in Chrome, stored as plain
+markdown files in an Obsidian vault.
 
 - Clicking the toolbar icon opens a popup for the current tab. If a note
   already exists for that URL, its content is shown inline (as plain text,
@@ -17,14 +13,19 @@ files in an Obsidian vault:
   If a request fails, it shows a "!" badge instead, and the popup offers an
   "Open Obsidian" button.
 
-Chrome's extension APIs have no direct file system access, so this is all
-done from the native messaging host described below. Looking up and
-creating notes reads and writes files directly in the vault folder on
-disk — no dependency on the `obsidian` CLI or the app being open at all.
-The one exception is "Open in Obsidian", which does need the app: it goes
-through the `obsidian://open?vault=...&file=...` URL scheme (handled by the
-app itself), which launches the app if needed and reliably lands on the
-right vault and note.
+The tool is two halves that ship as one binary:
+
+- `extension/` — the Chrome extension. Chrome's extension APIs have no
+  direct file system access, so all it does is talk to the host below.
+- `src/` — a Rust CLI (`chrome-page-notes`, a member of this repo's Cargo
+  workspace) that is also the extension's [native messaging
+  host](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging).
+  It reads and writes note files directly in the vault folder on disk — no
+  dependency on the `obsidian` CLI or the app being open at all. The one
+  exception is "Open in Obsidian", which does need the app: it goes through
+  the `obsidian://open?vault=...&file=...` URL scheme (handled by the app
+  itself), which launches the app if needed and reliably lands on the right
+  vault and note.
 
 (An earlier version shelled out to the [`obsidian`
 CLI](https://obsidian.md/plugins?id=cli) for everything, but its `vault=`
@@ -32,47 +33,55 @@ targeting option turned out to be silently ignored — every command actually
 operated on whichever vault window happened to be focused, which both
 under-reported notes and once created a note in the wrong vault entirely.)
 
-The extension's `manifest.json` has a fixed `"key"` field, which pins its
-extension ID to `jbgofjilflakfjbenbgpppajapiffphn` no matter where it's
-loaded unpacked from — that ID is also hardcoded in `register-host.sh`, so
-the two stay in sync without per-machine edits.
+## Setup
 
-## Loading the extension
-
-1. Go to `chrome://extensions`
-2. Enable "Developer mode" (top right)
-3. Click "Load unpacked" and select this directory
-4. Click the extension's icon in the toolbar — a popup should show whether the current page has a note
-
-## Reloading after changes
-
-Click the reload icon for the extension on `chrome://extensions`. Since the
-`tabs` permission and the background service worker were added after the
-first load, Chrome will show a "new permissions" prompt on that reload —
-click "Update extension" to accept it, or the URL-reporting features won't
-be active.
-
-## Native messaging host
-
-`host/` is a small Rust program (`chrome-page-notes-host`, a member of this
-repo's Cargo workspace) that the browser extension talks to over stdin/stdout
-using Chrome's [native messaging
-protocol](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging).
-It reads and writes note files directly in the configured vault folder, and
-opens notes in Obsidian (installed e.g. via `brew install --cask obsidian`)
-through its `obsidian://` URL scheme.
-
-Register it with Chrome (builds the release binary and writes the host
-manifest to `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`):
+Install the binary the same way as every other tool in this repo, then let
+it register itself with Chrome:
 
 ```bash
-./register-host.sh
+./install chrome-page-notes    # from the repo root
+chrome-page-notes register
 ```
 
-Re-run this after updating the host code, or if the repo moves (the host
-manifest embeds an absolute path to the built binary).
+`register` unpacks its built-in copy of the extension to
+`~/.local/share/skagedal-tools/chrome-page-notes/extension`, writes the
+native messaging host manifest to `~/Library/Application
+Support/Google/Chrome/NativeMessagingHosts/`, and prints the steps for
+loading the extension in Chrome (`chrome://extensions` → "Developer mode" →
+"Load unpacked"). It also points out the config file below if you don't
+have one yet.
 
-### Configuration
+Re-run both after changing the extension or the host. The host manifest
+embeds an absolute path to the binary, so re-run `register` if the binary
+moves too.
+
+### Working on the extension
+
+`register --dev` skips unpacking and points Chrome at `extension/` in the
+checkout the binary was built from, so editing `popup.js` and friends only
+needs a click on the extension's reload icon rather than a reinstall.
+`register --dev <dir>` names the directory explicitly, for when the repo
+has moved since the binary was built.
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `chrome-page-notes register [--dev [DIR]]` | Register the host with Chrome and print how to load the extension |
+| `chrome-page-notes host` | Serve the native messaging protocol on stdin/stdout |
+
+Chrome runs `host` itself, so there's rarely a reason to invoke it by hand.
+Its host manifest has no way to pass arguments — Chrome runs the binary
+bare and hands it the calling extension's origin as `argv[1]` — so the
+binary treats a leading `chrome-extension://…` argument as meaning "serve",
+and the `host` subcommand only exists for invoking the same thing manually.
+
+The extension's `manifest.json` has a fixed `"key"` field, which pins its
+extension ID to `jbgofjilflakfjbenbgpppajapiffphn` no matter where it's
+loaded unpacked from — that ID is also a constant in `src/main.rs`, which
+is what lets the host manifest name it without per-machine edits.
+
+## Configuration
 
 The host reads `~/.config/skagedal-tools/chrome-page-notes/config.toml`
 (or `$XDG_CONFIG_HOME/skagedal-tools/chrome-page-notes/config.toml`), per this repo's
@@ -96,7 +105,7 @@ message, and the log is never trimmed or rotated, so leaving it on
 indefinitely just grows the file unboundedly. Turn it on temporarily
 when you actually need to watch what's happening.
 
-### Note path scheme
+## Note path scheme
 
 A note's path is `<folder>/<domain>/<normalized-path>.md`, e.g.
 `https://github.com/owner/repo/issues/123` becomes
@@ -107,7 +116,7 @@ of a single file name); an empty path becomes `index`. The query string and
 fragment aren't part of the path, so e.g. `?tab=readme` and `?tab=files` on
 the same page collapse to the same note.
 
-### Trying it out
+## Trying it out
 
 Set `debug = true` in `config.toml` first (see above), then:
 
@@ -120,7 +129,7 @@ tab — a new line, including the URL, should appear in the log each time.
 
 ## Icon
 
-`icons/icon.svg` is the source; `icons/icon{16,32,48,128}.png` are rasterized
-from it (`convert -background none icon.svg -resize <N>x<N> icon<N>.png`,
+`extension/icons/icon.svg` is the source; `extension/icons/icon{16,32,48,128}.png`
+are rasterized from it (`convert -background none icon.svg -resize <N>x<N> icon<N>.png`,
 from ImageMagick) and are what's actually referenced in `manifest.json`.
 Regenerate them if the SVG changes.

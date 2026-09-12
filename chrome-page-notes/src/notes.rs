@@ -1,5 +1,5 @@
 //! URL-to-note-path normalization, and reading/writing notes directly in an
-//! Obsidian vault's folder on disk (see `cli.rs` for why this doesn't go
+//! Obsidian vault's folder on disk (see `obsidian.rs` for why this doesn't go
 //! through the `obsidian` CLI).
 
 use std::fs;
@@ -9,7 +9,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 
-use crate::cli::open_url;
+use crate::obsidian::open_url;
 
 pub struct Note {
     pub path: String,
