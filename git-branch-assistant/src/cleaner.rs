@@ -283,7 +283,10 @@ impl<P: Prompt> GitCleaner<P> {
                     // first; `git worktree remove` refuses if it is dirty, so
                     // uncommitted work is not silently discarded.
                     repo.delete_worktree(&path)?;
-                } else {
+                } else if repo.current_branch()?.as_deref() == Some(branch.refname.as_str()) {
+                    // `git branch -D` refuses to delete the branch HEAD is on,
+                    // so step off it first. Any other branch is deleted while
+                    // the checkout stays where the user left it.
                     repo.checkout_default_branch()?;
                 }
                 repo.delete_branch_forcefully(&branch.refname)?;
@@ -557,6 +560,65 @@ mod tests {
         if !status.success() {
             return Err(anyhow!("git {:?} failed", args));
         }
+        Ok(())
+    }
+
+    #[test]
+    fn delete_leaves_the_checkout_on_the_branch_the_user_was_on() -> Result<()> {
+        let repo_dir = tempdir()?;
+        git(repo_dir.path(), &["init", "-b", "main"])?;
+        fs::write(repo_dir.path().join("file.txt"), "hello")?;
+        git(repo_dir.path(), &["add", "."])?;
+        git(repo_dir.path(), &["commit", "-m", "init"])?;
+        git(repo_dir.path(), &["branch", "stale"])?;
+        // Standing on a branch that is neither the one being deleted nor the
+        // repository's default: nothing about the delete should move HEAD.
+        git(repo_dir.path(), &["checkout", "-b", "work"])?;
+
+        let repo = GitRepo::new(repo_dir.path().to_path_buf());
+        let branch = Branch {
+            refname: "stale".into(),
+            upstream: None,
+            worktree_path: None,
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.perform_action(&repo, &branch, BranchAction::Delete)?;
+        assert!(matches!(result, ActionResult::Handled));
+        assert_eq!(repo.current_branch()?.as_deref(), Some("work"));
+        Ok(())
+    }
+
+    #[test]
+    fn delete_steps_off_the_branch_it_is_about_to_delete() -> Result<()> {
+        let repo_dir = tempdir()?;
+        git(repo_dir.path(), &["init", "-b", "main"])?;
+        fs::write(repo_dir.path().join("file.txt"), "hello")?;
+        git(repo_dir.path(), &["add", "."])?;
+        git(repo_dir.path(), &["commit", "-m", "init"])?;
+        git(repo_dir.path(), &["config", "init.defaultBranch", "main"])?;
+        git(repo_dir.path(), &["checkout", "-b", "doomed"])?;
+
+        let repo = GitRepo::new(repo_dir.path().to_path_buf());
+        let branch = Branch {
+            refname: "doomed".into(),
+            upstream: None,
+            worktree_path: Some(repo_dir.path().to_path_buf()),
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.perform_action(&repo, &branch, BranchAction::Delete)?;
+        assert!(matches!(result, ActionResult::Handled));
+        assert_eq!(repo.current_branch()?.as_deref(), Some("main"));
+
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", "doomed"])
+            .current_dir(repo_dir.path())
+            .output()?;
+        assert!(
+            branches.stdout.is_empty(),
+            "branch 'doomed' should be deleted"
+        );
         Ok(())
     }
 

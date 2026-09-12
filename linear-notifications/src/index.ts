@@ -3,12 +3,19 @@
 import { spawnSync } from "child_process";
 import termkit from "terminal-kit";
 import {
+  clampOffset,
   countStatus,
+  documentLines,
   formatTime,
-  metadataRows,
+  issueLines,
+  notificationLines,
+  previewLines,
+  scrollStatus,
   truncate,
-  wrapText,
-  type Row,
+  type DocumentLike,
+  type IssueLike,
+  type Line,
+  type ThreadComment,
 } from "./lib";
 
 const term = termkit.terminal;
@@ -37,6 +44,7 @@ const NOTIFICATIONS_QUERY = `query {
       }
       ... on DocumentNotification {
         documentId
+        commentId
       }
     }
   }
@@ -55,26 +63,15 @@ interface Notification {
   project?: { name: string } | null;
   pullRequest?: { title: string; number: number; url: string } | null;
   comment?: { body: string } | null;
+  documentId?: string | null;
+  commentId?: string | null;
 }
 
-interface Issue {
-  identifier: string;
-  title: string;
-  description: string | null;
-  url: string;
-  createdAt: string;
-  state: { name: string } | null;
-  priorityLabel: string | null;
-  assignee: { name: string } | null;
-  creator: { name: string } | null;
-  labels: { nodes: Array<{ name: string }> };
-  comments: {
-    nodes: Array<{
-      body: string;
-      createdAt: string;
-      user: { name: string } | null;
-    }>;
-  };
+type Issue = IssueLike;
+
+interface DocumentDetail {
+  document: DocumentLike | null;
+  comment: ThreadComment | null;
 }
 
 function runLinearApi(query: string): any {
@@ -128,6 +125,37 @@ function fetchIssue(identifier: string): Issue {
   return issue;
 }
 
+// Document notifications only carry ids, and the subtitle is an abridged copy
+// of the comment — so fetch the document and the whole comment thread.
+function fetchDocumentDetail(
+  documentId: string,
+  commentId: string | null | undefined
+): DocumentDetail {
+  const commentPart = commentId
+    ? `comment(id: "${commentId}") {
+        body
+        createdAt
+        user { name }
+        parent { body createdAt user { name } }
+        children(first: 50) { nodes { body createdAt user { name } } }
+      }`
+    : "";
+  const query = `query {
+    document(id: "${documentId}") {
+      title
+      url
+      createdAt
+      creator { name }
+    }
+    ${commentPart}
+  }`;
+  const data = runLinearApi(query);
+  return {
+    document: data?.data?.document ?? null,
+    comment: data?.data?.comment ?? null,
+  };
+}
+
 function markNotificationRead(id: string): void {
   const now = new Date().toISOString();
   const mutation = `mutation { notificationUpdate(id: "${id}", input: { readAt: "${now}" }) { success } }`;
@@ -148,19 +176,51 @@ function safeW(): number {
   return Math.max(0, term.width - 1);
 }
 
-type Mode = "list" | "issue";
+type Mode = "list" | "detail";
 
-function drawLabeledRows(startRow: number, maxRow: number, rows: Row[]): number {
-  const labelW = Math.max(...rows.map((r) => r.label.length)) + 2;
-  let row = startRow;
-  for (const { label, value } of rows) {
-    if (row > maxRow) break;
-    term.moveTo(1, row);
-    term.dim((label + ":").padEnd(labelW));
-    term(truncate(value, Math.max(0, safeW() - labelW)));
-    row++;
+type Detail =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "issue"; issue: Issue }
+  | { kind: "document"; detail: DocumentDetail }
+  | { kind: "notification" };
+
+function drawLine(row: number, line: Line): void {
+  term.moveTo(1, row);
+  if (line.label) term.dim.noFormat(line.label);
+  switch (line.style) {
+    case "title":
+      term.bold.cyan.noFormat(line.text);
+      break;
+    case "bold":
+      term.bold.noFormat(line.text);
+      break;
+    case "dim":
+      term.dim.noFormat(line.text);
+      break;
+    case "red":
+      term.red.noFormat(line.text);
+      break;
+    default:
+      term.noFormat(line.text);
   }
-  return row;
+}
+
+/** Draws lines[offset…] into rows top…bottom. Returns lines left undrawn. */
+function drawLines(
+  lines: Line[],
+  top: number,
+  bottom: number,
+  offset: number
+): number {
+  const height = bottom - top + 1;
+  if (height <= 0) return lines.length;
+  for (let i = 0; i < height; i++) {
+    const line = lines[offset + i];
+    if (!line) break;
+    drawLine(top + i, line);
+  }
+  return Math.max(0, lines.length - offset - height);
 }
 
 class App {
@@ -169,11 +229,13 @@ class App {
   scrollOffset = 0;
   mode: Mode = "list";
   listStatus: string;
-  issueStatus = "";
-  issue: Issue | null = null;
-  issueError: string | null = null;
-  issueLoading = false;
+  detailStatus = "";
+  detail: Detail = { kind: "loading" };
+  detailOffset = 0;
+  detailTotal = 0;
+  detailHeight = 0;
   issueCache = new Map<string, Issue>();
+  documentCache = new Map<string, DocumentDetail>();
 
   constructor(notifications: Notification[]) {
     this.notifications = notifications;
@@ -186,7 +248,7 @@ class App {
 
   render(): void {
     if (this.mode === "list") this.renderList();
-    else this.renderIssue();
+    else this.renderDetail();
   }
 
   renderList(): void {
@@ -195,7 +257,7 @@ class App {
     term.moveTo(1, 1);
     term.bold.cyan("Linear Notifications");
     term(" ");
-    term.dim(`— ${this.listStatus}`);
+    term.dim.noFormat(`— ${this.listStatus}`);
 
     const footerRow = term.height;
     const listTop = 3;
@@ -230,9 +292,9 @@ class App {
 
       term.moveTo(1, listTop + i);
       if (isSelected) {
-        term.inverse.bold(truncate(line, rowW).padEnd(rowW));
+        term.inverse.bold.noFormat(truncate(line, rowW).padEnd(rowW));
       } else {
-        term(truncate(line, rowW));
+        term.noFormat(truncate(line, rowW));
       }
     }
 
@@ -259,235 +321,145 @@ class App {
     if (!n) return;
     const w = safeW();
 
-    let row = top;
-
-    term.moveTo(1, row);
-    term.bold(truncate(n.title, w));
-    row++;
-
-    if (n.subtitle && row <= bottom) {
-      term.moveTo(1, row);
-      term.dim(truncate(n.subtitle, w));
-      row++;
-    }
-
-    if (row <= bottom) row++; // blank line
-
-    row = drawLabeledRows(row, bottom, metadataRows(n));
-
-    if (n.comment?.body && row + 1 <= bottom) {
-      row++; // blank
-      term.moveTo(1, row);
-      term.bold("Comment");
-      row++;
-
-      const bodyLines = wrapText(n.comment.body, w);
-      const available = bottom - row + 1;
-      const shown = bodyLines.slice(0, available);
-      for (const line of shown) {
-        if (row > bottom) break;
-        term.moveTo(1, row);
-        term(line);
-        row++;
-      }
-      if (bodyLines.length > shown.length && row - 1 <= bottom) {
-        term.moveTo(1, Math.min(row, bottom));
-        const leftover = bodyLines.length - shown.length;
-        term.dim(
-          truncate(
-            `… (${leftover} more line${leftover !== 1 ? "s" : ""})`,
-            w
-          )
-        );
-      }
+    const lines = previewLines(n, w);
+    const leftover = drawLines(lines, top, bottom, 0);
+    if (leftover > 0) {
+      // Padded so it covers whatever the last preview line had already drawn.
+      drawLine(bottom, {
+        text: truncate(
+          `… (${leftover} more line${leftover !== 1 ? "s" : ""} — press o)`,
+          w
+        ).padEnd(w),
+        style: "dim",
+      });
     }
   }
 
-  renderIssue(): void {
-    term.clear();
+  detailLines(w: number): Line[] {
     const n = this.current();
-    if (!n) return;
+    if (!n) return [];
+    switch (this.detail.kind) {
+      case "loading":
+        return [{ text: "Loading…", style: "dim" }];
+      case "error":
+        return [{ text: truncate(this.detail.message, w), style: "red" }];
+      case "issue":
+        return issueLines(this.detail.issue, w);
+      case "document":
+        return documentLines(
+          n,
+          this.detail.detail.document,
+          this.detail.detail.comment,
+          w
+        );
+      case "notification":
+        return notificationLines(n, w);
+    }
+  }
+
+  renderDetail(): void {
+    term.clear();
+    if (!this.current()) return;
     const w = safeW();
     const footerRow = term.height;
     const bodyBottom = footerRow - 1;
+    const height = Math.max(1, bodyBottom);
 
-    const footerHelp = "b: browser  m: mark read  u/Enter/q: back";
+    const lines = this.detailLines(w);
+    this.detailTotal = lines.length;
+    this.detailHeight = height;
+    this.detailOffset = clampOffset(lines.length, this.detailOffset, height);
+    drawLines(lines, 1, bodyBottom, this.detailOffset);
 
-    const drawFooter = () => {
-      term.moveTo(1, footerRow);
-      const text = this.issueStatus
-        ? `${footerHelp}  ${this.issueStatus}`
-        : footerHelp;
-      term.dim(truncate(text, w));
-    };
-
-    if (this.issueLoading) {
-      term.moveTo(1, 1);
-      term.dim("Loading issue…");
-      drawFooter();
-      return;
-    }
-
-    if (this.issueError) {
-      term.moveTo(1, 1);
-      term.red(truncate(this.issueError, w));
-      drawFooter();
-      return;
-    }
-
-    if (this.issue) {
-      this.renderIssueBody(this.issue, bodyBottom, w);
-    } else {
-      // No associated issue — fall back to notification details
-      this.renderNotificationFallback(n, bodyBottom, w);
-    }
-
-    drawFooter();
+    const scroll = scrollStatus(lines.length, this.detailOffset, height);
+    const parts = ["b: browser  m: mark read  u/Enter/q: back"];
+    if (scroll) parts.push(`↑↓/jk: scroll  ${scroll}`);
+    if (this.detailStatus) parts.push(this.detailStatus);
+    term.moveTo(1, footerRow);
+    term.dim.noFormat(truncate(parts.join("  "), w));
   }
 
-  renderIssueBody(issue: Issue, bottom: number, w: number): void {
-    let row = 1;
-
-    term.moveTo(1, row);
-    term.bold.cyan(truncate(`${issue.identifier}  ${issue.title}`, w));
-    row += 2;
-
-    const meta: Row[] = [];
-    if (issue.state) meta.push({ label: "State", value: issue.state.name });
-    if (issue.priorityLabel)
-      meta.push({ label: "Priority", value: issue.priorityLabel });
-    if (issue.assignee)
-      meta.push({ label: "Assignee", value: issue.assignee.name });
-    if (issue.creator)
-      meta.push({ label: "Creator", value: issue.creator.name });
-    meta.push({
-      label: "Created",
-      value: `${formatTime(issue.createdAt)} (${issue.createdAt})`,
-    });
-    const labelNames = issue.labels?.nodes?.map((l) => l.name) ?? [];
-    if (labelNames.length)
-      meta.push({ label: "Labels", value: labelNames.join(", ") });
-    meta.push({ label: "URL", value: issue.url });
-
-    row = drawLabeledRows(row, bottom, meta);
-
-    if (issue.description && row + 1 <= bottom) {
-      row++; // blank
-      term.moveTo(1, row);
-      term.bold("Description");
-      row++;
-      const lines = wrapText(issue.description, w);
-      for (const line of lines) {
-        if (row > bottom) return;
-        term.moveTo(1, row);
-        term(line);
-        row++;
-      }
-    }
-
-    const comments = issue.comments?.nodes ?? [];
-    if (comments.length && row + 1 <= bottom) {
-      row++;
-      term.moveTo(1, row);
-      term.bold(`Comments (${comments.length})`);
-      row++;
-      for (const c of comments) {
-        if (row > bottom) return;
-        term.moveTo(1, row);
-        term.dim(
-          truncate(
-            `— ${c.user?.name ?? "?"} · ${formatTime(c.createdAt)}`,
-            w
-          )
-        );
-        row++;
-        const lines = wrapText(c.body, w);
-        for (const line of lines) {
-          if (row > bottom) return;
-          term.moveTo(1, row);
-          term(line);
-          row++;
-        }
-        if (row > bottom) return;
-        row++; // blank between comments
-      }
-    }
-  }
-
-  renderNotificationFallback(n: Notification, bottom: number, w: number): void {
-    let row = 1;
-    term.moveTo(1, row);
-    term.bold.cyan(truncate(n.title, w));
-    row++;
-    if (n.subtitle) {
-      term.moveTo(1, row);
-      term.dim(truncate(n.subtitle, w));
-      row++;
-    }
-    row++;
-    row = drawLabeledRows(row, bottom, metadataRows(n));
-
-    if (n.comment?.body && row + 1 <= bottom) {
-      row++;
-      term.moveTo(1, row);
-      term.bold("Comment");
-      row++;
-      const lines = wrapText(n.comment.body, w);
-      for (const line of lines) {
-        if (row > bottom) return;
-        term.moveTo(1, row);
-        term(line);
-        row++;
-      }
-    }
+  scrollDetail(delta: number): void {
+    this.detailOffset = clampOffset(
+      this.detailTotal,
+      this.detailOffset + delta,
+      this.detailHeight
+    );
+    this.render();
   }
 
   openCurrent(): void {
     const n = this.current();
     if (!n) return;
 
-    this.mode = "issue";
-    this.issueStatus = "";
-    this.issue = null;
-    this.issueError = null;
+    this.mode = "detail";
+    this.detailStatus = "";
+    this.detailOffset = 0;
 
-    if (!n.issue) {
-      // No associated issue — show fallback immediately
-      this.issueLoading = false;
+    if (n.issue) {
+      this.loadIssue(n.issue.identifier);
+    } else if (n.documentId) {
+      this.loadDocument(n.documentId, n.commentId);
+    } else {
+      this.detail = { kind: "notification" };
       this.render();
-      return;
     }
+  }
 
-    const cached = this.issueCache.get(n.issue.identifier);
+  loadIssue(identifier: string): void {
+    const cached = this.issueCache.get(identifier);
     if (cached) {
-      this.issue = cached;
-      this.issueLoading = false;
+      this.detail = { kind: "issue", issue: cached };
       this.render();
       return;
     }
 
-    this.issueLoading = true;
+    this.detail = { kind: "loading" };
     this.render();
 
     try {
-      const issue = fetchIssue(n.issue.identifier);
-      this.issueCache.set(n.issue.identifier, issue);
-      this.issue = issue;
-      this.issueError = null;
+      const issue = fetchIssue(identifier);
+      this.issueCache.set(identifier, issue);
+      this.detail = { kind: "issue", issue };
     } catch (err) {
-      this.issueError = `Error loading issue: ${err}`;
-    } finally {
-      this.issueLoading = false;
+      this.detail = { kind: "error", message: `Error loading issue: ${err}` };
+    }
+    this.render();
+  }
+
+  loadDocument(documentId: string, commentId: string | null | undefined): void {
+    const key = `${documentId}:${commentId ?? ""}`;
+    const cached = this.documentCache.get(key);
+    if (cached) {
+      this.detail = { kind: "document", detail: cached };
+      this.render();
+      return;
+    }
+
+    this.detail = { kind: "loading" };
+    this.render();
+
+    try {
+      const detail = fetchDocumentDetail(documentId, commentId);
+      this.documentCache.set(key, detail);
+      this.detail = { kind: "document", detail };
+    } catch (err) {
+      this.detail = { kind: "error", message: `Error loading document: ${err}` };
     }
     this.render();
   }
 
   backToList(): void {
     this.mode = "list";
-    this.issue = null;
-    this.issueError = null;
-    this.issueLoading = false;
+    this.detail = { kind: "loading" };
+    this.detailOffset = 0;
     this.render();
+  }
+
+  detailUrl(): string | undefined {
+    const n = this.current();
+    if (this.detail.kind === "issue") return this.detail.issue.url;
+    return n?.url;
   }
 
   removeCurrent(): boolean {
@@ -505,6 +477,7 @@ class App {
     try {
       this.notifications = fetchUnreadNotifications();
       this.issueCache.clear();
+      this.documentCache.clear();
       this.selected = Math.min(
         this.selected,
         Math.max(0, this.notifications.length - 1)
@@ -563,7 +536,7 @@ async function main(): Promise<void> {
     if (app.mode === "list") {
       handleListKey(app, key);
     } else {
-      handleIssueKey(app, key);
+      handleDetailKey(app, key);
     }
   });
 }
@@ -629,7 +602,7 @@ function handleListKey(app: App, key: string): void {
   }
 }
 
-function handleIssueKey(app: App, key: string): void {
+function handleDetailKey(app: App, key: string): void {
   switch (key) {
     case "u":
     case "q":
@@ -638,12 +611,40 @@ function handleIssueKey(app: App, key: string): void {
       app.backToList();
       return;
 
+    case "UP":
+    case "k":
+      app.scrollDetail(-1);
+      return;
+
+    case "DOWN":
+    case "j":
+      app.scrollDetail(1);
+      return;
+
+    case "PAGE_UP":
+      app.scrollDetail(-Math.max(1, app.detailHeight - 1));
+      return;
+
+    case "PAGE_DOWN":
+    case " ":
+      app.scrollDetail(Math.max(1, app.detailHeight - 1));
+      return;
+
+    case "g":
+    case "HOME":
+      app.scrollDetail(-app.detailTotal);
+      return;
+
+    case "G":
+    case "END":
+      app.scrollDetail(app.detailTotal);
+      return;
+
     case "b": {
-      const n = app.current();
-      const url = app.issue?.url ?? n?.url;
+      const url = app.detailUrl();
       if (url) {
         openUrl(url);
-        app.issueStatus = "Opened in browser";
+        app.detailStatus = "Opened in browser";
         app.render();
       }
       return;
@@ -652,7 +653,7 @@ function handleIssueKey(app: App, key: string): void {
     case "m": {
       const n = app.current();
       if (!n) return;
-      app.issueStatus = "Marking as read…";
+      app.detailStatus = "Marking as read…";
       app.render();
       try {
         markNotificationRead(n.id);
@@ -662,7 +663,7 @@ function handleIssueKey(app: App, key: string): void {
         }
         app.backToList();
       } catch (err) {
-        app.issueStatus = `Error marking as read: ${err}`;
+        app.detailStatus = `Error marking as read: ${err}`;
         app.render();
       }
       return;

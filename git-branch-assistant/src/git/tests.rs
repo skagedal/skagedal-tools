@@ -309,6 +309,26 @@ fn default_branch_for_checkout_errors_when_no_candidate_exists() -> Result<()> {
 }
 
 #[test]
+fn current_branch_reports_the_checked_out_branch() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("main")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["checkout", "-q", "-b", "feature"])?;
+
+    assert_eq!(repo.current_branch()?.as_deref(), Some("feature"));
+    Ok(())
+}
+
+#[test]
+fn current_branch_is_none_when_head_is_detached() -> Result<()> {
+    let (_temp, repo) = repo_with_initial_branch("main")?;
+    let dir = repo.dir.clone();
+    git(&dir, &["checkout", "-q", "--detach"])?;
+
+    assert_eq!(repo.current_branch()?, None);
+    Ok(())
+}
+
+#[test]
 fn checkout_default_branch_uses_the_branch_the_remote_defaults_to() -> Result<()> {
     // A real clone of a remote whose default branch is `trunk`, which is
     // exactly the case `init.defaultBranch` alone gets wrong.
