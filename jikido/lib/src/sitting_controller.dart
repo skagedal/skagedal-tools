@@ -63,6 +63,10 @@ class SittingController extends ChangeNotifier {
   bool _openingBellStruck = false;
   bool _closingBellStruck = false;
   bool _permissionsRequested = false;
+
+  /// Counts sittings, so that setup still under way for one can tell that it
+  /// has been cancelled, finished or replaced.
+  int _sittingCount = 0;
   String? _notice;
   int _notifiedMinutesLeft = _unwritten;
 
@@ -223,6 +227,7 @@ class SittingController extends ChangeNotifier {
       prepare: _settings.prepare,
     );
     _session = session;
+    _sittingCount++;
     _status = SittingStatus.running;
     _pausedAt = null;
     _openingBellStruck = false;
@@ -253,7 +258,17 @@ class SittingController extends ChangeNotifier {
   /// The layers are independent by design — each covers a different way for
   /// the others to fail, see the README — so they are engaged independently
   /// too, and one that throws costs the sitting that layer and nothing else.
+  ///
+  /// Each layer can take its time, and the sitting may be cancelled, paused
+  /// or even over before the next one comes up. A layer engaged after that
+  /// would outlive the sitting — a backstop armed after the app has already
+  /// rung the bell and cancelled it rings a second time — so each one checks
+  /// first.
   Future<void> _engageLayers(MeditationSession session) async {
+    final sitting = _sittingCount;
+    bool stillSitting() =>
+        _status == SittingStatus.running && _sittingCount == sitting;
+
     // Ring first — unless there is settling time to sit through, in which
     // case the ticker rings it when it comes due. Everything below is
     // housekeeping, and a user who pressed a button expecting a bell should
@@ -263,12 +278,18 @@ class SittingController extends ChangeNotifier {
       await _engage(() => _audio.strike(
           session.bell, session.bellSize, BellSequence.opening));
     }
+    if (!stillSitting()) {
+      return;
+    }
     await _engage(() => _audio.startKeepAlive());
 
-    if (_settings.keepScreenOn) {
+    if (_settings.keepScreenOn && stillSitting()) {
       await _engage(() => _screen.set(enabled: true));
     }
 
+    if (!stillSitting()) {
+      return;
+    }
     await _engage(() {
       final now = _now();
       final settling = session.phaseAt(now) == SessionPhase.preparing;
@@ -281,7 +302,13 @@ class SittingController extends ChangeNotifier {
             : _serviceText(session.remainingAt(now)),
       );
     });
-    await _armBackstop(session);
+
+    // Pausing cancels the backstop and resuming arms it again, for the
+    // session the pause moved, so that is the one to arm here too.
+    final current = _session;
+    if (stillSitting() && !isPaused && !_closingBellStruck && current != null) {
+      await _armBackstop(current);
+    }
   }
 
   /// Hands the operating system the bell to ring if Jikido is not around to

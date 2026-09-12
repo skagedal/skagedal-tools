@@ -156,7 +156,7 @@ class BellAudio {
 
     await _bellPlayer.setVolume(1);
     await _bellPlayer.setAudioSource(_WavSource(rendering.bytes));
-    await _bellPlayer.play();
+    _startPlaying(_bellPlayer);
   }
 
   /// Strikes the free-play bell, letting it overlap whatever is still
@@ -171,7 +171,7 @@ class BellAudio {
     _nextPlayer = (_nextPlayer + 1) % _poolSize;
     await player.setVolume(1);
     await player.setAudioSource(_WavSource(rendering.bytes));
-    await player.play();
+    _startPlaying(player);
   }
 
   /// Lays the striker on the bowl: everything ringing dies away fast.
@@ -219,7 +219,24 @@ class BellAudio {
   Future<void> startKeepAlive() async {
     _keepAliveWanted = true;
     await _keepAlivePlayer.seek(Duration.zero);
-    await _keepAlivePlayer.play();
+    _startPlaying(_keepAlivePlayer);
+  }
+
+  /// Starts [player] without waiting for it to finish.
+  ///
+  /// just_audio's `play()` completes when playback stops, not when it starts.
+  /// Awaiting it made `strike` last as long as the bell rang and
+  /// `startKeepAlive` last the whole sitting, so everything a caller set up
+  /// after them happened only once the sitting was over.
+  void _startPlaying(AudioPlayer player) {
+    unawaited(player.play().catchError((Object error, StackTrace stack) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'jikido',
+        context: ErrorDescription('playing a bell'),
+      ));
+    }));
   }
 
   Future<void> stopKeepAlive() async {

@@ -95,6 +95,51 @@ void main() {
     });
   });
 
+  test('setup that finishes after the sitting leaves nothing behind', () {
+    fakeAsync((async) {
+      // Holds the rest of the setup until the sitting is over, the way
+      // awaiting just_audio's play() on the keep-alive loop did. The backstop
+      // was then armed after the app had rung the bell and cancelled it, and
+      // rang as a notification on a sitting that had ended properly.
+      audio.keepAliveBlocks = true;
+      final controller = makeController()
+        ..setDuration(const Duration(minutes: 5));
+      controller.start();
+      async.flushMicrotasks();
+
+      for (var i = 0; i < 6 * 60 * 5; i++) {
+        clock.advance(const Duration(milliseconds: 200));
+        async.elapse(const Duration(milliseconds: 200));
+      }
+
+      expect(controller.status, SittingStatus.complete);
+      expect(notification.isScheduled, isFalse,
+          reason: 'a backstop armed after the bell has rung rings again');
+      expect(service.running, isFalse,
+          reason: 'a service started after the sitting would never stop');
+
+      controller.dispose();
+    });
+  });
+
+  test('ending early while setup is still under way arms no backstop', () {
+    fakeAsync((async) {
+      service.startBlocker = Completer<void>();
+      final controller = makeController();
+      controller.start();
+      async.flushMicrotasks();
+
+      controller.cancel();
+      async.flushMicrotasks();
+      service.startBlocker!.complete();
+      async.flushMicrotasks();
+
+      expect(notification.isScheduled, isFalse);
+
+      controller.dispose();
+    });
+  });
+
   test('the sitting completes once the closing bell has rung out', () {
     fakeAsync((async) {
       final controller = makeController()

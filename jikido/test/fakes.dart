@@ -77,14 +77,25 @@ class FakeBellAudio implements BellAudio {
   @override
   bool get isRinging => ringing;
 
+  /// Makes [startKeepAlive] hold until [stopKeepAlive], the way awaiting
+  /// just_audio's `play()` on a looping player does.
+  bool keepAliveBlocks = false;
+  Completer<void>? _keepAliveStopped;
+
   @override
   Future<void> startKeepAlive() async {
     keepAliveRunning = true;
+    if (keepAliveBlocks) {
+      _keepAliveStopped = Completer<void>();
+      await _keepAliveStopped!.future;
+    }
   }
 
   @override
   Future<void> stopKeepAlive() async {
     keepAliveRunning = false;
+    _keepAliveStopped?.complete();
+    _keepAliveStopped = null;
   }
 
   @override
