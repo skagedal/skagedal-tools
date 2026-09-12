@@ -70,10 +70,11 @@ const int dominantIndex = 1;
 const double dominantQ = 20300;
 
 /// The striker laid on the bowl rather than lifted away: how long the bell
-/// rings before the hand arrives, and how fast it dies once it does. Together
-/// these put a strike 20 dB down in 0.17 s, against 2.5-4.7 s for one left to
-/// ring.
-const double dampedAfter = 0.06;
+/// rings before the hand arrives, and how fast it dies once it does. Later
+/// than the 0.05-0.17 s real damped strikes take to fall 20 dB, so that the
+/// closing strike is heard as a strike rather than as the clack of the
+/// striker. See `DAMPED_AFTER` in the Python reference.
+const double dampedAfter = 0.25;
 const double dampedTau = 0.05;
 
 const int sampleRate = 32000;
@@ -370,9 +371,10 @@ List<BellStrike> openingStrikes(BellVoice voice, Random random) {
   ];
 }
 
-/// Two strikes, the second damped. This closes a period of zazen.
+/// Two strikes ringing, then a third that is stopped. This closes a period
+/// of zazen.
 ///
-/// The striker is laid on the bowl straight after the second strike rather
+/// The striker is laid on the bowl straight after the last strike rather
 /// than lifted away, so the ring is stopped rather than allowed to fade. It
 /// is how a period ends in a zendo, and it is unmistakable: the sitting is
 /// over, not fading out.
@@ -380,9 +382,10 @@ List<BellStrike> closingStrikes(BellVoice voice, Random random) {
   final interval = strikeInterval(voice);
   return <BellStrike>[
     BellStrike(at: 0, gain: 1.0, contact: random.nextDouble()),
+    BellStrike(at: interval, gain: 0.95, contact: random.nextDouble()),
     BellStrike(
-      at: interval,
-      gain: 0.95,
+      at: 2 * interval,
+      gain: 1.0,
       dampAfter: dampedAfter,
       contact: random.nextDouble(),
     ),

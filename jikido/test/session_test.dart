@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jikido/src/alarm/closing_bell_notification.dart';
+import 'package:jikido/src/audio/bell_synth.dart';
 import 'package:jikido/src/bell.dart';
 import 'package:jikido/src/session.dart';
 
@@ -32,13 +33,16 @@ void main() {
       );
     });
 
-    test('the closing rings for a fraction of what the opening does', () {
+    test('the closing is over soon after its last strike', () {
       // The closing ends with the striker laid on the bowl, so there is no
-      // tail to wait out. It is the reason a sitting now ends three seconds
-      // after the bell rather than twelve.
+      // tail to wait out after the third strike, where the opening has one.
       final session = sessionOf();
-      expect(session.closingRing, lessThan(session.openingRing ~/ 3));
-      expect(session.closingRing, lessThan(const Duration(seconds: 3)));
+      final lastStrike = Duration(
+          microseconds:
+              (2 * strikeInterval(Bell.inkin.voiceAt(1)) * 1e6).round());
+      expect(session.closingRing, lessThan(session.openingRing));
+      expect(session.closingRing - lastStrike,
+          lessThan(const Duration(seconds: 1)));
     });
   });
 
@@ -225,11 +229,11 @@ void main() {
         SessionPhase.closing,
       );
       expect(
-        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 2))),
+        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 5))),
         SessionPhase.closing,
       );
       expect(
-        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 3))),
+        session.phaseAt(start.add(const Duration(minutes: 15, seconds: 6))),
         SessionPhase.complete,
       );
     });

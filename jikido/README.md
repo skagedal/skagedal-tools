@@ -35,9 +35,10 @@ because a real bell's pitch and how long it rings are not independent — a
 heavier casting sounds lower *and* rings longer — and the synthesizer moves
 them together.
 
-The closing is two strikes rather than three, and the second is stopped: the
-striker is laid on the bowl instead of being lifted away, so the ring is cut
-off rather than allowed to fade.
+The closing is three strikes as well, but only the first two ring out. The
+third is stopped: the striker is laid on the bowl instead of being lifted
+away, so that strike is heard and then cut off rather than allowed to fade.
+Strike, strike, close.
 
 You can also interact with a bell on its own, under the bell icon: tap the 
 upper half of the screen to strike it, the lower half to rest the striker and 

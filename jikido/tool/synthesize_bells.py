@@ -98,10 +98,12 @@ DOMINANT_Q = 20300
 
 # The striker laid on the bowl rather than lifted away. `DAMPED_AFTER` is how
 # long the bell is allowed to ring before the hand arrives, and `DAMPED_TAU`
-# how fast it dies once it does. Together they put the strike 20 dB down in
-# 0.17 s, at the slow end of the 0.05-0.17 s measured on real damped strikes
-# and against 2.5-4.7 s for one left to ring.
-DAMPED_AFTER = 0.06
+# how fast it dies once it does. Real damped strikes fall 20 dB in 0.05-0.17 s,
+# against 2.5-4.7 s for one left to ring, but a hand that arrives that soon
+# leaves little more than the clack of the striker. Letting the bright upper
+# partials sound first — the third is gone in a third of a second anyway —
+# keeps the closing strike a strike of the bell, which is what it is.
+DAMPED_AFTER = 0.25
 DAMPED_TAU = 0.05
 
 SAMPLE_RATE = 32000
@@ -336,16 +338,18 @@ def opening(voice: Voice, interval: float, rng: random.Random) -> list[Strike]:
 
 
 def closing(voice: Voice, interval: float, rng: random.Random) -> list[Strike]:
-    """Two strikes, the second damped. This closes a period of zazen.
+    """Two strikes ringing, then a third that is stopped. This closes a
+    period of zazen.
 
-    The striker is laid on the bowl straight after the second strike rather
+    The striker is laid on the bowl straight after the last strike rather
     than lifted away, so the ring is stopped rather than allowed to fade.
     It is how a period ends in a zendo, and it is unmistakable: the sitting
     is over, not fading out.
     """
     return [
         Strike(at=0.0, gain=1.0, contact=rng.uniform(0.0, 1.0)),
-        Strike(at=interval, gain=0.95, damp_after=DAMPED_AFTER,
+        Strike(at=interval, gain=0.95, contact=rng.uniform(0.0, 1.0)),
+        Strike(at=2 * interval, gain=1.0, damp_after=DAMPED_AFTER,
                contact=rng.uniform(0.0, 1.0)),
     ]
 

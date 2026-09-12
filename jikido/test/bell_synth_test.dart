@@ -58,13 +58,13 @@ void main() {
 
     const golden = <int, double>{
       0: 0.0,
-      100: -0.36085992006377066,
-      8000: 0.3439348238316009,
-      16000: 0.304944080960263,
-      17000: 0.40833166796151854,
-      20000: -0.04104001462317705,
-      30000: -3.015517929114501e-05,
-      34000: 1.9117221488859187e-06,
+      100: -0.3280907614227558,
+      8000: 0.31270260828847407,
+      16000: 0.2772525574354021,
+      17000: 0.37125166970841084,
+      20000: -0.13691331508700808,
+      30000: -0.0012255648568504848,
+      34000: 7.769608859282338e-05,
     };
 
     golden.forEach((index, expected) {
@@ -77,7 +77,7 @@ void main() {
     expect(sequenceSeconds(voice, <BellStrike>[
       const BellStrike(at: 0, contact: 0.11),
       const BellStrike(at: 0.5, dampAfter: dampedAfter, contact: 0.73),
-    ]), closeTo(0.9600000000000001, tolerance));
+    ]), closeTo(1.15, tolerance));
     expect(strikeInterval(voice), closeTo(2.4, tolerance));
     expect(voice.dominantTau, closeTo(1.9912760214271032, tolerance));
   });

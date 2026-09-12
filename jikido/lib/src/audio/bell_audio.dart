@@ -13,7 +13,8 @@ enum BellSequence {
   /// Three strikes, ringing out. Opens a period of zazen.
   opening,
 
-  /// Two strikes, the second stopped by the striker laid on the bowl.
+  /// Two strikes ringing, then a third stopped by the striker laid on the
+  /// bowl.
   /// Closes a period.
   closing,
 
