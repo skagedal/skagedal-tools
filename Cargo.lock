@@ -846,7 +846,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skagedal-dirs",
- "toml 1.1.5+spec-1.1.0",
+ "toml 0.8.2",
  "url",
 ]
 
@@ -6081,6 +6081,17 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
+name = "woke"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "libc",
+ "signal-hook",
+ "tempfile",
+]
 
 [[package]]
 name = "writeable"

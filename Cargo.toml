@@ -18,6 +18,7 @@ members = [
     "sync-brewfile",
     "tracker",
     "trafikverket",
+    "woke",
     "x-java-home",
 ]
 
@@ -49,6 +50,7 @@ filetime = "*"
 flexi_logger = "*"
 include_dir = "*"
 indexmap = { version = "*", features = ["serde"] }
+libc = "*"
 log = "*"
 node-semver = "*"
 num-traits = "*"
@@ -66,6 +68,7 @@ serde_json = "*"
 serde_yaml_ng = "*"
 shell-escape = "*"
 shellexpand = "*"
+signal-hook = "*"
 skagedal-dirs = { path = "skagedal-dirs" }
 tao = "*"
 temp-dir = "*"

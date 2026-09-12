@@ -29,6 +29,7 @@ INSTALLED_RUST_TOOLS=(
     sync-brewfile
     tracker
     trafikverket
+    woke
     x-java-home
 )
 
