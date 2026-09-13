@@ -843,7 +843,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "dirs",
+ "dirs 6.0.0",
  "include_dir",
  "percent-encoding",
  "serde",
