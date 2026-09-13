@@ -54,12 +54,6 @@ SWIFT_TOOLS=(
     "${INSTALLED_SWIFT_TOOLS[@]}"
 )
 
-# Flutter apps. They go onto a phone rather than into ~/.cargo/bin, so
-# ./install skips them and ./install-to-mobile is what puts them there.
-FLUTTER_TOOLS=(
-    jikido
-)
-
 check-node() {
     local dir="$1"
     echo "==> Checking $dir"
@@ -155,29 +149,6 @@ update-swift() {
     (cd "$SCRIPT_DIR/$dir" && swift package update)
 }
 
-# Runs the Flutter SDK version the app pins in its .fvmrc. Locally that means
-# going through fvm; CI installs the pinned version onto PATH instead (see
-# .github/workflows/tests.yml), where there is no fvm and plain flutter is
-# already the right SDK.
-run-flutter() {
-    if command -v fvm >/dev/null 2>&1; then
-        fvm flutter "$@"
-    else
-        flutter "$@"
-    fi
-}
-
-check-flutter() {
-    local dir="$1"
-    echo "==> Checking $dir"
-    (
-        cd "$SCRIPT_DIR/$dir"
-        run-flutter pub get
-        run-flutter analyze
-        run-flutter test
-    )
-}
-
 install-node() {
     local dir="$1"
     echo "==> Installing $dir"
@@ -225,11 +196,5 @@ update-rust() {
 update-rust-workspace() {
     echo "==> Updating Rust workspace"
     (cd "$SCRIPT_DIR" && cargo update)
-}
-
-update-flutter() {
-    local dir="$1"
-    echo "==> Updating $dir"
-    (cd "$SCRIPT_DIR/$dir" && run-flutter pub upgrade)
 }
 

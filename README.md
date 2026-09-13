@@ -26,7 +26,6 @@ A collection of small tools.
 | [disky](disky/) | Offload and onload big directories between this machine and a remote, deleting locally only after checksum verification |
 | [chrome-page-notes](chrome-page-notes/) | Chrome extension, plus the CLI that registers and serves it, for attaching your own notes to a page |
 | [appicon-generator](appicon-generator/) | Generates placeholder app icons from an emoji, for Xcode and Flutter projects |
-| [jikido](jikido/) | Zazen timer for iOS and Android: three strikes of the bell, a silent period, two strikes to close |
 | [trafikverket](trafikverket/) | The next trains between two stations, with live delays, filtered to the ones your ticket covers |
 | [woke](woke/) | Keeps this Mac awake with the lid closed, restoring the setting when it exits |
 | [skagedal-dirs](skagedal-dirs/) | Shared library: the XDG config/data/cache directories every tool stores its files in |
