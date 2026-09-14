@@ -327,3 +327,98 @@ fn assert_open_shift_error(
 fn build_tracker() -> TrackerBuilder {
     Tracker::builder(naive_date_time(2023, 12, 2, 12, 0), TrackerDirs::real())
 }
+
+mod carrying_over_balance {
+    use super::*;
+    use std::fs;
+    use temp_dir::TempDir;
+
+    fn tracker_on(tempdir: &TempDir, weekdiff: Option<i32>) -> Tracker {
+        // A wednesday in 2024-W04.
+        Tracker::builder(
+            naive_date_time(2024, 1, 24, 9, 0),
+            TrackerDirs::fixed(tempdir.path()),
+        )
+        .weekdiff(weekdiff)
+        .build()
+    }
+
+    fn write_week_file(tempdir: &TempDir, name: &str, content: &str) {
+        let dir = tempdir.path().join("data").join("week-files");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(name), content).unwrap();
+    }
+
+    #[test]
+    fn a_new_week_starts_with_the_latest_earlier_weeks_closing_balance() {
+        let tempdir = TempDir::new().unwrap();
+        write_week_file(
+            &tempdir,
+            "2024-W01.txt",
+            "[monday 2024-01-01]\n* 08:00-20:00\n",
+        );
+        write_week_file(
+            &tempdir,
+            "2024-W02.txt",
+            "* balance 2h\n\n[monday 2024-01-08]\n* 08:00-18:30\n",
+        );
+        write_week_file(&tempdir, "2024-W02.txt~", "garbage\n");
+        let tracker = tracker_on(&tempdir, None);
+
+        let path = tracker.week_file_created_if_needed(tracker.now.date());
+
+        assert_eq!(
+            "# balance carried over from 2024-W02\n* balance -27:30h\n\n",
+            fs::read_to_string(path).unwrap()
+        );
+    }
+
+    #[test]
+    fn the_first_week_starts_empty() {
+        let tempdir = TempDir::new().unwrap();
+        let tracker = tracker_on(&tempdir, None);
+
+        let path = tracker.week_file_created_if_needed(tracker.now.date());
+
+        assert_eq!("", fs::read_to_string(path).unwrap());
+    }
+
+    #[test]
+    fn a_future_week_starts_empty() {
+        let tempdir = TempDir::new().unwrap();
+        write_week_file(
+            &tempdir,
+            "2024-W04.txt",
+            "[monday 2024-01-22]\n* 08:00-16:00\n",
+        );
+        let tracker = tracker_on(&tempdir, Some(1));
+
+        let path = tracker.week_file_created_if_needed(tracker.now.date());
+
+        assert!(path.ends_with("2024-W05.txt"));
+        assert_eq!("", fs::read_to_string(path).unwrap());
+    }
+
+    #[test]
+    fn an_existing_week_file_is_left_alone() {
+        let tempdir = TempDir::new().unwrap();
+        write_week_file(
+            &tempdir,
+            "2024-W03.txt",
+            "[monday 2024-01-15]\n* 08:00-16:00\n",
+        );
+        write_week_file(
+            &tempdir,
+            "2024-W04.txt",
+            "[monday 2024-01-22]\n* 08:00-16:00\n",
+        );
+        let tracker = tracker_on(&tempdir, None);
+
+        let path = tracker.week_file_created_if_needed(tracker.now.date());
+
+        assert_eq!(
+            "[monday 2024-01-22]\n* 08:00-16:00\n",
+            fs::read_to_string(path).unwrap()
+        );
+    }
+}
