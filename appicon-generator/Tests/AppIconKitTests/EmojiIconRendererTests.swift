@@ -16,12 +16,14 @@ struct EmojiIconRendererTests {
         background: IconColor = .white,
         size: Int = 128,
         style: IconStyle,
-        glyphScale: Double = 0.82
+        glyphScale: Double = 0.82,
+        badge: IconBadge? = nil
     ) throws -> NSBitmapImageRep {
         let data = try EmojiIconRenderer(
             text: text,
             backgroundColor: background,
-            glyphScale: glyphScale
+            glyphScale: glyphScale,
+            badge: badge
         )
         .renderPNG(sizeInPixels: size, style: style)
         return try #require(NSBitmapImageRep(data: data))
@@ -175,6 +177,68 @@ struct EmojiIconRendererTests {
         }
     }
 
+    @Test("a badge fills a band across the bottom with its colour")
+    func badgeBand() throws {
+        let size = 256
+        let blue = try #require(IconColor(parsing: "#1d3557"))
+        let image = try render(size: size, style: .opaqueColor, badge: IconBadge(text: "DEV", color: blue))
+
+        // At the band's ends, clear of the label. Exact, as for the background.
+        for x in [1, size - 2] {
+            let pixel = image.rawPixel(x: x, y: size - 2)
+            #expect(pixel.red == blue.red && pixel.green == blue.green && pixel.blue == blue.blue)
+        }
+        #expect(image.rawPixel(x: 1, y: 1).red == 1, "above the band is still the background")
+    }
+
+    @Test(
+        "the label is white on a dark band and black on a light one",
+        arguments: [("#1d3557", 1.0), ("yellow", 0.0)]
+    )
+    func badgeLabelContrast(color: String, expectedLabel: Double) throws {
+        let size = 256
+        let badge = IconBadge(text: "DEV", color: try #require(IconColor(parsing: color)))
+        let image = try render(size: size, style: .opaqueColor, badge: badge)
+
+        let bandTop = Int(Double(size) * (1 - IconBadge.bandFraction))
+        let labelPixels = (bandTop..<size).flatMap { y in
+            (0..<size).map { image.rawPixel(x: $0, y: y) }
+        }
+        .filter { $0.red == expectedLabel && $0.green == expectedLabel && $0.blue == expectedLabel }
+        #expect(labelPixels.count > 200, "found \(labelPixels.count) label pixels")
+    }
+
+    @Test("with a badge the glyph is centred in the space above the band")
+    func glyphClearsBadge() throws {
+        let size = 256
+        let image = try render(
+            "A",
+            size: size,
+            style: .transparentColor,
+            glyphScale: 0.6,
+            badge: IconBadge(text: "DEV")
+        )
+        let bandTop = Double(size) * (1 - IconBadge.bandFraction)
+        let above = try #require(image.opaqueBounds(rows: 0..<Int(bandTop)))
+
+        #expect(above.maxY < bandTop, "the glyph runs into the band: \(above)")
+        #expect(abs(Double(above.midX) - Double(size) / 2) < 6, "off-centre horizontally: \(above)")
+    }
+
+    @Test("a badge keeps the opaque styles free of an alpha channel")
+    func badgeKeepsOpaque() throws {
+        let image = try render(style: .opaqueColor, badge: IconBadge(text: "DEV"))
+        #expect(!image.hasAlpha)
+    }
+
+    @Test("a badge with nothing to draw is an error")
+    func emptyBadge() throws {
+        #expect(throws: EmojiIconRenderer.Error.self) {
+            try EmojiIconRenderer(text: "🐘", badge: IconBadge(text: ""))
+                .renderPNG(sizeInPixels: 64, style: .opaqueColor)
+        }
+    }
+
     @Test("rendering twice in a row gives the same bytes")
     func isDeterministic() throws {
         // The renderer sets NSGraphicsContext.current while it draws; this is
@@ -219,13 +283,14 @@ extension NSBitmapImageRep {
         )
     }
 
-    /// The bounding box of every pixel that is not fully transparent.
-    func opaqueBounds() -> CGRect? {
+    /// The bounding box of every pixel that is not fully transparent, in the
+    /// given rows or all of them.
+    func opaqueBounds(rows: Range<Int>? = nil) -> CGRect? {
         var minX = pixelsWide
         var minY = pixelsHigh
         var maxX = -1
         var maxY = -1
-        for y in 0..<pixelsHigh {
+        for y in rows ?? 0..<pixelsHigh {
             for x in 0..<pixelsWide where rawPixel(x: x, y: y).alpha > 0.02 {
                 minX = min(minX, x)
                 minY = min(minY, y)

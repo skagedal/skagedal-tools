@@ -12,6 +12,7 @@ public struct EmojiIconRenderer: IconRenderer {
         case couldNotCreateBitmap(sizeInPixels: Int)
         case couldNotEncodePNG
         case textHasNoGlyphs(String)
+        case badgeHasNoGlyphs(String)
 
         public var errorDescription: String? {
             switch self {
@@ -23,6 +24,8 @@ public struct EmojiIconRenderer: IconRenderer {
                 "Could not encode the drawn icon as PNG."
             case .textHasNoGlyphs(let text):
                 "No font on this system has glyphs for \(text.debugDescription)."
+            case .badgeHasNoGlyphs(let text):
+                "The badge \(text.debugDescription) has nothing to draw."
             }
         }
     }
@@ -35,11 +38,19 @@ public struct EmojiIconRenderer: IconRenderer {
     /// a margin, because iOS rounds the icon's corners and a glyph drawn right
     /// to the edge loses its extremities to the mask.
     public let glyphScale: Double
+    /// A label drawn over the bottom of the icon, if any.
+    public let badge: IconBadge?
 
-    public init(text: String, backgroundColor: IconColor = .white, glyphScale: Double = 0.82) {
+    public init(
+        text: String,
+        backgroundColor: IconColor = .white,
+        glyphScale: Double = 0.82,
+        badge: IconBadge? = nil
+    ) {
         self.text = text
         self.backgroundColor = backgroundColor
         self.glyphScale = glyphScale
+        self.badge = badge
     }
 
     public func renderPNG(sizeInPixels: Int, style: IconStyle) throws -> Data {
@@ -101,7 +112,12 @@ public struct EmojiIconRenderer: IconRenderer {
             break
         }
 
-        let line = try fittedLine(canvasSize: side)
+        // With a badge the glyph is fitted into the space above its band
+        // rather than drawn whole and then half covered.
+        let bandHeight = badge == nil ? 0 : side * IconBadge.bandFraction
+        let area = CGRect(x: 0, y: bandHeight, width: side, height: side - bandHeight)
+
+        let line = try fittedLine(canvasSize: area.height)
         var ascent: CGFloat = 0
         var descent: CGFloat = 0
         let advance = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, nil))
@@ -112,9 +128,73 @@ public struct EmojiIconRenderer: IconRenderer {
         // typographic metrics are the only measurement that works.
         context.textPosition = CGPoint(
             x: (side - advance) / 2,
-            y: (side - (ascent + descent)) / 2 + descent
+            y: area.minY + (area.height - (ascent + descent)) / 2 + descent
         )
         CTLineDraw(line, context)
+
+        if let badge {
+            try draw(badge, in: context)
+        }
+    }
+
+    /// Draws the band along the bottom edge and centres the label in it.
+    ///
+    /// Drawn in colour whatever the style: the greyscale styles are flattened
+    /// afterwards, which leaves the band a grey that still stands apart from
+    /// the glyph.
+    private func draw(_ badge: IconBadge, in context: CGContext) throws {
+        let side = CGFloat(context.width)
+        let band = CGRect(x: 0, y: 0, width: side, height: side * IconBadge.bandFraction)
+        context.setFillColor(badge.color.cgColor)
+        context.fill(band)
+
+        // Image bounds are measured from the current text position, which
+        // drawing the glyph has moved along.
+        context.textPosition = .zero
+
+        // Fitted to whichever runs out first, the label's width or its height,
+        // measured once at a reference size as for the glyph.
+        let referenceSize: CGFloat = 100
+        let referenceFont = Self.badgeFont(ofSize: referenceSize)
+        let referenceLine = Self.badgeLine(badge, font: referenceFont)
+        let referenceWidth = CTLineGetImageBounds(referenceLine, context).width
+        guard referenceWidth > 0, referenceFont.capHeight > 0 else {
+            throw Error.badgeHasNoGlyphs(badge.text)
+        }
+        let fontSize = min(
+            referenceSize * side * IconBadge.labelWidthFraction / referenceWidth,
+            referenceSize * band.height * IconBadge.capHeightFraction / referenceFont.capHeight
+        )
+        let font = Self.badgeFont(ofSize: fontSize)
+        let line = Self.badgeLine(badge, font: font)
+        let bounds = CTLineGetImageBounds(line, context)
+
+        // Centred on the ink rather than the advance, so trailing kerning does
+        // not push the label off-centre, and on the cap height vertically, so
+        // a label with descenders sits where one without does.
+        context.textPosition = CGPoint(
+            x: (side - bounds.width) / 2 - bounds.minX,
+            y: (band.height - font.capHeight) / 2
+        )
+        CTLineDraw(line, context)
+    }
+
+    private static func badgeFont(ofSize size: CGFloat) -> NSFont {
+        NSFont.systemFont(ofSize: size, weight: .heavy)
+    }
+
+    private static func badgeLine(_ badge: IconBadge, font: NSFont) -> CTLine {
+        // Core Text's own colour key, not AppKit's: CTLineDraw ignores an
+        // NSColor and falls back to the context's fill, which is the band's.
+        let attributed = NSAttributedString(
+            string: badge.text,
+            attributes: [
+                .font: font,
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String): badge.labelColor.cgColor,
+                .kern: font.pointSize * 0.06,
+            ]
+        )
+        return CTLineCreateWithAttributedString(attributed)
     }
 
     /// A laid-out line whose glyph box spans `glyphScale` of the canvas.

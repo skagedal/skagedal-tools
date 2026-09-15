@@ -110,6 +110,18 @@ Run `appicon-generator --help` for the full list. The ones worth knowing about:
 * `--glyph-scale` is how much of the icon the emoji spans, 0–1. The default of
   0.82 leaves a margin, because iOS rounds the corners off and a glyph drawn
   right to the edge loses its extremities to the mask.
+* `--badge DEV` draws a label in a band across the bottom of the icon, and fits
+  the emoji into the space above it — for telling a development build from the
+  real one on a home screen that has both. `--badge-color` sets the band's
+  colour, as `--background` does; the label is white or black, whichever reads.
+* `--icon-set AppIcon-Dev` (ios only) writes a set of that name instead of
+  `AppIcon`, beside it in the same catalog. Point
+  `ASSETCATALOG_COMPILER_APPICON_NAME` at it in the build configuration that
+  should use it:
+
+  ```shell
+  $ appicon-generator --mode ios --icon-set AppIcon-Dev --badge DEV 🐘
+  ```
 * `--dry-run` prints where the icons would go without writing anything. It
   reports the same plan the real run carries out, so if a dry run succeeds the
   real one will too.

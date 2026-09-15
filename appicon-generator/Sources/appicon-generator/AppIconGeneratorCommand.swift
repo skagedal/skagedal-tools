@@ -30,6 +30,9 @@ struct AppIconGeneratorCommand: ParsableCommand {
               appicon-generator --mode ios --legacy-sizes --appearances light 📎
                     Fill in an old-style icon set, one image per size and scale.
 
+              appicon-generator --mode ios --icon-set AppIcon-Dev --badge DEV 🐘
+                    A second icon set with a DEV band, for a development build.
+
             Existing files are overwritten without asking, so commit first if the \
             project already has an icon you care about.
             """,
@@ -81,6 +84,32 @@ struct AppIconGeneratorCommand: ParsableCommand {
     )
     var glyphScale: Double = 0.82
 
+    @Option(
+        name: .long,
+        help: ArgumentHelp(
+            "A short label, like DEV, drawn in a band across the bottom of the icon.",
+            valueName: "text"
+        )
+    )
+    var badge: String?
+
+    @Option(
+        name: .long,
+        help: ArgumentHelp("Colour of the --badge band, as for --background.", valueName: "colour")
+    )
+    var badgeColor: String?
+
+    @Option(
+        name: .long,
+        help: ArgumentHelp(
+            "ios only: name of the icon set to write, without .appiconset.",
+            discussion: "Defaults to AppIcon. Give another to add an icon set beside it, "
+                + "for a build configuration that selects it.",
+            valueName: "name"
+        )
+    )
+    var iconSet: String?
+
     @Flag(
         name: .long,
         help: ArgumentHelp(
@@ -120,7 +149,8 @@ struct AppIconGeneratorCommand: ParsableCommand {
         let renderer = EmojiIconRenderer(
             text: emoji,
             backgroundColor: try parsedBackground(),
-            glyphScale: try validatedGlyphScale()
+            glyphScale: try validatedGlyphScale(),
+            badge: try parsedBadge()
         )
         let target = try makeTarget(kind: kind)
 
@@ -162,7 +192,8 @@ struct AppIconGeneratorCommand: ParsableCommand {
             return XcodeIconTarget(
                 appearances: appearances?.appearances ?? IconAppearance.allCases,
                 layout: legacySizes ? .legacySizes(requestedIdioms) : .singleSize,
-                assetCatalog: outputURL
+                assetCatalog: outputURL,
+                iconSetName: try validatedIconSet()
             )
         case .flutter:
             try rejectIOSOnlyFlags(for: kind)
@@ -194,15 +225,43 @@ struct AppIconGeneratorCommand: ParsableCommand {
     // MARK: - Validation
 
     private func parsedBackground() throws -> IconColor {
-        guard let color = IconColor(parsing: background) else {
+        try parsedColor(background)
+    }
+
+    private func parsedColor(_ string: String) throws -> IconColor {
+        guard let color = IconColor(parsing: string) else {
             throw ValidationError(
-                "Could not read '\(background)' as a colour. Give a hex triple like "
+                "Could not read '\(string)' as a colour. Give a hex triple like "
                     + "'#1d3557', or one of: "
                     + IconColor.namedColors.keys.sorted().joined(separator: ", ")
                     + "."
             )
         }
         return color
+    }
+
+    private func parsedBadge() throws -> IconBadge? {
+        guard let badge else {
+            if badgeColor != nil {
+                throw ValidationError("--badge-color needs a --badge to colour.")
+            }
+            return nil
+        }
+        let text = badge.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            throw ValidationError("--badge needs some text to show.")
+        }
+        return IconBadge(text: text, color: try badgeColor.map(parsedColor) ?? IconBadge.defaultColor)
+    }
+
+    private func validatedIconSet() throws -> String {
+        guard let iconSet else { return "AppIcon" }
+        guard !iconSet.isEmpty, !iconSet.contains("/"), !iconSet.hasSuffix(".appiconset") else {
+            throw ValidationError(
+                "--icon-set takes a bare name like AppIcon-Dev, without a path or .appiconset."
+            )
+        }
+        return iconSet
     }
 
     private func validatedGlyphScale() throws -> Double {
@@ -224,6 +283,7 @@ struct AppIconGeneratorCommand: ParsableCommand {
             ("--legacy-sizes", legacySizes),
             ("--iphone", iphone),
             ("--ipad", ipad),
+            ("--icon-set", iconSet != nil),
         ]
         .filter(\.1).map(\.0)
         guard offenders.isEmpty else {

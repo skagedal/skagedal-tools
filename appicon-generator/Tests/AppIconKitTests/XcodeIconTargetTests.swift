@@ -63,6 +63,21 @@ struct XcodeIconTargetTests {
         #expect(outcome.writtenFiles.map(\.lastPathComponent) == ["icon.png", "Contents.json"])
     }
 
+    @Test("a named icon set is written beside the default one, leaving it alone")
+    func namedIconSet() throws {
+        let (temp, catalog) = try makeCatalog()
+        try XcodeIconTarget().generate(using: RecordingRenderer(), in: temp.url)
+        let outcome = try XcodeIconTarget(iconSetName: "AppIcon-Dev")
+            .generate(using: RecordingRenderer(), in: temp.url)
+
+        #expect(
+            outcome.writtenFiles.allSatisfy {
+                $0.deletingLastPathComponent().lastPathComponent == "AppIcon-Dev.appiconset"
+            })
+        let sets = try FileManager.default.contentsOfDirectory(atPath: catalog.path).sorted()
+        #expect(sets == ["AppIcon-Dev.appiconset", "AppIcon.appiconset"])
+    }
+
     @Test("the legacy layout dedupes images that share a pixel size")
     func legacyDeduplication() throws {
         let (temp, _) = try makeCatalog()
