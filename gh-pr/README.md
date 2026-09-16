@@ -52,15 +52,24 @@ Prints all comments on the PR:
 - review summaries — the body a reviewer typed when submitting a review
   (e.g. an `APPROVED` or `CHANGES_REQUESTED` review with a message), shown
   with the review state
+- your own pending review, if you have one — the drafts you've written but
+  not yet submitted, which nobody else can see
 - inline review comments grouped into threads
 
 By default, comments in resolved review threads are hidden.
 
+Pending drafts arrive under `reviewThreads` like any other inline comment —
+GitHub returns them to their author — so they're tagged `[PENDING]` in place
+rather than printed twice. The `Pending review` section names the draft
+review and prints in full only those drafts no visible thread covers, e.g.
+one sitting in a resolved thread.
+
 Uses a single GraphQL query against `pullRequest.comments`,
-`pullRequest.reviews`, and `pullRequest.reviewThreads`. (Going via REST
-would require three endpoints — `/issues/{n}/comments`,
-`/pulls/{n}/reviews`, `/pulls/{n}/comments` — and resolved state still
-wouldn't be available, since the REST API doesn't expose it.)
+`pullRequest.reviews` (twice: once unfiltered, once for `states: [PENDING]`),
+and `pullRequest.reviewThreads`. (Going via REST would require three
+endpoints — `/issues/{n}/comments`, `/pulls/{n}/reviews`,
+`/pulls/{n}/comments` — and neither resolved state nor pending drafts would
+be available, since the REST API doesn't expose them.)
 
 Flags:
 

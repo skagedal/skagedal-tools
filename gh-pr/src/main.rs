@@ -1,6 +1,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use regex::Regex;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::process::{Command, Stdio, exit};
 
@@ -196,11 +197,12 @@ fn comments_command(args: CommentsArgs) {
         }
     };
 
-    // One GraphQL call returns both conversation comments and review
-    // threads (the latter pre-grouped, with their `isResolved` state). The
-    // REST endpoints `/issues/N/comments` and `/pulls/N/comments` would
-    // each return half of this, with no resolved state — so GraphQL is
-    // both simpler and more complete.
+    // One GraphQL call returns conversation comments, review threads (the
+    // latter pre-grouped, with their `isResolved` state) and the viewer's own
+    // unsubmitted review. The REST endpoints `/issues/N/comments` and
+    // `/pulls/N/comments` would each return half of this, with no resolved
+    // state and no pending drafts — so GraphQL is both simpler and more
+    // complete.
     let response = fetch_pr_comments(number);
 
     match args.format {
@@ -240,6 +242,25 @@ fn fetch_pr_comments(number: u64) -> Value {
                         submittedAt \
                         state \
                         body \
+                    } \
+                } \
+                pendingReviews: reviews(first: 10, states: [PENDING]) { \
+                    nodes { \
+                        databaseId \
+                        author { login } \
+                        createdAt \
+                        body \
+                        comments(first: 100) { \
+                            nodes { \
+                                databaseId \
+                                author { login } \
+                                createdAt \
+                                path \
+                                line \
+                                originalLine \
+                                body \
+                            } \
+                        } \
                     } \
                 } \
                 reviewThreads(first: 100) { \
@@ -348,6 +369,10 @@ fn print_text(response: &Value, show_resolved: bool) {
         .pointer("/data/repository/pullRequest/reviewThreads/nodes")
         .and_then(Value::as_array)
         .unwrap_or(&empty);
+    let pending_reviews = response
+        .pointer("/data/repository/pullRequest/pendingReviews/nodes")
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
 
     println!("=== Conversation comments ({}) ===", convo.len());
     if convo.is_empty() {
@@ -356,7 +381,7 @@ fn print_text(response: &Value, show_resolved: bool) {
     }
     for c in convo {
         println!();
-        print_comment_header(c, "", false);
+        print_comment_header(c, "", false, &HashSet::new());
         print_body(c, "");
     }
 
@@ -400,6 +425,9 @@ fn print_text(response: &Value, show_resolved: bool) {
         .collect();
     let hidden = threads.len() - visible.len();
 
+    let pending_ids = comment_ids(pending_reviews.iter());
+    print_pending(pending_reviews, &comment_ids(visible.iter().copied()));
+
     let suffix = if hidden > 0 && !show_resolved {
         format!(", {} resolved hidden", hidden)
     } else {
@@ -413,15 +441,7 @@ fn print_text(response: &Value, show_resolved: bool) {
     }
 
     for thread in &visible {
-        let path = thread.get("path").and_then(Value::as_str).unwrap_or("?");
-        let line = thread
-            .get("line")
-            .and_then(Value::as_i64)
-            .or_else(|| thread.get("originalLine").and_then(Value::as_i64));
-        let location = match line {
-            Some(l) => format!("{}:{}", path, l),
-            None => path.to_string(),
-        };
+        let location = comment_location(thread);
         let res_tag = if is_resolved(thread) {
             " [RESOLVED]"
         } else {
@@ -440,7 +460,7 @@ fn print_text(response: &Value, show_resolved: bool) {
                 println!();
             }
             let indent = if i == 0 { "" } else { "  " };
-            print_comment_header(c, indent, i > 0);
+            print_comment_header(c, indent, i > 0, &pending_ids);
             print_body(c, indent);
         }
     }
@@ -456,14 +476,97 @@ fn print_review_summary_header(r: &Value) {
     println!("[{}] @{} ({}):", submitted, author, state);
 }
 
-fn print_comment_header(c: &Value, indent: &str, is_reply: bool) {
+fn print_comment_header(c: &Value, indent: &str, is_reply: bool, pending_ids: &HashSet<i64>) {
     let author = c
         .pointer("/author/login")
         .and_then(Value::as_str)
         .unwrap_or("ghost");
     let created = c.get("createdAt").and_then(Value::as_str).unwrap_or("?");
     let suffix = if is_reply { " (reply)" } else { "" };
-    println!("{}[{}] @{}{}:", indent, created, author, suffix);
+    let pending = if is_pending(c, pending_ids) {
+        " [PENDING]"
+    } else {
+        ""
+    };
+    println!("{}[{}] @{}{}{}:", indent, created, author, suffix, pending);
+}
+
+fn is_pending(c: &Value, pending_ids: &HashSet<i64>) -> bool {
+    c.get("databaseId")
+        .and_then(Value::as_i64)
+        .is_some_and(|id| pending_ids.contains(&id))
+}
+
+/// The `databaseId`s of every comment under the given nodes — each of which is
+/// expected to have a `comments.nodes` connection (a review or a review thread).
+fn comment_ids<'a>(nodes: impl IntoIterator<Item = &'a Value>) -> HashSet<i64> {
+    nodes
+        .into_iter()
+        .filter_map(|n| n.pointer("/comments/nodes").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|c| c.get("databaseId").and_then(Value::as_i64))
+        .collect()
+}
+
+/// Report the viewer's own unsubmitted review, if any. GitHub already returns
+/// its draft comments to their author under `reviewThreads`, so they're tagged
+/// `[PENDING]` there rather than repeated here; only drafts that no visible
+/// thread covers — one hidden behind `isResolved`, say — are printed in full,
+/// so that nothing pending goes unseen.
+fn print_pending(pending_reviews: &[Value], rendered_ids: &HashSet<i64>) {
+    if pending_reviews.is_empty() {
+        return;
+    }
+    let empty: Vec<Value> = Vec::new();
+
+    for review in pending_reviews {
+        let comments = review
+            .pointer("/comments/nodes")
+            .and_then(Value::as_array)
+            .unwrap_or(&empty);
+        let author = review
+            .pointer("/author/login")
+            .and_then(Value::as_str)
+            .unwrap_or("ghost");
+
+        println!(
+            "=== Pending review by @{} ({} draft comment{}, not submitted — only you can see it) ===",
+            author,
+            comments.len(),
+            if comments.len() == 1 { "" } else { "s" },
+        );
+
+        let body = review.get("body").and_then(Value::as_str).unwrap_or("");
+        if !body.is_empty() {
+            println!();
+            print_body(review, "");
+        }
+
+        for c in comments {
+            let id = c.get("databaseId").and_then(Value::as_i64);
+            if id.is_some_and(|id| rendered_ids.contains(&id)) {
+                continue;
+            }
+            println!();
+            println!("— {}", comment_location(c));
+            print_comment_header(c, "", false, &HashSet::new());
+            print_body(c, "");
+        }
+
+        println!();
+    }
+}
+
+fn comment_location(c: &Value) -> String {
+    let path = c.get("path").and_then(Value::as_str).unwrap_or("?");
+    match c
+        .get("line")
+        .and_then(Value::as_i64)
+        .or_else(|| c.get("originalLine").and_then(Value::as_i64))
+    {
+        Some(l) => format!("{}:{}", path, l),
+        None => path.to_string(),
+    }
 }
 
 fn print_body(c: &Value, indent: &str) {

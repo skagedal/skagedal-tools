@@ -230,6 +230,20 @@ const SAMPLE_PR_COMMENTS_JSON: &str = r#"{
             {"databaseId": 501, "author": {"login": "bob"}, "submittedAt": "2026-05-02T10:00:00Z", "state": "COMMENTED", "body": ""}
           ]
         },
+        "pendingReviews": {
+          "nodes": [
+            {
+              "databaseId": 502,
+              "author": {"login": "me"},
+              "createdAt": "2026-05-03T08:00:00Z",
+              "body": "",
+              "comments": {"nodes": [
+                {"databaseId": 300, "author": {"login": "me"}, "createdAt": "2026-05-03T08:00:00Z", "path": "src/baz.rs", "line": 11, "originalLine": 11, "body": "draft: is this dead code?"},
+                {"databaseId": 301, "author": {"login": "me"}, "createdAt": "2026-05-03T08:05:00Z", "path": "src/bar.rs", "line": 7, "originalLine": 7, "body": "draft reply on a resolved thread"}
+              ]}
+            }
+          ]
+        },
         "reviewThreads": {
           "nodes": [
             {
@@ -249,7 +263,18 @@ const SAMPLE_PR_COMMENTS_JSON: &str = r#"{
               "line": 7,
               "originalLine": 7,
               "comments": {"nodes": [
-                {"databaseId": 200, "author": {"login": "carol"}, "createdAt": "2026-05-02T11:00:00Z", "body": "old concern"}
+                {"databaseId": 200, "author": {"login": "carol"}, "createdAt": "2026-05-02T11:00:00Z", "body": "old concern"},
+                {"databaseId": 301, "author": {"login": "me"}, "createdAt": "2026-05-03T08:05:00Z", "body": "draft reply on a resolved thread"}
+              ]}
+            },
+            {
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "src/baz.rs",
+              "line": 11,
+              "originalLine": 11,
+              "comments": {"nodes": [
+                {"databaseId": 300, "author": {"login": "me"}, "createdAt": "2026-05-03T08:00:00Z", "body": "draft: is this dead code?"}
               ]}
             }
           ]
@@ -288,12 +313,14 @@ fn comments_text_format_calls_graphql_and_hides_resolved() {
         "stdout: {stdout}"
     );
     assert!(
-        stdout.contains("Review threads (1, 1 resolved hidden)"),
+        stdout.contains("Review threads (2, 1 resolved hidden)"),
         "stdout: {stdout}"
     );
     assert!(stdout.contains("src/foo.rs:42"), "stdout: {stdout}");
     assert!(stdout.contains("@bob"), "stdout: {stdout}");
-    assert!(!stdout.contains("src/bar.rs"), "stdout: {stdout}");
+    // src/bar.rs's thread is resolved, so it isn't listed — its own pending
+    // draft still is, above, which the pending-review test covers.
+    assert!(!stdout.contains("[RESOLVED]"), "stdout: {stdout}");
     assert!(!stdout.contains("@carol"), "stdout: {stdout}");
 
     let log = h.log();
@@ -316,12 +343,87 @@ fn comments_resolved_flag_shows_resolved_threads() {
     );
     assert_success(&out);
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("Review threads (2)"), "stdout: {stdout}");
+    assert!(stdout.contains("Review threads (3)"), "stdout: {stdout}");
     assert!(
         stdout.contains("src/bar.rs:7 [RESOLVED]"),
         "stdout: {stdout}"
     );
     assert!(stdout.contains("@carol"), "stdout: {stdout}");
+}
+
+#[test]
+fn comments_marks_pending_drafts_and_surfaces_hidden_ones() {
+    let h = Harness::new();
+    let out = h.run(
+        &["comments"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_COMMENTS_JSON", SAMPLE_PR_COMMENTS_JSON),
+        ],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Pending review by @me (2 draft comments, not submitted"),
+        "stdout: {stdout}"
+    );
+    // The draft on the unresolved thread is tagged in place, not repeated.
+    assert!(stdout.contains("@me [PENDING]"), "stdout: {stdout}");
+    assert_eq!(stdout.matches("draft: is this dead code?").count(), 1);
+    // The draft on the resolved (hence hidden) thread is printed in full.
+    assert!(stdout.contains("— src/bar.rs:7"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("draft reply on a resolved thread"),
+        "stdout: {stdout}"
+    );
+    assert!(!stdout.contains("old concern"), "stdout: {stdout}");
+    // A pending review is not a review summary.
+    assert!(stdout.contains("Review summaries (1)"), "stdout: {stdout}");
+
+    let log = h.log();
+    assert!(log.contains("pendingReviews"), "log: {log}");
+}
+
+#[test]
+fn comments_resolved_flag_leaves_nothing_for_the_pending_section() {
+    let h = Harness::new();
+    let out = h.run(
+        &["comments", "--resolved"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_COMMENTS_JSON", SAMPLE_PR_COMMENTS_JSON),
+        ],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Pending review by @me"), "stdout: {stdout}");
+    // Every draft is now visible in its thread, so neither is repeated above.
+    assert_eq!(
+        stdout.matches("draft reply on a resolved thread").count(),
+        1
+    );
+    assert_eq!(stdout.matches("draft: is this dead code?").count(), 1);
+    assert_eq!(stdout.matches("[PENDING]").count(), 2);
+}
+
+#[test]
+fn comments_omits_the_pending_section_when_there_is_no_draft_review() {
+    let h = Harness::new();
+    let no_pending = SAMPLE_PR_COMMENTS_JSON.replace("\"pendingReviews\"", "\"unusedReviews\"");
+    let out = h.run(
+        &["comments"],
+        &[
+            ("MOCK_GH_PR_NUMBER", "42"),
+            ("MOCK_GH_NAME_WITH_OWNER", "me/repo"),
+            ("MOCK_GH_PR_COMMENTS_JSON", &no_pending),
+        ],
+    );
+    assert_success(&out);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("Pending review"), "stdout: {stdout}");
+    assert!(!stdout.contains("[PENDING]"), "stdout: {stdout}");
 }
 
 #[test]
@@ -345,7 +447,7 @@ fn comments_json_format_emits_full_raw_response() {
         .pointer("/data/repository/pullRequest/reviewThreads/nodes")
         .and_then(serde_json::Value::as_array)
         .expect("review threads array");
-    assert_eq!(threads.len(), 2);
+    assert_eq!(threads.len(), 3);
     let convo = parsed
         .pointer("/data/repository/pullRequest/comments/nodes")
         .and_then(serde_json::Value::as_array)
