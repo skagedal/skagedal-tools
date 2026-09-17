@@ -27,5 +27,6 @@ A collection of small tools.
 | [chrome-page-notes](chrome-page-notes/) | Chrome extension, plus the CLI that registers and serves it, for attaching your own notes to a page |
 | [appicon-generator](appicon-generator/) | Generates placeholder app icons from an emoji, for Xcode and Flutter projects |
 | [trafikverket](trafikverket/) | The next trains between two stations, with live delays, filtered to the ones your ticket covers |
+| [kontoutdrag](kontoutdrag/) | Identify merchants and categorise spending in a bank statement export, using YAML merchant tables |
 | [woke](woke/) | Keeps this Mac awake with the lid closed, restoring the setting when it exits |
 | [skagedal-dirs](skagedal-dirs/) | Shared library: the XDG config/data/cache directories every tool stores its files in |

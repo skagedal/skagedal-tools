@@ -1,0 +1,6 @@
+# Statement exports. This tool exists to read them, so the obvious thing
+# to do while working on it is to drop a real one in here — and a real one
+# holds account balances, counterparty phone numbers and every purchase
+# you have made. Ignored so that cannot be committed by accident.
+*.csv
+*.CSV

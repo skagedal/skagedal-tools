@@ -23,6 +23,7 @@ INSTALLED_RUST_TOOLS=(
     git-branch-assistant
     git-dirty-checker
     intellij-patch
+    kontoutdrag
     log-jsonify
     log-viewer
     package-json-merge

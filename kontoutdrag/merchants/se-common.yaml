@@ -1,0 +1,855 @@
+# Common Swedish merchants, as they appear in bank statement exports.
+#
+# Descriptors are matched after normalisation: upper case, and runs of
+# whitespace collapsed. Diacritics are left as they are, so a chain that
+# arrives both as `HEMKOP` and as `HEMKÖP` needs both patterns written
+# out. That is deliberate — a rule here means exactly what it says.
+#
+# A pattern ending in a space means a word boundary: `prefix: "SL "`
+# matches `SL APP` but not the butcher's hall down the road. YAML strips
+# a trailing space from an unquoted scalar, so quote those patterns.
+#
+# Card descriptors are truncated — SEB cuts them to twelve characters — so
+# `prefix` is the rule you want almost always. Where an acquirer mangles a
+# diacritic into a space rather than dropping it (`K PMANS TORG` for
+# Köpmans Torg) the mangled spelling is listed as its own pattern,
+# because no rule about diacritics recovers it.
+#
+# This table deliberately stops at chains anyone in Sweden would
+# recognise. Anything regional, niche or small-chain belongs in a table of
+# your own, loaded after this one so it wins — not only because it is
+# yours, but because which of those appear at all says something about
+# whoever built the table.
+
+version: 1
+name: se-common
+description: National Swedish chains, utilities, public bodies and the usual subscriptions
+
+# Payment providers that put their own name in front of the merchant's.
+# Tried only when the descriptor matches nothing as written, so a shop
+# whose name really does start with these letters is left alone.
+normalize:
+  strip_prefixes:
+    - prefix: "KLARNA"
+      provider: Klarna
+    - prefix: "K*"
+      provider: Klarna
+    - prefix: "ZETTLE"
+      provider: Zettle
+    - prefix: "IZ "
+      provider: Zettle
+    - prefix: "SUMUP"
+      provider: SumUp
+    - prefix: "PAYPAL"
+      provider: PayPal
+    - prefix: "SP*"
+      provider: Shopify
+    - prefix: "SQ*"
+      provider: Square
+    - prefix: "STRIPE"
+      provider: Stripe
+    # SEB's own marker for a card-not-present purchase.
+    - prefix: "WWW "
+      provider: null
+
+merchants:
+
+  # ---- Dagligvaror -------------------------------------------------
+
+  - name: ICA
+    category: groceries
+    match:
+      prefix: [ICA, MAXI ICA, STORA ICA]
+  - name: Coop
+    category: groceries
+    match:
+      prefix: [COOP, STORA COOP]
+  - name: Willys
+    category: groceries
+    match:
+      prefix: [WILLYS]
+  - name: Hemköp
+    category: groceries
+    match:
+      prefix: [HEMKOP, HEMKÖP, "HEMK P"]
+  - name: City Gross
+    category: groceries
+    match:
+      prefix: [CITY GROSS, CITYGROSS]
+  - name: Lidl
+    category: groceries
+    match:
+      prefix: [LIDL]
+  - name: Mathem
+    category: groceries
+    match:
+      prefix: [MATHEM]
+
+  - name: Tempo
+    category: groceries
+    match:
+      prefix: [TEMPO]
+  - name: Matöppet
+    category: groceries
+    match:
+      prefix: [MATOPPET, MATÖPPET]
+  - name: Handlarn
+    category: groceries
+    match:
+      prefix: [HANDLARN]
+  # ---- Kiosk och närbutik ------------------------------------------
+
+  - name: Pressbyrån
+    category: convenience
+    match:
+      prefix: [PRESSBYRAN, PRESSBYRÅN, PRESSBYRAAN, "PB "]
+      # Some acquirers put the store number first.
+      regex: ['^\d{6,8} PRES']
+  - name: 7-Eleven
+    category: convenience
+    match:
+      prefix: ["7-ELEVEN", "7 ELEVEN", SEVEN ELEVEN]
+      regex: ['^\d{6,8} 7-?EL']
+  - name: Systembolaget
+    category: alcohol
+    match:
+      prefix: [SYSTEMBOLAGE]
+
+  # ---- Apotek ------------------------------------------------------
+
+  - name: Apoteket
+    category: pharmacy
+    match:
+      prefix: [APOTEKET]
+  - name: Apotek Hjärtat
+    category: pharmacy
+    match:
+      prefix: [APOTEK HJART, APOTEK HJÄRT]
+  - name: Kronans Apotek
+    category: pharmacy
+    match:
+      prefix: [KRONANS APOT]
+  - name: Apoteksgruppen
+    category: pharmacy
+    match:
+      prefix: [APOTEKSGRUPP]
+  - name: Lloyds Apotek
+    category: pharmacy
+    match:
+      prefix: [LLOYDS APOTEK, LLOYDSAPOTEK]
+  - name: Apotea
+    category: pharmacy
+    match:
+      prefix: [APOTEA]
+
+  - name: DOZ Apotek
+    category: pharmacy
+    match:
+      prefix: [DOZAPOTEK, DOZ APOTEK]
+  # ---- Drivmedel ---------------------------------------------------
+
+  - name: OKQ8
+    category: fuel
+    match:
+      prefix: [OKQ8, OK Q8]
+  - name: Circle K
+    category: fuel
+    match:
+      prefix: [CIRCLE K, CIRCLEK]
+  - name: Preem
+    category: fuel
+    match:
+      prefix: [PREEM]
+  - name: Ingo
+    category: fuel
+    match:
+      prefix: [INGO]
+  - name: St1
+    category: fuel
+    match:
+      prefix: ["ST1 "]
+  - name: Tanka
+    category: fuel
+    match:
+      prefix: [TANKA]
+  - name: Shell
+    category: fuel
+    match:
+      prefix: [SHELL]
+
+  # ---- Parkering ---------------------------------------------------
+
+  - name: EasyPark
+    category: parking
+    match:
+      prefix: [EASYPARK, EASY PARK]
+  - name: Aimo Park
+    category: parking
+    match:
+      prefix: [AIMO]
+  - name: Parkster
+    category: parking
+    match:
+      prefix: [PARKSTER]
+  - name: Q-Park
+    category: parking
+    match:
+      prefix: [Q-PARK, QPARK]
+  - name: Apcoa
+    category: parking
+    match:
+      prefix: [APCOA]
+  - name: Mobill
+    category: parking
+    match:
+      prefix: [MOBILPARK, MOBILL]
+  - name: Parkman
+    category: parking
+    match:
+      prefix: [PARKMAN]
+
+  # ---- Kollektivtrafik och resor -----------------------------------
+
+  - name: SJ
+    category: transport
+    match:
+      prefix: [SJ AB, SJ APP, SJ SE, SJ REGIONAL]
+      exact: [SJ]
+  - name: SL
+    category: transport
+    match:
+      prefix: [SL APP, SL AB, "SL "]
+      exact: [SL]
+  - name: UL
+    category: transport
+    match:
+      prefix: [UL KUNDCENTER, UL APP]
+  - name: Västtrafik
+    category: transport
+    match:
+      prefix: [VASTTRAFIK, VÄSTTRAFIK]
+  - name: Skånetrafiken
+    category: transport
+    match:
+      prefix: [SKANETRAFIK, SKÅNETRAFIK]
+  - name: Snälltåget
+    category: transport
+    match:
+      prefix: [SNALLTAGET, SNÄLLTÅGET]
+  - name: Flixbus
+    category: transport
+    match:
+      prefix: [FLIXBUS]
+  - name: MTR
+    category: transport
+    match:
+      prefix: [MTR EXPRESS, MTRX]
+  - name: Taxi Stockholm
+    category: transport
+    match:
+      prefix: [TAXI STOCKHOLM, TAXISTHLM]
+  - name: Uber
+    category: transport
+    match:
+      prefix: [UBER]
+  - name: Bolt
+    category: transport
+    match:
+      prefix: [BOLT.EU, BOLT EU]
+  - name: Öresundsbron
+    category: transport
+    match:
+      prefix: [OERESUNDSBRO, ORESUNDSBRO, ÖRESUNDSBRO]
+  - name: Mälardalstrafik
+    category: transport
+    match:
+      prefix: [MALARDALSTRA, MÄLARDALSTRA]
+
+  - name: SAS
+    category: travel
+    match:
+      prefix: [SAS SCANDINAV, SAS NORGE, SAS SVERIGE]
+  - name: Norwegian
+    category: travel
+    match:
+      prefix: [NORWEGIAN AI, NORWEGIAN.CO]
+  - name: Ryanair
+    category: travel
+    match:
+      prefix: [RYANAIR]
+  - name: Finnair
+    category: travel
+    match:
+      prefix: [FINNAIR]
+  - name: Booking.com
+    category: accommodation
+    match:
+      prefix: [BOOKING COM, BOOKING.COM]
+  - name: Airbnb
+    category: accommodation
+    match:
+      prefix: [AIRBNB]
+  - name: Scandic
+    category: accommodation
+    match:
+      prefix: [SCANDIC]
+  - name: Telia
+    category: telecom
+    match:
+      prefix: [TELIA]
+  - name: Telenor
+    category: telecom
+    match:
+      prefix: [TELENOR]
+  - name: Tele2
+    category: telecom
+    match:
+      prefix: [TELE2]
+  - name: Comviq
+    category: telecom
+    match:
+      prefix: [COMVIQ]
+  - name: Tre
+    category: telecom
+    match:
+      prefix: [HI3G, TRE SVERIGE]
+  - name: Hallon
+    category: telecom
+    match:
+      prefix: [HALLON]
+  - name: Vimla
+    category: telecom
+    match:
+      prefix: [VIMLA]
+  - name: Lycamobile
+    category: telecom
+    match:
+      prefix: [LYCAMOBI, LYCA MOBILE]
+
+  - name: Bredbandsbolaget
+    category: internet
+    match:
+      prefix: [BREDBANDSBOL]
+  - name: Bahnhof
+    category: internet
+    match:
+      prefix: [BAHNHOF]
+
+  - name: Vattenfall
+    category: utilities
+    match:
+      prefix: [VATTENFALL]
+  - name: E.ON
+    category: utilities
+    match:
+      prefix: [E.ON, EON SVERIGE, EON ENERGI]
+  - name: Ellevio
+    category: utilities
+    match:
+      prefix: [ELLEVIO]
+  - name: Fortum
+    category: utilities
+    match:
+      prefix: [FORTUM]
+  - name: Stockholm Exergi
+    category: utilities
+    match:
+      prefix: [STOCKHOLM EX]
+  - name: Göteborg Energi
+    category: utilities
+    match:
+      prefix: [GOTEBORG ENE, GÖTEBORG ENE]
+
+  - name: Tibber
+    category: utilities
+    match:
+      prefix: [TIBBER]
+  # ---- Försäkring --------------------------------------------------
+
+  - name: Trygg-Hansa
+    category: insurance
+    match:
+      prefix: [TRYGG-HANSA, TRYGG HANSA, TRYGGHANSA]
+  - name: Folksam
+    category: insurance
+    match:
+      prefix: [FOLKSAM]
+  - name: If
+    category: insurance
+    match:
+      prefix: [IF SKADEFORS, IF FORSAKRING]
+  - name: Länsförsäkringar
+    category: insurance
+    match:
+      prefix: [LANSFORSAKR, LÄNSFÖRSÄKR]
+  - name: Moderna Försäkringar
+    category: insurance
+    match:
+      prefix: [MODERNA FORS, MODERNA FÖRS]
+  - name: Dina Försäkringar
+    category: insurance
+    match:
+      prefix: [DINA FORSAKR, DINA FÖRSÄKR]
+  - name: Avanza
+    category: banking
+    match:
+      prefix: [AVANZA]
+  - name: Nordnet
+    category: banking
+    match:
+      prefix: [NORDNET]
+  - name: SEB
+    category: banking
+    match:
+      prefix: [SEB KORT, SEB BANK, SEB TRYGG]
+  - name: Swedbank
+    category: banking
+    match:
+      prefix: [SWEDBANK]
+  - name: Handelsbanken
+    category: banking
+    match:
+      prefix: [HANDELSBANK]
+  - name: Nordea
+    category: banking
+    match:
+      prefix: [NORDEA]
+  - name: Klarna
+    category: banking
+    match:
+      prefix: [KLARNA]
+  - name: Santander
+    category: banking
+    match:
+      prefix: [SANTANDER]
+  - name: Resurs Bank
+    category: banking
+    match:
+      prefix: [RESURS BANK]
+
+  - name: Biltema
+    category: hardware
+    match:
+      prefix: [BILTEMA]
+  - name: Clas Ohlson
+    category: hardware
+    match:
+      prefix: [CLAS OHLSON, CLASOHLSON]
+  - name: Jula
+    category: hardware
+    match:
+      prefix: [JULA]
+  - name: Bauhaus
+    category: hardware
+    match:
+      prefix: [BAUHAUS]
+  - name: K-Rauta
+    category: hardware
+    match:
+      prefix: [K-RAUTA, KRAUTA]
+  - name: Byggmax
+    category: hardware
+    match:
+      prefix: [BYGGMAX]
+  - name: Hornbach
+    category: hardware
+    match:
+      prefix: [HORNBACH]
+  - name: Rusta
+    category: hardware
+    match:
+      prefix: [RUSTA]
+  - name: Granngården
+    category: hardware
+    match:
+      prefix: [GRANNGARDEN, GRANNGÅRDEN]
+  - name: Kjell & Company
+    category: electronics
+    match:
+      prefix: [KJELL, KJELLCO, "KJELL & CO"]
+  - name: IKEA
+    category: home
+    match:
+      prefix: [IKEA]
+  - name: Cervera
+    category: home
+    match:
+      prefix: [CERVERA]
+  - name: Mekonomen
+    category: car
+    match:
+      prefix: [MEKONOMEN]
+  - name: Autoexperten
+    category: car
+    match:
+      prefix: [AUTOEXPERTEN]
+  - name: Bilia
+    category: car
+    match:
+      prefix: [BILIA]
+
+  # ---- Elektronik --------------------------------------------------
+
+  - name: Elgiganten
+    category: electronics
+    match:
+      prefix: [ELGIGANTEN]
+  - name: MediaMarkt
+    category: electronics
+    match:
+      prefix: [MEDIA MARKT, MEDIAMARKT]
+  - name: NetOnNet
+    category: electronics
+    match:
+      prefix: [NETONNET]
+  - name: Webhallen
+    category: electronics
+    match:
+      prefix: [WEBHALLEN]
+  - name: Inet
+    category: electronics
+    match:
+      prefix: [INET.SE, INET AB]
+  - name: Komplett
+    category: electronics
+    match:
+      prefix: [KOMPLETT]
+  - name: Power
+    category: electronics
+    match:
+      prefix: [POWER SVERIG]
+
+  - name: Teknikmagasinet
+    category: electronics
+    match:
+      prefix: [TEKNIKMAGASI]
+  # ---- Kläder och sport --------------------------------------------
+
+  - name: H&M
+    category: clothing
+    match:
+      prefix: ["H&M", "HM SE", "H & M"]
+  - name: Lindex
+    category: clothing
+    match:
+      prefix: [LINDEX]
+  - name: KappAhl
+    category: clothing
+    match:
+      prefix: [KAPPAHL]
+  - name: Åhléns
+    category: clothing
+    match:
+      prefix: [AHLENS, ÅHLENS, ÅHLÉNS]
+  - name: Dressmann
+    category: clothing
+    match:
+      prefix: [DRESSMANN]
+  - name: Zalando
+    category: clothing
+    match:
+      prefix: [ZALANDO]
+  - name: Stadium
+    category: sports
+    match:
+      prefix: [STADIUM]
+  - name: XXL
+    category: sports
+    match:
+      prefix: [XXL SPORT, XXL.SE]
+  - name: Intersport
+    category: sports
+    match:
+      prefix: [INTERSPORT]
+
+  # ---- Böcker ------------------------------------------------------
+
+  - name: Adlibris
+    category: books
+    match:
+      prefix: [ADLIBRIS]
+  - name: Akademibokhandeln
+    category: books
+    match:
+      prefix: [AKADEMIBOKHA]
+  - name: Bokus
+    category: books
+    match:
+      prefix: [BOKUS]
+  - name: McDonald's
+    category: fast-food
+    match:
+      prefix: [MCDONALD, "MCD ", MCDSTHLM]
+      regex: ['^MCD\s*\d']
+  - name: Burger King
+    category: fast-food
+    match:
+      prefix: [BURGER KING]
+  - name: Max Burgers
+    category: fast-food
+    match:
+      prefix: [MAX BURGERS, MAX HAMBURG]
+  - name: Sibylla
+    category: fast-food
+    match:
+      prefix: [SIBYLLA]
+  - name: Subway
+    category: fast-food
+    match:
+      prefix: [SUBWAY]
+  - name: Espresso House
+    category: cafe
+    match:
+      prefix: [ESPRESSO HOU]
+  - name: Wayne's Coffee
+    category: cafe
+    match:
+      prefix: [WAYNES COFFE, WAYNE'S]
+  - name: Starbucks
+    category: cafe
+    match:
+      prefix: [STARBUCKS]
+  - name: Gateau
+    category: cafe
+    match:
+      prefix: [GATEAU]
+  - name: Fazer
+    category: cafe
+    match:
+      prefix: [FAZER]
+
+  # ---- Nöje och kultur ---------------------------------------------
+
+  - name: Filmstaden
+    category: entertainment
+    match:
+      prefix: [FILMSTADEN, SF BIO]
+  - name: Ticketmaster
+    category: entertainment
+    match:
+      prefix: [TICKETMASTER]
+  - name: Gröna Lund
+    category: entertainment
+    match:
+      prefix: [GRONA LUND, GRÖNA LUND, AB GRONA LUN, AB GRÖNA LUN, GRONALUND, GRÖNALUND]
+  - name: Liseberg
+    category: entertainment
+    match:
+      prefix: [LISEBERG]
+  - name: Skansen
+    category: entertainment
+    match:
+      prefix: [SKANSEN]
+
+  # ---- Prenumerationer och digitalt --------------------------------
+
+  - name: Spotify
+    category: subscriptions
+    match:
+      prefix: [SPOTIFY]
+  - name: Netflix
+    category: subscriptions
+    match:
+      prefix: [NETFLIX]
+  - name: Max
+    category: subscriptions
+    match:
+      prefix: [HBO, WARNERMEDIA]
+  - name: Disney+
+    category: subscriptions
+    match:
+      prefix: [DISNEY PLUS, DISNEYPLUS]
+  - name: Viaplay
+    category: subscriptions
+    match:
+      prefix: [VIAPLAY]
+  - name: Amazon Prime
+    category: subscriptions
+    match:
+      prefix: [AMAZON PRIME]
+  - name: PlayStation
+    category: subscriptions
+    match:
+      prefix: [PLAYSTATION]
+  - name: Xbox
+    category: subscriptions
+    match:
+      prefix: [XBOX, MICROSOFT XB]
+  - name: Steam
+    category: subscriptions
+    match:
+      prefix: [STEAMGAMES, VALVE]
+  - name: Apple
+    category: subscriptions
+    match:
+      prefix: [APPLE COM, APPLE.COM, ITUNES]
+  - name: Google
+    category: subscriptions
+    match:
+      prefix: [GOOGLE]
+  - name: Microsoft
+    category: subscriptions
+    match:
+      prefix: [MICROSOFT, MSFT]
+  - name: Adobe
+    category: subscriptions
+    match:
+      prefix: [ADOBE]
+  - name: Dropbox
+    category: subscriptions
+    match:
+      prefix: [DROPBOX]
+  - name: GitHub
+    category: subscriptions
+    match:
+      prefix: [GITHUB]
+  - name: Patreon
+    category: subscriptions
+    match:
+      prefix: [PATREON]
+  - name: Amazon
+    category: shopping
+    match:
+      prefix: [AMAZON, AMAZONRETAIL, AMZN]
+  - name: Blocket
+    category: shopping
+    match:
+      prefix: [BLOCKET]
+  - name: Tradera
+    category: shopping
+    match:
+      prefix: [TRADERA]
+
+  # ---- Träning -----------------------------------------------------
+
+  - name: Friskis & Svettis
+    category: fitness
+    match:
+      prefix: [FRISKIS]
+  - name: SATS
+    category: fitness
+    match:
+      prefix: [SATS SVERIGE, "SATS "]
+  - name: Actic
+    category: fitness
+    match:
+      prefix: [ACTIC]
+  - name: Fitness24Seven
+    category: fitness
+    match:
+      prefix: [FITNESS24, F24]
+
+  - name: Nordic Wellness
+    category: fitness
+    match:
+      prefix: [NORDICWELL, NORDIC WELL, "NW "]
+  # ---- Syn och tänder ----------------------------------------------
+
+  - name: Synsam
+    category: healthcare
+    match:
+      prefix: [SYNSAM]
+  - name: Smarteyes
+    category: healthcare
+    match:
+      prefix: [SMARTEYES]
+  - name: Specsavers
+    category: healthcare
+    match:
+      prefix: [SPECSAVERS]
+  - name: Synoptik
+    category: healthcare
+    match:
+      prefix: [SYNOPTIK]
+  - name: Folktandvården
+    category: healthcare
+    match:
+      prefix: [FOLKTANDVARD, FOLKTANDVÅRD]
+
+  # ---- Myndigheter och avgifter ------------------------------------
+
+  - name: Skatteverket
+    category: government
+    match:
+      prefix: [SKATTEVERKET]
+  - name: CSN
+    category: government
+    note: Centrala studiestödsnämnden — student loan repayments.
+    match:
+      prefix: [CENTRALA STUDIESTOD, CENTRALA STUDIESTÖD, "CSN "]
+  - name: Transportstyrelsen
+    category: government
+    note: Vehicle tax, congestion charge and infrastructure fees are all billed from here.
+    match:
+      prefix: [TRANSPORTSTY, FORDONSSKATT, TRANGSELSKAT, TRÄNGSELSKAT, INFRASTRUKTURAVGIFT]
+  - name: Kronofogden
+    category: government
+    match:
+      prefix: [KRONOFOGDEN]
+  - name: Polisen
+    category: government
+    match:
+      prefix: [POLISEN, POLISMYNDIGH]
+  - name: Trafikverket
+    category: government
+    match:
+      prefix: [TRAFIKVERKET]
+  - name: Försäkringskassan
+    category: government
+    match:
+      prefix: [FORSAKRINGSK, FÖRSÄKRINGSK]
+  - name: Pensionsmyndigheten
+    category: government
+    match:
+      prefix: [PENSIONSMYND]
+
+  # ---- Välgörenhet -------------------------------------------------
+
+  - name: Läkare Utan Gränser
+    category: charity
+    match:
+      prefix: [LAKARE UTAN, LÄKARE UTAN, "MSF "]
+  - name: Röda Korset
+    category: charity
+    match:
+      prefix: [RODA KORSET, RÖDA KORSET, SVENSKA RODA, SVENSKA RÖDA]
+  - name: Rädda Barnen
+    category: charity
+    match:
+      prefix: [RADDA BARNEN, RÄDDA BARNEN]
+  - name: Amnesty
+    category: charity
+    match:
+      prefix: [AMNESTY]
+  - name: Naturskyddsföreningen
+    category: charity
+    match:
+      prefix: [NATURSKYDDSF]
+  - name: UNICEF
+    category: charity
+    match:
+      prefix: [UNICEF]
+  - name: Majblomman
+    category: charity
+    match:
+      prefix: [MAJBLOMMAN]
+
+  # ---- Frakt och retur ---------------------------------------------
+
+  - name: PostNord
+    category: shipping
+    match:
+      prefix: [POSTNORD]
+  - name: DHL
+    category: shipping
+    match:
+      prefix: [DHL]
+  - name: Instabox
+    category: shipping
+    match:
+      prefix: [INSTABOX, BUDBEE]
+  - name: Returpack
+    category: refunds
+    note: Pant — deposit refunds from the bottle machines.
+    match:
+      prefix: [RETURPACK]
