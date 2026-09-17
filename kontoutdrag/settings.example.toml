@@ -1,0 +1,23 @@
+# kontoutdrag — settings
+#
+# Lives at ~/.config/skagedal-tools/kontoutdrag/settings.toml.
+# `kontoutdrag edit-config` opens it, creating it from this template.
+
+# Merchant tables, loaded in the order written. A later table wins ties
+# against an earlier one, so put the bundled table first and your own
+# below it: anything you define there overrides the shipped guess without
+# editing the shipped file.
+
+[[table]]
+bundled = "se-common"
+
+# [[table]]
+# path = "~/notes/finances/merchants.yaml"
+
+[statements]
+# Export format of the statement files. Currently only "seb".
+format = "seb"
+
+# Optional. A statement named on the command line without any directory
+# part is looked for here first.
+# directory = "~/notes/finances/data"
