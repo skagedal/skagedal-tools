@@ -77,24 +77,37 @@ impl Report {
         let expected_days_so_far = expected_days_worked(document.week, now, workweek);
         let expected_duration_so_far_week =
             TimeDelta::try_hours((expected_days_so_far * workweek.hours_per_day).into()).unwrap();
-        let incoming_balance: Duration = document
-            .preamble
-            .iter()
-            .filter_map(|d| match d {
-                Line::DurationShift { text: _, duration } => Some(duration),
-                _ => None,
-            })
-            .sum();
-
         Report {
             duration_today,
             duration_week,
             is_ongoing: this_day.map(Day::has_open_shift).unwrap_or_else(|| false),
             balance: duration_week
                 .sub(expected_duration_so_far_week)
-                .add(incoming_balance),
+                .add(incoming_balance(document)),
         }
     }
+}
+
+/// The balance a week ends with, counting every expected day of it. Open
+/// shifts count as nothing, since there is no end time to count them to.
+pub fn closing_balance(document: &Document, workweek: &WorkWeekConfig) -> Duration {
+    let worked = document.days.iter().fold(TimeDelta::zero(), |acc, day| {
+        acc + duration_for_day(day, workweek)
+    });
+    let expected =
+        TimeDelta::try_hours((workweek.days_per_week * workweek.hours_per_day).into()).unwrap();
+    worked.sub(expected).add(incoming_balance(document))
+}
+
+fn incoming_balance(document: &Document) -> Duration {
+    document
+        .preamble
+        .iter()
+        .filter_map(|d| match d {
+            Line::DurationShift { text: _, duration } => Some(duration),
+            _ => None,
+        })
+        .sum()
 }
 
 #[cfg(test)]

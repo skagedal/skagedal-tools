@@ -91,15 +91,21 @@ The time should be in `HH:MM` format (24-hour format).
 
 ## Transferring balance
 
-Tracker will only look at the current week file when stating your report. If you wish to transfer a balance from a previous week, it can be done by adding a line like this to the top of the current week file: 
+Tracker only looks at the current week file when stating your report, so the balance a week ends with is carried into the next one as a line at the top of the new file:
 
 ```
+# balance carried over from 2024-W03
 * balance 3:12h
+
+[monday 2024-01-22]
+* 08:28-
 ```
 
-This will add 3 hours and 12 minutes to the balance for the current week. A negative balance is written the same way, with a minus sign: `* balance -3:12h`. Any duration format described above works here – the separated form `* balance 3h 12m` is still read, and is rewritten in the compound form the next time `tracker` writes the file. 
+This happens once, when the week file is created – by whichever command touches the new week first. The carried balance is the one the previous week *ended* with: every expected work day of that week counts, whether or not it was worked, and a shift that was never closed counts as nothing.
 
-(Under development: Such as balance shift will be added automatically when you start a new week.)
+"Previous week" means the latest earlier week that has a file. A week without one – a holiday you never ran `tracker` in – is skipped rather than counted as a week of missed work. No balance is carried into a future week (`tracker -w 1`), since the week before it is not over, or into a file given with `-f`.
+
+The line is an ordinary part of the file, so if the carried balance is wrong, or you want to start over at zero, edit or delete it. The same line can be written by hand, and a negative balance is written with a minus sign: `* balance -3:12h`. Any duration format described above works here – the separated form `* balance 3h 12m` is still read, and is rewritten in the compound form the next time `tracker` writes the file.
 
 ## Installation
 
