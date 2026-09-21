@@ -29,7 +29,7 @@ You have worked 3:12h this week.
 Balance: -4:48h
 ```
 
-The balance tells you that you have 4 hours and 48 minutes left to work this day in order to be in balance. 
+The balance tells you that you have 4 hours and 48 minutes left to work this day in order to be in balance. For a fuller picture, see [looking closer, and looking back](#looking-closer-and-looking-back) below.
 
 While the normal mode of operation is to use `tracker start` and `tracker stop` to track your shifts, you may find that you sometimes forget to start your shift, or otherwise make an error that you wish to correct. Instead of offering a specific user interface to do such edits, `tracker` lets you open the data file for the current week in your text editor of choice (following the `EDITOR` environment variable) by using `tracker edit`.
 
@@ -49,6 +49,43 @@ Here is an example of what a file might look like after two days of tracking:
 Each day starts with the week day and ISO-formatted date in square brackets. (The duplication in information is intentional, to make it easier to read the file.) Each shift is represented by a line starting with an asterisk, followed by the start and end time in 24-hour format, separated by a hyphen.
 
 Comments can be written in the file using lines starting with `#`.
+
+## Looking closer, and looking back
+
+`tracker report --verbose` prints the whole week alongside the numbers, laid out the way `tracker edit` shows it, with the length of every shift and the sum of every day written beside it in colour:
+
+```
+$ tracker --week=-1 report --verbose
+* balance 5:19h
+
+[monday 2026-09-14]     7:57h
+* 08:16-08:40             24m
+* 09:57-17:00           7:03h
+* 20:10-20:40             30m
+
+[tuesday 2026-09-15]    8:10h
+* 07:37-08:17             40m
+* 08:30-12:00           3:30h
+* 13:00-17:00              4h
+
+[wednesday 2026-09-16]  9:33h
+* 07:36-11:40           4:04h
+* 12:25-17:10           4:45h
+* 17:46-18:30             44m
+
+[thursday 2026-09-17]   9:11h
+* 07:49-17:00           9:11h
+
+[friday 2026-09-18]        8h
+* vacation                 8h
+
+You worked 42:51h this week.
+Balance: +8:10h
+```
+
+The annotations are not part of the file – they are what `tracker` makes of it – which is what makes them worth having: a day that is short of hours, or a whole day that never got recorded, is visible at a glance instead of having to be added up by hand. A shift left open on an earlier day is marked `not closed` rather than given a duration, since that is exactly what it counts as.
+
+As in the example, `--week` points any command at another week, counted relative to this one, so `tracker --week=-1 report` reports on last week. A week that is not the current one has no "today" in it to report on, and is spoken of in the past tense.
 
 ## Durations
 

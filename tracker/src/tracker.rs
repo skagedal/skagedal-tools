@@ -1,9 +1,8 @@
 use crate::config::Config;
 use crate::document::Line::{self, OpenShift};
 use crate::document::{Day, Document, Parser};
-use crate::duration::{format_duration, format_signed_duration};
 use crate::paths::TrackerDirs;
-use crate::report::{Report, closing_balance};
+use crate::report::{Report, closing_balance, render};
 use chrono::{Datelike, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 use std::env;
 use std::fs::OpenOptions;
@@ -135,11 +134,11 @@ impl Tracker {
             .expect("Could not open editor");
     }
 
-    pub fn show_report(&self, is_working: bool) {
+    pub fn show_report(&self, options: ReportOptions) {
         let path = self.week_file_created_if_needed(self.now.date());
         let result = fs::read_to_string(path);
         match result {
-            Ok(content) => self.process_report_of_content(content, self.now, is_working),
+            Ok(content) => self.process_report_of_content(content, self.now, options),
             Err(err) => eprintln!("Error: {}", err),
         }
     }
@@ -203,16 +202,16 @@ impl Tracker {
         }
     }
 
-    fn get_report(&self, content: String, now: NaiveDateTime) -> Report {
-        let document = self
-            .parser
-            .parse_document(self.active_week(now.date()), &content);
-        Report::from_document(&document, &now, &self.config.workweek)
-    }
-
-    fn process_report_of_content(&self, content: String, now: NaiveDateTime, is_working: bool) {
-        let report = self.get_report(content, now);
-        if is_working {
+    fn process_report_of_content(
+        &self,
+        content: String,
+        now: NaiveDateTime,
+        options: ReportOptions,
+    ) {
+        let week = self.active_week(now.date());
+        let document = self.parser.parse_document(week, &content);
+        let report = Report::from_document(&document, &now, &self.config.workweek);
+        if options.is_working {
             let code = match report.is_ongoing {
                 true => 0,
                 false => 1,
@@ -220,20 +219,19 @@ impl Tracker {
             std::process::exit(code);
         }
 
-        print!(
-            "You have worked {} today",
-            format_duration(report.duration_today)
-        );
-        if report.is_ongoing {
-            println!(", ongoing.")
-        } else {
-            println!(".")
+        if options.verbose {
+            let listing = render::week(
+                &document,
+                &now,
+                &self.config.workweek,
+                console::colors_enabled(),
+            );
+            if !listing.trim().is_empty() {
+                println!("{}", listing.trim_end());
+                println!();
+            }
         }
-        println!(
-            "You have worked {} this week.",
-            format_duration(report.duration_week)
-        );
-        println!("Balance: {}", format_signed_duration(report.balance))
+        print!("{}", render::summary(&report, week == now.iso_week()));
     }
 
     pub fn document_with_tracking_started(
@@ -363,6 +361,15 @@ impl Tracker {
     fn week_files_dir(&self) -> PathBuf {
         self.dirs.data_dir().join("week-files")
     }
+}
+
+/// What `report` was asked to print.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ReportOptions {
+    /// Say nothing, and only report through the exit code whether work is ongoing.
+    pub is_working: bool,
+    /// Also list the whole week, shift by shift.
+    pub verbose: bool,
 }
 
 #[derive(Debug, Clone)]

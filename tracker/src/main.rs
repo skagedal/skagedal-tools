@@ -1,7 +1,7 @@
 use std::{io, path::PathBuf};
 
 use ::tracker::paths::TrackerDirs;
-use ::tracker::tracker::Tracker;
+use ::tracker::tracker::{ReportOptions, Tracker};
 use chrono::Local;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
@@ -43,6 +43,10 @@ enum Commands {
         /// Only report with status code whether work is ongoing
         #[arg(short, long)]
         is_working: bool,
+
+        /// Also list the whole week, with the length of every shift and the sum of every day
+        #[arg(short, long)]
+        verbose: bool,
     },
     /// Generate command-line completions
     Completions { shell: Shell },
@@ -76,9 +80,15 @@ fn main() {
         Some(Commands::Stop) => tracker.stop_tracking(),
         Some(Commands::Edit { show_path: true }) => tracker.show_weekfile_path(),
         Some(Commands::Edit { show_path: false }) => tracker.edit_file(),
-        Some(Commands::Report { is_working }) => tracker.show_report(is_working),
+        Some(Commands::Report {
+            is_working,
+            verbose,
+        }) => tracker.show_report(ReportOptions {
+            is_working,
+            verbose,
+        }),
         Some(Commands::Completions { shell }) => generate_completions(shell),
-        None => tracker.show_report(false),
+        None => tracker.show_report(ReportOptions::default()),
     }
 }
 

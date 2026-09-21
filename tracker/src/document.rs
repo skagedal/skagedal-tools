@@ -149,6 +149,11 @@ impl Day {
     pub fn create(date: NaiveDate, lines: Vec<Line>) -> Self {
         Day { date, lines }
     }
+
+    /// The `[monday 2024-01-08]` line that introduces the day in the file.
+    pub fn header_line(&self) -> String {
+        format!("[{} {}]", format_weekday(self.date), self.date)
+    }
 }
 
 fn format_weekday(date: NaiveDate) -> String {
@@ -165,7 +170,7 @@ fn format_weekday(date: NaiveDate) -> String {
 
 impl fmt::Display for Day {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "[{} {}]", format_weekday(self.date), self.date)?;
+        writeln!(f, "{}", self.header_line())?;
         for line in &self.lines {
             writeln!(f, "{}", line)?;
         }
