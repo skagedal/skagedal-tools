@@ -4,7 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use temp_dir::TempDir;
 use tracker::{
     paths::TrackerDirs,
-    tracker::{Tracker, TrackerBuilder},
+    tracker::{ReportOptions, Tracker, TrackerBuilder},
 };
 
 struct TrackerTestContext {
@@ -51,7 +51,7 @@ fn read_file_and_report() {
         .builder
         .explicit_weekfile(Some(test_data().join("2024-W04.txt")))
         .build();
-    tracker.show_report(false)
+    tracker.show_report(ReportOptions::default())
 }
 
 #[test]

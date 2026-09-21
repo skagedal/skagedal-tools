@@ -110,5 +110,7 @@ fn incoming_balance(document: &Document) -> Duration {
         .sum()
 }
 
+pub mod render;
+
 #[cfg(test)]
 mod report_tests;
