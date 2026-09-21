@@ -166,3 +166,10 @@ All Rust projects in this repository must follow these guidelines:
 - Code must be rustfmt-clean. `./check` also runs `cargo fmt --all --check`, so
   unformatted code is a CI failure. Run `cargo fmt` before committing. Don't
   hand-format around rustfmt or scatter `#[rustfmt::skip]`.
+- All crates share one `target/` at the repository root — `install-rust` points
+  `CARGO_TARGET_DIR` at it so a bulk install compiles common dependencies once.
+  It is cache, and `check` and `install` end by trimming it back under
+  `TARGET_MAXSIZE_MB` (1500 by default, `SKAGEDAL_TOOLS_TARGET_MAXSIZE_MB` to
+  override) with `cargo sweep`, oldest artifacts first. `shared.sh` also sets
+  `CARGO_INCREMENTAL=0`, since a full-workspace pass has nothing to reuse it
+  for; a `cargo build` you run yourself in a crate directory is unaffected.

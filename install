@@ -112,6 +112,7 @@ main() {
         run-checks
     fi
     run-installs
+    sweep-target
     echo "==> Done"
 }
 
