@@ -1,5 +1,16 @@
 # shellcheck shell=bash
-# Sourced by install and update. Expects SCRIPT_DIR to be set.
+# Sourced by check, install and update. Expects SCRIPT_DIR to be set.
+
+# These scripts each do one full pass over the workspace, so incremental
+# compilation has nothing to be incremental against — it just leaves another
+# few hundred MB in target/debug. Only set here, so an interactive
+# `cargo build` in a crate directory keeps its incremental cache.
+export CARGO_INCREMENTAL=0
+
+# Ceiling for the shared target/ directory, in MB. Everything in there is
+# cache — the binaries that matter are copied out to ~/.cargo/bin and
+# ~/.local/bin — so the only cost of dropping an artifact is rebuild time.
+TARGET_MAXSIZE_MB="${SKAGEDAL_TOOLS_TARGET_MAXSIZE_MB:-1500}"
 
 INSTALLED_NODE_TOOLS=(
     linear-notifications
@@ -199,3 +210,14 @@ update-rust-workspace() {
     (cd "$SCRIPT_DIR" && cargo update)
 }
 
+# Drop the oldest build artifacts until target/ is back under the ceiling.
+# Oldest-first is what makes this cheap: the artifacts a subsequent build
+# wants are the ones it keeps.
+sweep-target() {
+    if ! command -v cargo-sweep >/dev/null 2>&1; then
+        echo "==> Skipping target/ sweep (cargo-sweep not installed)"
+        return 0
+    fi
+    echo "==> Sweeping target/ down to ${TARGET_MAXSIZE_MB} MB"
+    cargo sweep --maxsize "$TARGET_MAXSIZE_MB" "$SCRIPT_DIR"
+}

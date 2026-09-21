@@ -13,6 +13,7 @@ main() {
     for tool in "${SWIFT_TOOLS[@]}"; do
         check-swift "$tool"
     done
+    sweep-target
     echo "==> Done"
 }
 

@@ -29,6 +29,12 @@ edition = "2024"
 [profile.dev]
 debug = "line-tables-only"
 
+[profile.release]
+# Drops the symbol table: about 23% off an installed binary. There is no
+# debug info to strip, so `"debuginfo"` would gain nothing. The cost is that
+# a panic backtrace names addresses rather than functions.
+strip = true
+
 # Every dep used by any member is declared here so this file doubles as
 # an inventory of what's used across all the tools. Members opt in via
 # `dep.workspace = true` in their own [dependencies] — that's what
