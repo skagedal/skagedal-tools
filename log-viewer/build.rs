@@ -24,7 +24,7 @@ fn main() {
 
     // Re-run when any React source, the Vite config, or the manifest changes.
     rerun_if_changed(&browser.join("web"));
-    rerun_if_changed(&browser.join("package.json5"));
+    rerun_if_changed(&browser.join("package.json"));
     rerun_if_changed(&browser.join("pnpm-lock.yaml"));
     rerun_if_changed(&browser.join("src"));
 
@@ -44,7 +44,7 @@ fn main() {
     let dist_index = browser.join("web/dist/index.html");
     if !dist_index.exists() {
         fail(&format!(
-            "vite build did not produce {} — check the build:web script in browser/package.json5",
+            "vite build did not produce {} — check the build:web script in browser/package.json",
             dist_index.display()
         ));
     }

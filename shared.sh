@@ -12,6 +12,42 @@ export CARGO_INCREMENTAL=0
 # ~/.local/bin — so the only cost of dropping an artifact is rebuild time.
 TARGET_MAXSIZE_MB="${SKAGEDAL_TOOLS_TARGET_MAXSIZE_MB:-1500}"
 
+# pnpm 12 looks for package.json and package.yaml only, so it cannot see the
+# package.json5 manifests the Node tools use — an install there is a silent
+# no-op and every `pnpm run` reports a missing script. When the pnpm on PATH
+# is one of those, put a shim for the pinned version in front of it. The call
+# sites below keep saying `pnpm`, and so does log-viewer's build.rs, which
+# spawns it as a subprocess of cargo and so cannot see a shell function.
+PNPM_VERSION="10.33.0"
+
+pnpm-reads-package-json5() {
+    local version
+    version="$(pnpm --version 2>/dev/null)" || return 1
+    [[ "$version" =~ ^([0-9]+)\. ]] || return 1
+    (( BASH_REMATCH[1] < 12 ))
+}
+
+shim-pnpm() {
+    PNPM_SHIM_DIR="$(mktemp -d)"
+    trap 'rm -rf "$PNPM_SHIM_DIR"' EXIT
+    cat >"$PNPM_SHIM_DIR/pnpm" <<EOF
+#!/usr/bin/env bash
+exec npx --yes "pnpm@$PNPM_VERSION" "\$@"
+EOF
+    chmod +x "$PNPM_SHIM_DIR/pnpm"
+    export PATH="$PNPM_SHIM_DIR:$PATH"
+    # pnpm 12 keeps its global shims in $PNPM_HOME/bin and puts that on PATH,
+    # where pnpm 10 links into $PNPM_HOME itself and then refuses to link at
+    # all because that directory is not on PATH. Aim the older one at the
+    # directory that is. Only `pnpm link --global` needs it, and npx warns
+    # about the unknown npm config, so it is set on that call alone.
+    if [[ -n "${PNPM_HOME:-}" ]]; then
+        PNPM_GLOBAL_BIN_DIR="$PNPM_HOME/bin"
+    fi
+}
+
+pnpm-reads-package-json5 || shim-pnpm
+
 INSTALLED_NODE_TOOLS=(
     linear-notifications
 )
@@ -85,7 +121,7 @@ check-rust() {
         # log-viewer/browser), type-check / lint it too. The crate itself
         # is checked without the `web` feature so contributors don't need
         # GTK/webkit2gtk dev libs to run ./check.
-        if [[ -f browser/package.json5 ]]; then
+        if [[ -f browser/package.json ]]; then
             (cd browser && pnpm install && pnpm run check)
         fi
         cargo fmt --check
@@ -103,7 +139,7 @@ check-rust-workspace() {
         # is checked without the `web` feature so contributors don't need
         # GTK/webkit2gtk dev libs to run ./check.
         for tool in "${RUST_TOOLS[@]}"; do
-            if [[ -f "$tool/browser/package.json5" ]]; then
+            if [[ -f "$tool/browser/package.json" ]]; then
                 (cd "$tool/browser" && pnpm install && pnpm run check)
             fi
         done
@@ -168,7 +204,11 @@ install-node() {
         cd "$SCRIPT_DIR/$dir"
         pnpm install
         pnpm run build
-        pnpm link --global
+        if [[ -n "${PNPM_GLOBAL_BIN_DIR:-}" ]]; then
+            npm_config_global_bin_dir="$PNPM_GLOBAL_BIN_DIR" pnpm link --global
+        else
+            pnpm link --global
+        fi
     )
 }
 

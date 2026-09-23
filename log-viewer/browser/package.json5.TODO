@@ -1,3 +1,15 @@
+// NOT IN USE — kept deliberately, to be restored once the repo's package.json5
+// convention works again. See the header comment below for what this package is.
+//
+// pnpm 12 dropped package.json5 support: `pnpm install` / `pnpm run` in this
+// directory fail with ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND. Vite never read it
+// either, so with no package.json present `vite build web` hung rather than
+// failing — a build that sat at 0% CPU indefinitely instead of erroring.
+//
+// The working manifest is package.json next to this file. Keep the two in sync
+// until this is resolved properly across the repo (AGENTS.md still documents
+// package.json5 as the convention).
+
 // Manifest for log-viewer (browser-only dev server).
 //
 // This package now exists primarily as the React app that the Rust
