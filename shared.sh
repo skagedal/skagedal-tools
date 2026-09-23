@@ -308,9 +308,17 @@ install-completions() {
     # An interactive shell that runs `compinit -C` trusts its cached dump and
     # never notices a new file, so rebuild it rather than leave a completion
     # that only starts working tomorrow.
+    #
+    # `zsh -i`, not plain `zsh -c`: .zshrc is only sourced for interactive
+    # shells, so a non-interactive one does not have the completions directory
+    # on its fpath and would cheerfully write a dump with these files missing —
+    # which is worse than not rebuilding at all, since the stale dump then
+    # looks fresh. The directory is also added explicitly, in case a layout
+    # keeps it somewhere .zshrc does not put on the fpath.
     if command -v zsh >/dev/null 2>&1; then
-        zsh -c 'autoload -Uz compinit && compinit' >/dev/null 2>&1 \
-            || echo "    (could not rebuild ~/.zcompdump)" >&2
+        zsh -i -c "fpath=(${ZSH_COMPLETIONS_DIR} \$fpath); autoload -Uz compinit && compinit" \
+            >/dev/null 2>&1 \
+            || echo "    (could not rebuild the completion dump)" >&2
     fi
 }
 
