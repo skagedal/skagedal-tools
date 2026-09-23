@@ -71,7 +71,16 @@ fn main() {
 
 fn output_selected(path: &Path) {
     if let Ok(file) = std::env::var("SUGGESTED_CD_FILE") {
-        let _ = fs::write(&file, path.to_string_lossy().as_bytes());
+        // Not `let _ =`: a failed write here is invisible to the caller, which
+        // exits 10 and assumes the path was handed over. That is exactly what
+        // happened when SUGGESTED_CD_FILE pointed into a directory nothing
+        // created — every write failed and the shell function silently never
+        // cd'd, with nothing anywhere saying why.
+        if let Err(err) = fs::write(&file, path.to_string_lossy().as_bytes()) {
+            eprintln!("could not write the selected path to {file}: {err}");
+            eprintln!("{}", path.display());
+            process::exit(1);
+        }
         process::exit(10);
     } else {
         println!("{}", path.display());
