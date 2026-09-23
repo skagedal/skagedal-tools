@@ -149,6 +149,17 @@ check-rust-workspace() {
     )
 }
 
+# Tools that ship a `completions` subcommand. Kept as a list rather than
+# sniffed out of --help, which works right up until someone rewords a line.
+COMPLETION_TOOLS=(
+    assistant
+    tracker
+)
+
+# Where zsh completion functions go. This one is on the fpath in my dotfiles
+# (shell/zshrc.sh); override it for another layout.
+ZSH_COMPLETIONS_DIR="${ZSH_COMPLETIONS_DIR:-$HOME/local/zsh-functions}"
+
 # Where Swift binaries get installed. Rust tools go to ~/.cargo/bin by way of
 # cargo install and Node tools are pnpm-linked; SwiftPM has no equivalent, so
 # the release binary is copied to ~/.local/bin, which is already on PATH.
@@ -253,6 +264,56 @@ update-rust-workspace() {
 # Drop the oldest build artifacts until target/ is back under the ceiling.
 # Oldest-first is what makes this cheap: the artifacts a subsequent build
 # wants are the ones it keeps.
+# is-selected NAME — whether NAME is part of this run, so that
+# `./install tracker` regenerates only tracker's completions.
+is-selected() {
+    local name="$1" t
+    for t in ${SELECTED_NODE_TOOLS[@]+"${SELECTED_NODE_TOOLS[@]}"} \
+             ${SELECTED_RUST_TOOLS[@]+"${SELECTED_RUST_TOOLS[@]}"} \
+             ${SELECTED_SWIFT_TOOLS[@]+"${SELECTED_SWIFT_TOOLS[@]}"}; do
+        [[ "$t" == "$name" ]] && return 0
+    done
+    return 1
+}
+
+# install-completions — regenerate zsh completions for the selected tools that
+# offer them. cargo install has no post-install hook (build.rs runs at build
+# time and cannot know where the binary lands), so it belongs here, in the
+# script that is actually run after changing a tool.
+install-completions() {
+    local tool target tmp generated=0
+
+    for tool in "${COMPLETION_TOOLS[@]}"; do
+        is-selected "$tool" || continue
+        command -v "$tool" >/dev/null 2>&1 || continue
+
+        mkdir -p "$ZSH_COMPLETIONS_DIR"
+        target="${ZSH_COMPLETIONS_DIR}/_${tool}"
+        tmp="$(mktemp)"
+        if "$tool" completions zsh > "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
+            mv "$tmp" "$target"
+            chmod 644 "$target"
+            echo "    ${target}"
+            generated=$((generated + 1))
+        else
+            rm -f "$tmp"
+            echo "    ${tool}: completions zsh produced nothing" >&2
+        fi
+    done
+
+    [[ "$generated" -gt 0 ]] || return 0
+
+    echo "==> Wrote ${generated} zsh completion file(s)"
+
+    # An interactive shell that runs `compinit -C` trusts its cached dump and
+    # never notices a new file, so rebuild it rather than leave a completion
+    # that only starts working tomorrow.
+    if command -v zsh >/dev/null 2>&1; then
+        zsh -c 'autoload -Uz compinit && compinit' >/dev/null 2>&1 \
+            || echo "    (could not rebuild ~/.zcompdump)" >&2
+    fi
+}
+
 sweep-target() {
     if ! command -v cargo-sweep >/dev/null 2>&1; then
         echo "==> Skipping target/ sweep (cargo-sweep not installed)"
