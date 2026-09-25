@@ -5,7 +5,7 @@ use std::io::{BufRead, IsTerminal};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use chrono::Local;
+use chrono::{DateTime, Days, FixedOffset, Local, NaiveTime, TimeZone};
 use clap::Parser;
 
 mod api;
@@ -86,25 +86,33 @@ async fn run_next(args: NextArgs) -> Result<()> {
         bail!("{} is both the origin and the destination", from.name);
     }
 
+    // The window the API is asked for is expressed in minutes from now, so
+    // `--at` becomes an offset rather than a second notion of the clock.
+    let now = Local::now().fixed_offset();
+    let reference = match args.at {
+        Some(time) => next_occurrence(&Local, now, time)?,
+        None => now,
+    };
+    let offset = (reference - now).num_minutes();
+
     let (departures, arrivals) = tokio::try_join!(
         client.announcements(
             &from.signature,
             query::DEPARTURE,
-            -LOOKBACK_MINUTES,
-            args.window,
+            offset - LOOKBACK_MINUTES,
+            offset + args.window,
         ),
         client.announcements(
             &to.signature,
             query::ARRIVAL,
-            -LOOKBACK_MINUTES,
-            args.window + ARRIVAL_ALLOWANCE_MINUTES,
+            offset - LOOKBACK_MINUTES,
+            offset + args.window + ARRIVAL_ALLOWANCE_MINUTES,
         ),
     )?;
 
-    let now = Local::now().fixed_offset();
     let selection = journeys::select(
         journeys::build(&departures, &arrivals, &ticket),
-        now,
+        reference,
         args.count as usize,
         args.all,
     );
@@ -119,6 +127,7 @@ async fn run_next(args: NextArgs) -> Result<()> {
             name: &to.name,
         },
         now,
+        reference,
         window_minutes: args.window,
         ticket: &ticket,
         selection: &selection,
@@ -133,6 +142,35 @@ async fn run_next(args: NextArgs) -> Result<()> {
         print!("{}", output::render(&report, console::colors_enabled()));
     }
     Ok(())
+}
+
+/// The next instant at which the clock in `zone` reads `time`: today if that is
+/// still to come, otherwise tomorrow.
+///
+/// Resolved through the zone rather than through `now`'s own offset, so that
+/// the two nights a year the offset changes don't move the answer by an hour.
+/// The hour that DST skips has no instant at all; there the next day's is used.
+fn next_occurrence<Tz: TimeZone>(
+    zone: &Tz,
+    now: DateTime<FixedOffset>,
+    time: NaiveTime,
+) -> Result<DateTime<FixedOffset>> {
+    let mut date = now.with_timezone(zone).date_naive();
+    for _ in 0..2 {
+        let moment = zone
+            .from_local_datetime(&date.and_time(time))
+            .earliest()
+            .map(|m| m.fixed_offset());
+        if let Some(moment) = moment
+            && moment > now
+        {
+            return Ok(moment);
+        }
+        date = date
+            .checked_add_days(Days::new(1))
+            .context("the day after today is out of range")?;
+    }
+    bail!("the clock does not reach {time} in the next two days")
 }
 
 async fn run_stations(args: StationsArgs) -> Result<()> {
@@ -379,4 +417,48 @@ fn auth_forget() -> Result<()> {
         eprintln!("there was no key in the keychain.");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn time(s: &str) -> DateTime<FixedOffset> {
+        DateTime::parse_from_rfc3339(s).unwrap()
+    }
+
+    fn zone() -> FixedOffset {
+        FixedOffset::east_opt(2 * 3600).unwrap()
+    }
+
+    fn at(h: u32, m: u32) -> NaiveTime {
+        NaiveTime::from_hms_opt(h, m, 0).unwrap()
+    }
+
+    #[test]
+    fn a_time_still_to_come_is_today() {
+        let now = time("2026-09-25T07:54:00+02:00");
+        assert_eq!(
+            next_occurrence(&zone(), now, at(16, 30)).unwrap(),
+            time("2026-09-25T16:30:00+02:00")
+        );
+    }
+
+    #[test]
+    fn a_time_already_past_is_tomorrow() {
+        let now = time("2026-09-25T17:00:00+02:00");
+        assert_eq!(
+            next_occurrence(&zone(), now, at(16, 30)).unwrap(),
+            time("2026-09-26T16:30:00+02:00")
+        );
+    }
+
+    #[test]
+    fn the_current_minute_counts_as_past() {
+        let now = time("2026-09-25T16:30:00+02:00");
+        assert_eq!(
+            next_occurrence(&zone(), now, at(16, 30)).unwrap(),
+            time("2026-09-26T16:30:00+02:00")
+        );
+    }
 }

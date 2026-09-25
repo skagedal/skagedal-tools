@@ -349,6 +349,21 @@ fn json_output_is_machine_readable() {
 }
 
 #[test]
+fn at_moves_the_window_off_now() {
+    let fixture = Fixture::new();
+    // Four hours out, so every train the stub advertises is behind it.
+    let later = (Local::now() + Duration::hours(4))
+        .format("%H:%M")
+        .to_string();
+    let out = fixture.stdout(&["--at", &later]);
+
+    assert!(out.contains("· from "), "{out}");
+    assert!(out.contains(&later), "{out}");
+    assert!(out.contains(&format!("in the 3 h from {later}")), "{out}");
+    assert!(!out.contains("Mälartåg 2137"), "{out}");
+}
+
+#[test]
 fn reverse_swaps_the_ends() {
     let fixture = Fixture::new();
     // The stub only answers for U departures and Cst arrivals, so the

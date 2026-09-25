@@ -19,9 +19,18 @@ pub struct Report<'a> {
     pub from: Endpoint<'a>,
     pub to: Endpoint<'a>,
     pub now: DateTime<FixedOffset>,
+    /// Where the window starts: `now`, unless `--at` moved it.
+    pub reference: DateTime<FixedOffset>,
     pub window_minutes: i64,
     pub ticket: &'a Ticket,
     pub selection: &'a Selection,
+}
+
+impl Report<'_> {
+    /// Whether `--at` moved the window away from now.
+    fn is_shifted(&self) -> bool {
+        self.reference != self.now
+    }
 }
 
 /// Colour, applied only when the caller says the output is going to a
@@ -86,6 +95,10 @@ fn header(report: &Report, color: bool) -> String {
     let mut line = paint(&route, Ink::Bold, color);
     let when = report.now.format("%a %-d %b %H:%M").to_string();
     line.push_str(&paint(&format!(" · {when}"), Ink::Dim, color));
+    if report.is_shifted() {
+        let from = report.reference.format("%a %-d %b %H:%M").to_string();
+        line.push_str(&paint(&format!(" · from {from}"), Ink::Dim, color));
+    }
     if let Some(products) = report.ticket.products.as_ref()
         && !products.is_empty()
     {
@@ -100,11 +113,16 @@ fn header(report: &Report, color: bool) -> String {
 
 fn empty_message(report: &Report) -> String {
     let window = format_window(report.window_minutes);
+    let span = if report.is_shifted() {
+        format!("the {window} from {}", report.reference.format("%H:%M"))
+    } else {
+        format!("the next {window}")
+    };
     if report.ticket.is_unrestricted() {
-        format!("No departures to {} in the next {window}.", report.to.name)
+        format!("No departures to {} in {span}.", report.to.name)
     } else {
         format!(
-            "No departures to {} in the next {window} that this ticket covers.",
+            "No departures to {} in {span} that this ticket covers.",
             report.to.name
         )
     }
@@ -320,6 +338,7 @@ pub fn render_json(report: &Report) -> serde_json::Value {
         "from": {"signature": report.from.signature, "name": report.from.name},
         "to": {"signature": report.to.signature, "name": report.to.name},
         "now": report.now.to_rfc3339(),
+        "windowFrom": report.reference.to_rfc3339(),
         "windowMinutes": report.window_minutes,
         "products": report.ticket.products,
         "journeys": report.selection.journeys,
@@ -375,6 +394,7 @@ mod tests {
                 name: "Stockholm C",
             },
             now: time("2026-09-10T09:10:00+02:00"),
+            reference: time("2026-09-10T09:10:00+02:00"),
             window_minutes: 180,
             ticket,
             selection,

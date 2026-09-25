@@ -1,5 +1,6 @@
 //! Command line surface.
 
+use chrono::NaiveTime;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
@@ -64,6 +65,11 @@ pub struct NextArgs {
     #[arg(long, short = 'w', value_name = "DURATION", default_value = "3h",
           value_parser = parse_window)]
     pub window: i64,
+
+    /// Look from a clock time instead of from now: 16:30, or 16 for 16:00.
+    /// A time already past today means tomorrow.
+    #[arg(long, short = 't', value_name = "TIME", value_parser = parse_at)]
+    pub at: Option<NaiveTime>,
 
     /// Include cancelled departures, and ones the ticket does not cover
     #[arg(long, short = 'a')]
@@ -201,6 +207,32 @@ fn parse_window(value: &str) -> Result<i64, String> {
     Ok(minutes)
 }
 
+/// Parse a clock time: `16:30`, or a bare hour such as `16`. Seconds are not
+/// accepted — a timetable is advertised to the minute.
+fn parse_at(value: &str) -> Result<NaiveTime, String> {
+    let text: String = value.chars().filter(|c| !c.is_whitespace()).collect();
+    let (hours, minutes) = match text.split_once(':') {
+        Some((h, m)) => {
+            if m.len() != 2 {
+                return Err(format!("expected HH:MM in {value:?}"));
+            }
+            (h, m)
+        }
+        None => (text.as_str(), "00"),
+    };
+    if hours.is_empty() || hours.len() > 2 {
+        return Err(format!("expected HH:MM in {value:?}"));
+    }
+    let hours: u32 = hours
+        .parse()
+        .map_err(|_| format!("expected HH:MM in {value:?}"))?;
+    let minutes: u32 = minutes
+        .parse()
+        .map_err(|_| format!("expected HH:MM in {value:?}"))?;
+    NaiveTime::from_hms_opt(hours, minutes, 0)
+        .ok_or_else(|| format!("{value:?} is not a time of day"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +253,33 @@ mod tests {
         for bad in ["", "   ", "h", "3d", "1h30", "-5", "abc", "0", "0m", "25h"] {
             assert!(parse_window(bad).is_err(), "{bad:?} should be rejected");
         }
+    }
+
+    #[test]
+    fn parses_clock_times() {
+        let time = |h, m| NaiveTime::from_hms_opt(h, m, 0).unwrap();
+        assert_eq!(parse_at("16:30").unwrap(), time(16, 30));
+        assert_eq!(parse_at("16").unwrap(), time(16, 0));
+        assert_eq!(parse_at("6:05").unwrap(), time(6, 5));
+        assert_eq!(parse_at("06:05").unwrap(), time(6, 5));
+        assert_eq!(parse_at("00:00").unwrap(), time(0, 0));
+    }
+
+    #[test]
+    fn rejects_nonsense_clock_times() {
+        for bad in [
+            "", "24:00", "16:60", "16:3", "16:305", "abc", "-1", "16:30:00", "1630",
+        ] {
+            assert!(parse_at(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn at_defaults_to_none() {
+        let cli = Cli::try_parse_from(["trafikverket"]).unwrap();
+        assert!(cli.next.at.is_none());
+        let cli = Cli::try_parse_from(["trafikverket", "--at", "16:30"]).unwrap();
+        assert_eq!(cli.next.at, NaiveTime::from_hms_opt(16, 30, 0));
     }
 
     #[test]
