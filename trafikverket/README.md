@@ -26,7 +26,7 @@ Uppsala C → Stockholm C · Fri 11 Sep 06:44 · Mälartåg, SJ Regional
 
 Whatever the tool leaves out, it says so and names the flag that brings it
 back: `--all` for the cancelled and uncovered ones, `-n` for departures beyond
-the count, `-w` for a longer reach.
+the count, `-w` for a longer reach, `--at` for a window that starts later.
 
 ## What it filters out
 
@@ -141,6 +141,7 @@ trafikverket [OPTIONS] [COMMAND]
   --any-product        report every train, whatever its product
   -n, --count <N>      how many departures to show (default 10)
   -w, --window <DUR>   how far ahead to look: 45m, 3h, 1h30m (default 3h)
+  -t, --at <TIME>      look from a clock time instead of from now: 16:30
   -a, --all            include cancelled and uncovered departures
   --json               print JSON instead of a table
 
@@ -148,6 +149,21 @@ trafikverket [OPTIONS] [COMMAND]
   config [path|edit]   show or edit the configuration file
   auth [status|forget] keep the API key in the keychain
   raw                  post a query and print the reply
+```
+
+`--at` is for planning rather than catching: it moves the window off now, so
+`--at 16:30` answers "what can I board when I leave the office" at nine in the
+morning. A bare hour works too, and a time already past today means tomorrow.
+The relative column stays relative to the real now, so you can still see how
+far off the train is.
+
+```
+$ trafikverket -r --at 16:30 -n 3
+Stockholm C → Uppsala C · Fri 25 Sep 08:31 · from Fri 25 Sep 16:30 · Mälartåg, SJ Regional
+
+   in 8 h 5 min  16:37 → 17:15  Mälartåg 846    track 4
+  in 8 h 27 min  16:59 → 17:39  Mälartåg 10964  track 18
+  in 8 h 39 min  17:11 → 17:49  Mälartåg 20954  track 17b
 ```
 
 `--from`/`--to` name a route the configuration file says nothing about, so no
