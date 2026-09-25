@@ -23,11 +23,22 @@ pub enum Subcommand {
     Summary(SummaryArgs),
     /// Inspect the loaded merchant tables
     Tables(TablesArgs),
+    /// Show the hand-written marks and how many rows each one caught
+    Marks(MarksArgs),
     /// Look a single descriptor up and show which rule decided it
     Explain(ExplainArgs),
     /// Open settings.toml in $EDITOR, creating it from the template if needed
     #[command(name = "edit-config")]
     EditConfig,
+}
+
+#[derive(Debug, Args)]
+pub struct MarksArgs {
+    #[command(flatten)]
+    pub common: Common,
+
+    #[arg(long, short = 'o', value_enum, default_value_t = OutputFormat::Table)]
+    pub output: OutputFormat,
 }
 
 #[derive(Debug, Args, Clone)]

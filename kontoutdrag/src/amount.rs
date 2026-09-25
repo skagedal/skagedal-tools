@@ -36,6 +36,13 @@ impl std::ops::AddAssign for Amount {
     }
 }
 
+impl std::ops::Neg for Amount {
+    type Output = Amount;
+    fn neg(self) -> Amount {
+        Amount(-self.0)
+    }
+}
+
 impl std::iter::Sum for Amount {
     fn sum<I: Iterator<Item = Amount>>(iter: I) -> Amount {
         Amount(iter.map(|a| a.0).sum())
@@ -133,6 +140,12 @@ mod tests {
         assert!("".parse::<Amount>().is_err());
         assert!("-".parse::<Amount>().is_err());
         assert!("12kr".parse::<Amount>().is_err());
+    }
+
+    #[test]
+    fn negates() {
+        assert_eq!(-"30.000".parse::<Amount>().unwrap(), Amount(-30_000));
+        assert_eq!(-Amount::ZERO, Amount::ZERO);
     }
 
     #[test]

@@ -15,7 +15,8 @@ bundled = "se-common"
 # path = "~/notes/finances/merchants.yaml"
 
 [statements]
-# Export format of the statement files. Currently only "seb".
+# Export format of the statement files: "seb" for the semicolon-separated
+# CSV export, "enable-banking" for JSON from the account-information API. A file that starts with "[" or "{" is read as JSON regardless.
 format = "seb"
 
 # Optional. A statement named on the command line without any directory

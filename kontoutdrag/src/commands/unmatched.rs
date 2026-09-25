@@ -25,7 +25,7 @@ pub fn run(args: &UnmatchedArgs) -> Result<()> {
     let considered = loaded.transactions.len();
 
     let mut groups: HashMap<String, Group> = HashMap::new();
-    for resolved in loaded.transactions.iter().filter(|r| r.hit.is_none()) {
+    for resolved in loaded.transactions.iter().filter(|r| !r.is_resolved()) {
         let transaction = &resolved.transaction;
         let key = transaction.descriptor.key();
         let group = groups.entry(normalize(key)).or_insert_with(|| Group {

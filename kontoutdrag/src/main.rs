@@ -5,6 +5,7 @@ mod cli;
 mod commands;
 mod config;
 mod mapping;
+mod marks;
 mod matcher;
 mod output;
 mod paths;
@@ -28,6 +29,7 @@ fn run() -> Result<()> {
         Subcommand::Unmatched(args) => commands::unmatched::run(&args),
         Subcommand::Summary(args) => commands::summary::run(&args),
         Subcommand::Tables(args) => commands::tables::run(&args),
+        Subcommand::Marks(args) => commands::marks::run(&args),
         Subcommand::Explain(args) => commands::explain::run(&args),
         Subcommand::EditConfig => commands::edit_config::run(),
     }
