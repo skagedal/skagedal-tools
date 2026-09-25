@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use chrono::NaiveDate;
+use serde::Deserialize;
 
 use crate::amount::Amount;
 
@@ -105,27 +106,61 @@ pub enum Format {
     /// SEB internetbanken's "Spara kontohändelser" CSV: semicolon
     /// separated, UTF-8 with a BOM, six columns.
     Seb,
+    /// Enable Banking's account-information API: a JSON array of transactions, or the
+    /// `{"transactions": [...]}` object the API itself returns.
+    ///
+    /// Worth having because it carries the merchant name the CSV does not.
+    /// The CSV truncates a card descriptor to twelve characters, which for a
+    /// foreign purchase can leave the acquirer's city and nothing else.
+    EnableBanking,
 }
 
 impl std::str::FromStr for Format {
     type Err = anyhow::Error;
     fn from_str(name: &str) -> Result<Self> {
-        match name.to_ascii_lowercase().as_str() {
+        match name.to_ascii_lowercase().replace('_', "-").as_str() {
             "seb" => Ok(Format::Seb),
-            other => bail!("unknown statement format {other:?} (known formats: seb)"),
+            "enable-banking" | "enablebanking" => Ok(Format::EnableBanking),
+            other => bail!(
+                "unknown statement format {other:?} \
+                 (known formats: seb, enable-banking)"
+            ),
         }
     }
 }
 
-pub fn read_file(path: &Path, format: Format) -> Result<Vec<Transaction>> {
+/// Read a statement.
+///
+/// `format` is the one explicitly asked for. `None` lets the file decide:
+/// JSON is recognised by its opening bracket and read as Enable Banking,
+/// and anything else falls through to `fallback`, which is whatever the
+/// configuration says. Sniffing cannot misfire — a CSV export starts with
+/// a byte-order mark or a column name, never a bracket.
+pub fn read_file(
+    path: &Path,
+    format: Option<Format>,
+    fallback: Format,
+) -> Result<Vec<Transaction>> {
     let contents = std::fs::read_to_string(path)
         .with_context(|| format!("could not read {}", path.display()))?;
+    let format = format.or_else(|| sniff(&contents)).unwrap_or(fallback);
     parse(&contents, format).with_context(|| format!("in {}", path.display()))
+}
+
+/// The format a file announces by its first non-blank character, or `None`
+/// when it does not announce one.
+pub fn sniff(contents: &str) -> Option<Format> {
+    let start = contents.trim_start_matches(|c: char| c == '\u{feff}' || c.is_whitespace());
+    match start.chars().next() {
+        Some('[') | Some('{') => Some(Format::EnableBanking),
+        _ => None,
+    }
 }
 
 pub fn parse(contents: &str, format: Format) -> Result<Vec<Transaction>> {
     match format {
         Format::Seb => parse_seb(contents),
+        Format::EnableBanking => parse_enable_banking(contents),
     }
 }
 
@@ -203,6 +238,178 @@ fn parse_seb(contents: &str) -> Result<Vec<Transaction>> {
         });
     }
     Ok(transactions)
+}
+
+/// The shape of one transaction in Enable Banking's JSON.
+///
+/// Only the fields this tool uses are named; the payload carries a dozen
+/// more (`creditor`, `merchant_category_code`, `exchange_rate`), which
+/// banks often leave null.
+#[derive(Debug, Deserialize)]
+struct EbTransaction {
+    /// Absent on a pending transaction, which is why those are skipped.
+    booking_date: Option<NaiveDate>,
+    value_date: Option<NaiveDate>,
+    /// The day a card was actually used, when the bank fills it in.
+    transaction_date: Option<NaiveDate>,
+    transaction_amount: EbAmount,
+    /// `DBIT` for money out, `CRDT` for money in. The amount itself is
+    /// unsigned, so this is the only thing that carries direction.
+    credit_debit_indicator: Option<String>,
+    /// `BOOK` once posted, `PDNG` while pending.
+    status: Option<String>,
+    #[serde(default)]
+    remittance_information: Vec<String>,
+    bank_transaction_code: Option<EbBankTransactionCode>,
+    balance_after_transaction: Option<EbAmount>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EbAmount {
+    amount: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EbBankTransactionCode {
+    /// "Card purchase", "Instant payment", "Mortgage" and so on. The CSV
+    /// has no equivalent, so this is how a card purchase
+    /// is recognised here — the CSV has to infer it from the descriptor's
+    /// shape instead.
+    description: Option<String>,
+}
+
+/// Either a bare array, or the `{"transactions": [...]}` the API returns.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum EbPayload {
+    Bare(Vec<EbTransaction>),
+    Wrapped { transactions: Vec<EbTransaction> },
+}
+
+fn parse_enable_banking(contents: &str) -> Result<Vec<Transaction>> {
+    let payload: EbPayload = serde_json::from_str(contents)
+        .context("this does not look like an Enable Banking export")?;
+    let rows = match payload {
+        EbPayload::Bare(rows) => rows,
+        EbPayload::Wrapped { transactions } => transactions,
+    };
+
+    let mut transactions = Vec::new();
+    for (offset, row) in rows.into_iter().enumerate() {
+        let number = offset + 1;
+
+        // A pending transaction has no booking date and is replaced by a
+        // booked one within a day or two, often with a different
+        // descriptor. Counting both would double it.
+        if row.status.as_deref() == Some("PDNG") {
+            continue;
+        }
+        let Some(booked) = row.booking_date else {
+            continue;
+        };
+
+        let magnitude = row
+            .transaction_amount
+            .amount
+            .parse::<Amount>()
+            .with_context(|| format!("transaction {number}: bad amount"))?;
+        let amount = match row.credit_debit_indicator.as_deref() {
+            Some("DBIT") => -magnitude,
+            Some("CRDT") | None => magnitude,
+            Some(other) => bail!("transaction {number}: unknown direction {other:?}"),
+        };
+
+        let text = row.remittance_information.join(" ").trim().to_string();
+        let kind = row
+            .bank_transaction_code
+            .as_ref()
+            .and_then(|code| code.description.as_deref());
+
+        transactions.push(Transaction {
+            booked,
+            value_date: row.value_date.unwrap_or(booked),
+            // The API has no posting batch. `entry_reference` identifies
+            // the single transaction, which is not the same thing, so this
+            // stays empty rather than holding something it does not mean.
+            batch: String::new(),
+            descriptor: enable_banking_descriptor(&text, kind, row.transaction_date),
+            text,
+            amount,
+            // Present on every row, but with currency `XXX` — no currency
+            // declared. The number itself matches the CSV's Saldo.
+            balance: row
+                .balance_after_transaction
+                .and_then(|b| b.amount.parse::<Amount>().ok()),
+        });
+    }
+    Ok(transactions)
+}
+
+/// Classify a descriptor that has not been truncated.
+///
+/// The CSV has to guess from the shape of the text — twelve characters and
+/// a slash means a card. Here the bank says so outright, which is both more
+/// reliable and the only way to tell a card purchase from a bankgiro
+/// payment once the `/YY-MM-DD` suffix is gone.
+fn enable_banking_descriptor(
+    text: &str,
+    kind: Option<&str>,
+    purchased: Option<NaiveDate>,
+) -> Descriptor {
+    let trimmed = text.trim();
+    if kind == Some("Card purchase") {
+        return Descriptor::Card {
+            merchant: trimmed.to_string(),
+            purchased,
+        };
+    }
+    // A credit transfer carries a payment reference after whatever
+    // identifies it — the counterparty's account, or the message typed
+    // with the transfer:
+    //
+    //     12345678901 987654321012
+    //     HYRA        123456789012
+    //
+    // The reference is unique per transaction, so keying on the whole
+    // string would make every transfer its own merchant.
+    let key = match kind {
+        Some("Credit transfer") => strip_payment_reference(trimmed),
+        _ => trimmed,
+    };
+
+    // A Swish payment arrives as the counterparty's number alone.
+    if is_counterparty_number(key) {
+        return Descriptor::Swish {
+            number: key.to_string(),
+        };
+    }
+    Descriptor::Plain {
+        text: key.to_string(),
+    }
+}
+
+/// Drop a trailing payment reference, leaving whatever came before it.
+///
+/// A reference is a long run of digits at the end, after whitespace. Nine
+/// is the shortest seen; requiring that many keeps it from eating a house
+/// number or a shop's branch number off the end of a real name.
+fn strip_payment_reference(text: &str) -> &str {
+    match text.rsplit_once(char::is_whitespace) {
+        Some((head, reference))
+            if reference.len() >= 9
+                && reference.chars().all(|c| c.is_ascii_digit())
+                && !head.trim().is_empty() =>
+        {
+            head.trim_end()
+        }
+        _ => text,
+    }
+}
+
+/// Eight digits or more, and nothing else — a Swish number, or a bank
+/// account in the form the counterparty field uses.
+fn is_counterparty_number(text: &str) -> bool {
+    text.len() >= 8 && text.chars().all(|c| c.is_ascii_digit())
 }
 
 #[cfg(test)]
@@ -285,6 +492,148 @@ mod tests {
             parse_descriptor("LÅN 10000001"),
             Descriptor::Plain { .. }
         ));
+    }
+
+    const EB_SAMPLE: &str = r#"[
+      {"booking_date": "2026-09-11", "value_date": "2026-09-11", "transaction_date": null,
+       "transaction_amount": {"currency": "SEK", "amount": "150.000"},
+       "credit_debit_indicator": "DBIT", "status": "BOOK",
+       "remittance_information": ["EXAMPLE CHARITY"],
+       "bank_transaction_code": {"description": "Card purchase"},
+       "balance_after_transaction": {"currency": "XXX", "amount": "1000.000"}},
+      {"booking_date": "2026-09-10", "value_date": "2026-09-10", "transaction_date": null,
+       "transaction_amount": {"currency": "SEK", "amount": "500.000"},
+       "credit_debit_indicator": "CRDT", "status": "BOOK",
+       "remittance_information": ["46700000001"],
+       "bank_transaction_code": {"description": "Instant payment"},
+       "balance_after_transaction": null},
+      {"booking_date": "2026-09-09", "value_date": "2026-09-09", "transaction_date": null,
+       "transaction_amount": {"currency": "SEK", "amount": "2000.000"},
+       "credit_debit_indicator": "DBIT", "status": "BOOK",
+       "remittance_information": ["12345678901 987654321012"],
+       "bank_transaction_code": {"description": "Credit transfer"},
+       "balance_after_transaction": null},
+      {"booking_date": "2026-09-08", "value_date": "2026-09-08", "transaction_date": null,
+       "transaction_amount": {"currency": "SEK", "amount": "700.000"},
+       "credit_debit_indicator": "DBIT", "status": "BOOK",
+       "remittance_information": ["HYRA        123456789012"],
+       "bank_transaction_code": {"description": "Credit transfer"},
+       "balance_after_transaction": null},
+      {"booking_date": null, "value_date": null, "transaction_date": null,
+       "transaction_amount": {"currency": "SEK", "amount": "50.000"},
+       "credit_debit_indicator": "DBIT", "status": "PDNG",
+       "remittance_information": ["123456789", "KORTBOLAGET AB"],
+       "bank_transaction_code": null, "balance_after_transaction": null}
+    ]"#;
+
+    #[test]
+    fn reads_the_enable_banking_export() {
+        let transactions = parse(EB_SAMPLE, Format::EnableBanking).unwrap();
+        // The pending row is not one of them.
+        assert_eq!(transactions.len(), 4);
+
+        let first = &transactions[0];
+        assert_eq!(first.booked, NaiveDate::from_ymd_opt(2026, 9, 11).unwrap());
+        assert_eq!(first.amount, "-150.00".parse().unwrap());
+        assert_eq!(first.balance, Some("1000.000".parse().unwrap()));
+        assert_eq!(
+            first.descriptor,
+            Descriptor::Card {
+                merchant: "EXAMPLE CHARITY".into(),
+                purchased: None,
+            }
+        );
+    }
+
+    /// The amount is unsigned; only `credit_debit_indicator` says which way
+    /// the money went.
+    #[test]
+    fn takes_the_direction_from_the_indicator() {
+        let transactions = parse(EB_SAMPLE, Format::EnableBanking).unwrap();
+        assert!(transactions[0].amount.is_negative());
+        assert_eq!(transactions[1].amount, "500".parse().unwrap());
+    }
+
+    /// The bank says outright that a row is a card purchase, so an
+    /// untruncated merchant name does not have to be guessed at.
+    #[test]
+    fn classifies_by_the_bank_transaction_code() {
+        let transactions = parse(EB_SAMPLE, Format::EnableBanking).unwrap();
+        assert_eq!(transactions[0].descriptor.kind(), "card");
+        assert_eq!(
+            transactions[1].descriptor,
+            Descriptor::Swish {
+                number: "46700000001".into()
+            }
+        );
+    }
+
+    /// A credit transfer carries a payment reference after the account
+    /// number, unique to the transaction. Keying on it would make every
+    /// transfer its own merchant.
+    #[test]
+    fn drops_the_payment_reference_from_a_transfer() {
+        let transactions = parse(EB_SAMPLE, Format::EnableBanking).unwrap();
+        assert_eq!(
+            transactions[2].descriptor,
+            Descriptor::Swish {
+                number: "12345678901".into()
+            }
+        );
+    }
+
+    /// The reference follows a typed message just as it follows an
+    /// account number, and the message is the part worth keying on.
+    #[test]
+    fn drops_the_reference_after_a_typed_message_too() {
+        let transactions = parse(EB_SAMPLE, Format::EnableBanking).unwrap();
+        assert_eq!(
+            transactions[3].descriptor,
+            Descriptor::Plain {
+                text: "HYRA".into()
+            }
+        );
+    }
+
+    /// Only a credit transfer carries one, and only a long run of digits
+    /// is one — a shop with a number in its name keeps it.
+    #[test]
+    fn leaves_a_number_that_is_part_of_the_name() {
+        assert_eq!(
+            enable_banking_descriptor("KIOSKEN 1234567", Some("Card purchase"), None),
+            Descriptor::Card {
+                merchant: "KIOSKEN 1234567".into(),
+                purchased: None,
+            }
+        );
+        assert_eq!(strip_payment_reference("BUTIKEN 4242"), "BUTIKEN 4242");
+        assert_eq!(strip_payment_reference("HYRA 123456789012"), "HYRA");
+        assert_eq!(strip_payment_reference("123456789012"), "123456789012");
+    }
+
+    #[test]
+    fn reads_the_wrapped_shape_the_api_returns() {
+        let wrapped = format!(r#"{{"transactions": {EB_SAMPLE}}}"#);
+        let transactions = parse(&wrapped, Format::EnableBanking).unwrap();
+        assert_eq!(transactions.len(), 4);
+    }
+
+    #[test]
+    fn sniffs_json_but_leaves_everything_else_alone() {
+        assert_eq!(sniff(EB_SAMPLE), Some(Format::EnableBanking));
+        assert_eq!(sniff("  \n [ ]"), Some(Format::EnableBanking));
+        assert_eq!(
+            sniff(r#"{"transactions": []}"#),
+            Some(Format::EnableBanking)
+        );
+        assert_eq!(sniff(SAMPLE), None);
+        assert_eq!(sniff(""), None);
+    }
+
+    #[test]
+    fn rejects_json_that_is_not_a_statement() {
+        let error = parse(r#"{"hello": "world"}"#, Format::EnableBanking).unwrap_err();
+        assert!(error.to_string().contains("does not look like"));
     }
 
     #[test]

@@ -18,6 +18,17 @@ pub struct Settings {
     pub tables: Vec<TableSource>,
     #[serde(default)]
     pub statements: Statements,
+    /// Files of hand-written marks, applied after the tables.
+    #[serde(default, rename = "marks")]
+    pub marks: Vec<MarkSource>,
+}
+
+/// One entry in the `[[marks]]` list.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarkSource {
+    /// A YAML file on disk. `~` and `$VAR` are expanded.
+    pub path: String,
 }
 
 impl Default for Settings {
@@ -30,6 +41,7 @@ impl Default for Settings {
                 path: None,
             }],
             statements: Statements::default(),
+            marks: Vec::new(),
         }
     }
 }
@@ -111,6 +123,15 @@ impl Settings {
             );
         }
         Ok(tables)
+    }
+
+    pub fn load_marks(&self) -> Result<Vec<crate::marks::MarkFile>> {
+        let mut files = Vec::new();
+        for source in &self.marks {
+            let path = mapping::expand(&source.path)?;
+            files.push(crate::marks::load_path(&path)?);
+        }
+        Ok(files)
     }
 }
 

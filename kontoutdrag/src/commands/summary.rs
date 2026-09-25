@@ -71,11 +71,7 @@ fn keys(resolved: &Resolved, by: GroupBy) -> Vec<String> {
         GroupBy::Category => vec![non_empty(resolved.category(), "(uncategorised)")],
         GroupBy::Merchant => vec![non_empty(resolved.merchant(), "(unknown)")],
         GroupBy::Month => vec![resolved.transaction.booked.format("%Y-%m").to_string()],
-        GroupBy::Tag => resolved
-            .hit
-            .as_ref()
-            .map(|h| h.tags.clone())
-            .unwrap_or_default(),
+        GroupBy::Tag => resolved.tags(),
     }
 }
 

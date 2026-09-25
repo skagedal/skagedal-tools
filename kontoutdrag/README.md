@@ -18,13 +18,89 @@ utilities            8   -3200.00
 restaurants         22   -2750.00
 ```
 
+## Marks
+
+The tables answer "who was paid", which is a property of the descriptor and
+the same every time it appears. Some things are not like that. A week away
+is a date range. A single transfer is one row on one day. Neither can be
+written as a rule about a string without catching everything else that
+shares it.
+
+A mark selects transactions by date, amount and descriptor, and then sets a
+category, a merchant name, or tags:
+
+```yaml
+version: 1
+marks:
+  - note: A week away, summer 2023
+    from: 2023-06-10
+    to: 2023-06-17
+    tags: [resa-2023]
+    descriptor_prefix: ["HOTELLET", "RESTAURANG", "MUSEET"]
+
+  - note: A one-off transfer to savings
+    date: 2024-03-15
+    amount: "-25000.000"
+    descriptor: ["10000000002"]
+    category: savings
+    merchant: Sparkontot
+```
+
+Tags sit on top of the ordinary category rather than replacing it, so a
+trip totals with `--by tag` without hiding that most of it was food. A
+category or merchant on a mark overrides the tables, because a mark is
+written about one transaction and a rule about a whole descriptor.
+
+The descriptor conditions are one condition between them — any listed
+`descriptor` or `descriptor_prefix` matching is enough — so a trip is one
+mark naming the places rather than one mark for each. Leaving them out
+selects everything in the date range, which is usually not what is meant:
+a subscription charged mid-trip would be swept in with it.
+
+A mark with no selector, or with nothing to set, is an error rather than a
+rule that quietly matches everything or nothing.
+
+    [[marks]]
+    path = "~/notes/finances/marks.yaml"
+
+`kontoutdrag marks <statement>` lists them with the number of rows each one
+caught, and says so when one caught nothing — almost always a typo in a
+date or an amount.
+
 ## The statement side
 
-Currently one format: `seb`, the CSV that SEB internetbanken writes from
-"Spara kontohändelser" — semicolon separated, UTF-8 with a BOM, columns
+Two formats.
+
+**`seb`** — the CSV export described below: semicolon separated, UTF-8
+with a BOM, columns
 `Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo`.
 
-The `Text` field comes in three shapes, which the tool tells apart:
+**`enable-banking`** — a JSON array of transactions from Enable Banking's
+account-information API, or the `{"transactions": [...]}` object the API
+itself returns. Worth having because it carries the merchant name the CSV
+does not: the CSV truncates a card descriptor to twelve characters, which
+for a foreign purchase can leave the acquirer's city and nothing else.
+
+A file that starts with `[` or `{` is read as JSON without being told,
+since a CSV export starts with a byte-order mark or a column name.
+`--format` overrides the guess.
+
+Three things the JSON has that the CSV has no column for:
+`bank_transaction_code.description` (Card purchase, Instant payment,
+Mortgage, Salary/Pension/Social Benefit and so on), which is how a card
+purchase is recognised once the `/YY-MM-DD` suffix is gone;
+`creditor_account`, which names a transfer; and pending rows, which are
+skipped — they carry no booking date and are replaced by a booked row
+within a day or two.
+
+Note that a credit transfer's descriptor is the counterparty account
+followed by a payment reference — `12345678901 987654321012`. The
+reference is unique per transaction, so only the account is used as the
+merchant key.
+
+### The CSV `Text` field
+
+It comes in three shapes, which the tool tells apart:
 
 | Shape | Meaning |
 |---|---|
@@ -128,6 +204,7 @@ bundled = "se-common"
 path = "~/notes/finances/merchants.yaml"
 
 [statements]
+# "seb" or "enable-banking"; a JSON file is recognised either way
 format = "seb"
 directory = "~/notes/finances/data"
 ```
@@ -172,7 +249,11 @@ recoverable from the CSV alone — one such descriptor usually covers
 several unrelated merchants, and the amounts alone will not separate
 them. The tool reports them as unmatched rather than guessing.
 
-Nothing here reads an MCC, because the CSV has no column for one. A bank's
-PSD2 API or an ISO 20022 `camt.053` export can carry `MrchntCtgyCd`, which
-would beat any amount of string matching; that would be a second statement
-format rather than a change to the tables.
+Nothing here reads an MCC. The CSV has no column for one, and the Enable
+Banking JSON has the field but a bank may leave it null. An ISO 20022
+`camt.053` export carries `MrchntCtgyCd` and would beat any amount of
+string matching.
+
+The untruncated merchant name in the JSON goes most of the way instead:
+the descriptors a truncated CSV cannot resolve are mostly foreign card
+purchases reduced to a city.
