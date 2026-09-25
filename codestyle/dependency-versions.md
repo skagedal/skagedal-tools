@@ -56,8 +56,11 @@ the lock file diff, and commit both together — the diff is the changelog,
 and a build that stops working is the signal that a major actually
 mattered.
 
-Repos with several ecosystems usually have an `./update` script that does
-this alongside `cargo update`, `pub upgrade` and the rest.
+Repos with several ecosystems usually have a `ci/update-dependencies`
+script that does this alongside `cargo update`, `pub upgrade` and the
+rest. A weekly workflow, `.github/workflows/update-dependencies.yml`,
+runs it and opens a pull request when something moved, and CI on that
+pull request is the check suite doing its job.
 
 ## When to deviate
 

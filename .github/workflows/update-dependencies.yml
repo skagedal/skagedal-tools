@@ -1,0 +1,150 @@
+name: Update dependencies
+
+on:
+  # Monday morning, so a week of updates is waiting at the start of the week.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+# The branch is pushed and the pull request opened with a GitHub App's token,
+# so the workflow's own token needs nothing beyond reading the repository —
+# pinact is the only thing that uses it, for the GitHub API.
+permissions:
+  contents: read
+
+jobs:
+  update:
+    name: Update dependencies and open a pull request
+    # macOS because the update includes `swift package update` for
+    # appicon-generator, and Swift is only set up on the macOS runners. The
+    # Rust and Node parts run there just as well.
+    runs-on: macos-latest
+    steps:
+      # The pull request comes from a GitHub App rather than from me, for two
+      # reasons. GitHub does not notify me of anything I did myself, so a pull
+      # request of my own would arrive in silence; one from the App can ask
+      # for my review, and that notifies me. And unlike the workflow's own
+      # GITHUB_TOKEN, a push made with the App's token triggers workflows, so
+      # CI runs on the pull request — which is what checks that the update
+      # builds. The token covers this repository only, carries only what the
+      # steps below need, and is revoked when the job ends.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ vars.UPDATES_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UPDATES_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          # pinact edits the pins in .github/workflows, and GitHub refuses a
+          # push that touches workflow files without this.
+          permission-workflows: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # pnpm 10, as in tests.yml: pnpm 12 cannot read the package.json5
+      # manifests the Node tools use.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: '**/pnpm-lock.yaml'
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      # There is no action that only installs pinact — the one its author
+      # ships wants to do the pinning and the committing itself — so the
+      # release binary is fetched directly. The version is pinned and the
+      # download checked against the checksums file published with the
+      # release, for the same reason the actions here are pinned to SHAs.
+      # Bumping PINACT_VERSION is a manual edit; nothing updates it.
+      - name: Install pinact
+        env:
+          PINACT_VERSION: 5.0.0
+        run: |
+          set -euo pipefail
+          case "$(uname -s)-$(uname -m)" in
+              Linux-x86_64) asset="pinact_linux_amd64.tar.gz" ;;
+              Darwin-arm64) asset="pinact_darwin_arm64.tar.gz" ;;
+              *) echo "no pinact build for $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+          esac
+          checksums="pinact_${PINACT_VERSION}_checksums.txt"
+          base="https://github.com/suzuki-shunsuke/pinact/releases/download/v${PINACT_VERSION}"
+          # In a temporary directory, not the checkout: anything left lying
+          # around in the working tree would be swept into the commit below.
+          cd "$(mktemp -d)"
+          curl -fsSL -O "$base/$asset" -O "$base/$checksums"
+          shasum -a 256 --ignore-missing -c "$checksums"
+          tar xzf "$asset" pinact
+          mkdir -p "$RUNNER_TEMP/bin"
+          install -m 0755 pinact "$RUNNER_TEMP/bin/pinact"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run ci/update-dependencies
+        env:
+          # The script lends pinact a token when it finds one in the
+          # environment and otherwise falls back to `gh auth token`, which is
+          # not set up here. Unauthenticated, pinact gets 60 GitHub API calls
+          # an hour, which a single run can get through.
+          PINACT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./ci/update-dependencies
+
+      - name: Did anything move?
+        id: changed
+        run: |
+          set -euo pipefail
+          if [[ -n "$(git status --porcelain)" ]]; then
+              echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+              echo "any=false" >> "$GITHUB_OUTPUT"
+              echo "Nothing moved this week."
+          fi
+
+      - name: Open a pull request
+        if: steps.changed.outputs.any == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          today="$(date -u +%F)"
+          branch="updates-$today"
+          # Commit as the App, so the commits on the branch belong to the same
+          # identity that pushes them and opens the pull request.
+          bot="${APP_SLUG}[bot]"
+          bot_id="$(gh api "/users/$bot" --jq .id)"
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A
+          git commit -m "Update dependencies, $today"
+          # --force so a second run on the same day replaces the branch rather
+          # than failing. Nothing but this workflow writes to it.
+          git push --force origin "$branch"
+          if [[ "$(gh pr list --head "$branch" --state open --json number --jq 'length')" != "0" ]]; then
+              echo "A pull request for $branch is already open; pushed to it."
+              exit 0
+          fi
+          {
+              echo "Weekly dependency update, from \`.github/workflows/update-dependencies.yml\`."
+              echo
+              echo "CI on this pull request is what says whether it builds."
+              echo
+              echo '```'
+              git --no-pager diff --stat 'HEAD^'
+              echo '```'
+          } >"$RUNNER_TEMP/pr-body.md"
+          # The review request is what reaches me as a notification.
+          gh pr create \
+              --title "Update dependencies, $today" \
+              --body-file "$RUNNER_TEMP/pr-body.md" \
+              --reviewer skagedal

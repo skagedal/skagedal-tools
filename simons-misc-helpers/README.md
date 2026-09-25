@@ -10,7 +10,7 @@ Think of it as "this could have been a bash script". (But they never stay bash-s
 
 This is a helper for Andrew Nesbitt's [git-pkgs](https://github.com/git-pkgs/git-pkgs) tool. it takes the output of `git pkgs diff --format=json` and formats it again, similar to the output of `git pkgs diff`, but with a difference that I want – major version bumps are highlighted.
 
-Example, taken from running `./update` in this very repo (skagedal-tools), which bumps dependencies across both Rust crates and pnpm workspaces:
+Example, taken from running `ci/update-dependencies` in this very repo (skagedal-tools), which bumps dependencies across both Rust crates and pnpm workspaces:
 
 ```
 Modified (major version updates):

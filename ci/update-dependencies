@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SCRIPT_DIR is the repo root, as shared.sh expects; this script sits in ci/.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=shared.sh
 source "$SCRIPT_DIR/shared.sh"
 
@@ -21,9 +22,11 @@ main() {
 
 # pinact rewrites every `uses:` in .github/workflows to the commit SHA its
 # tag points at, keeping the version in a trailing comment, and honours the
-# three-day min_age in .pinact.yaml. Exit 1 means it found something to pin
-# and 2 that something needs a person to decide; neither is a reason to stop
-# the rest of the run.
+# three-day min_age in .pinact.yaml. Exit 2 means it found something it will
+# not decide on its own — a branch ref, or a pin younger than min_age — which
+# is worth reading but no reason to stop the rest of the run. Any other
+# failure is pinact itself failing, a GitHub API error or a rate limit, and
+# fails the run with it.
 #
 # Unauthenticated GitHub API calls are capped at 60 an hour, which one run
 # can get through, so lend it the gh token when there is one.
@@ -34,8 +37,13 @@ update-actions() {
         PINACT_GITHUB_TOKEN="$(gh auth token 2>/dev/null || true)"
         [[ -n "$PINACT_GITHUB_TOKEN" ]] && export PINACT_GITHUB_TOKEN
     fi
-    (cd "$SCRIPT_DIR" && pinact run --update) ||
-        echo "    pinact exited $?, see above"
+    local status=0
+    (cd "$SCRIPT_DIR" && pinact run --update) || status=$?
+    case "$status" in
+        0) ;;
+        2) echo "    pinact left something for a person to decide, see above" ;;
+        *) echo "    pinact failed (exit $status)" >&2; return "$status" ;;
+    esac
 }
 
 # git-pkgs keeps its index in .git/pkgs.sqlite3 and leaves creating it to the
