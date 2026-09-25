@@ -184,3 +184,25 @@ The "Node.js Programs" section gains a rule after the one on
 - **Node itself.** The same `devEngines` object can declare a Node range,
   and pnpm can manage Node versions too. That would let `fnm` go from the
   Brewfile, but it is a separate decision and not part of this one.
+- **Or neither: a version manager over both.** `devEngines` is not the
+  only way to stop deciding Node and pnpm separately. mise reads one
+  `mise.toml` per project and installs both — `mise use node@26 pnpm@10`
+  — with a configured pnpm overriding whatever Node bundles, whichever
+  order they are listed in. It is worth weighing before the question
+  above gets answered, because the two answers are alternatives rather
+  than steps.
+
+  What makes it more than a footnote is that the same tool would also
+  replace `fnm`, `pyenv`, `tfenv`, `fvm`, the Java casks and the
+  `java11`/`java17`/`java20`/`java24` switcher functions in
+  `dotfiles/shell/common.zsh`. So the choice is not really pnpm's
+  version management against mise's; it is whether these machines keep
+  one manager per language or move to one for all of them. That is a
+  bigger question than this spec, and it is on
+  [SKA-90](https://linear.app/skagedal/issue/SKA-90/investigate-mise-as-one-version-manager-for-all-the-languages) — but answering
+  Node here in terms of `devEngines` would quietly pre-empt it.
+
+  Against it: `devEngines` keeps the declaration in the manifest, where
+  a CI runner and a contributor both already look, while `mise.toml` is
+  another file to be honoured. Nothing in this spec needs deciding today
+  either way.
