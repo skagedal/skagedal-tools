@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Sourced by check, install and update. Expects SCRIPT_DIR to be set.
+# Sourced by check, install and ci/update-dependencies. Expects SCRIPT_DIR to be set.
 
 # These scripts each do one full pass over the workspace, so incremental
 # compilation has nothing to be incremental against — it just leaves another
