@@ -267,11 +267,40 @@ The uncategorised share of spending has its own tile, against a target of
 it; its payees are raw descriptors, which is exactly what `unmatched`
 prints.
 
+### Comments
+
+Click a transaction in the table to open it. The box that opens takes a
+comment — what the payment was for, who a number belongs to — which is
+saved as you type to
+
+    ~/.local/share/skagedal-tools/kontoutdrag/comments.json
+
+(`$XDG_DATA_HOME` moves it, as for every tool here). To keep comments
+somewhere else, a git repository say, make that file a symlink; it is
+written through the link, not over it. Each comment carries the account,
+date, amount, descriptor and text of its transaction, so it can be turned
+into a mark or a table rule later without going back to the statement.
+
+The opened row also lists every transaction from the day before to the day
+after, in every account and regardless of the filters — where the other
+half of a transfer, a repayment or a refund turns up — and links to Google
+Calendar on the booking date and to Gmail for the week around it.
+
+The view watches the settings, the statements, the tables, the marks and
+the comments file, and reloads whatever changed, keeping the filters and
+selection. So a rule edited elsewhere shows up in the window a couple of
+seconds later, and so does a comments file that has been harvested and
+cleared. If a rule file fails to load, the last good data stays up with
+a banner saying why.
+
 The window is a React app under `browser/`, embedded in the binary and
 served on a local port, the same way `log-viewer` does it — the plumbing
 is shared in the `webview-shell` crate. It needs the `web` feature, which
 `./install` turns on; building with it runs pnpm and Vite. Without it,
-`view --json` still works. `view --serve` prints a URL for an ordinary
+`view --json` still works. The app icon, a 💰, is drawn at build time by
+[appicon-generator](../appicon-generator) when it is installed, and set as
+the Dock icon on macOS; it is Apple's emoji, so it is not committed, and a
+build without the tool has no icon. `view --serve` prints a URL for an ordinary
 browser instead of opening a window, and `?category=…`, `?merchant=…` and
 `?tag=…` on that URL open on a selection. For work on the app itself,
 `KONTOUTDRAG_URL=<that URL> pnpm dev` in `browser/` proxies the data.

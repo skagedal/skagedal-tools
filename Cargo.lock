@@ -5700,6 +5700,10 @@ dependencies = [
  "anyhow",
  "include_dir",
  "muda",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "opener",
  "tao",
  "wry",
 ]

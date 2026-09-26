@@ -12,6 +12,7 @@
   --accent-wash: rgba(42, 120, 214, 0.1);
   --recede: #c3c2b7;
   --good: #0ca30c;
+  --good-text: #006300;
   --warning: #fab219;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -33,6 +34,7 @@
     --accent: #3987e5;
     --accent-wash: rgba(57, 135, 229, 0.15);
     --recede: #4a4a47;
+    --good-text: #0ca30c;
   }
 }
 
@@ -121,3 +123,28 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; font-size: 12px; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.banner {
+  margin: 0; padding: 8px 16px; background: var(--warning); color: #0b0b0b;
+  position: sticky; top: 0; z-index: 2; font-size: 13px;
+}
+tr.row { cursor: pointer; }
+tr.row:hover td, tr.row:focus-visible td { background: var(--accent-wash); }
+tr.row:focus-visible { outline: none; }
+tr.row.open td { background: var(--accent-wash); border-bottom-color: transparent; }
+.has-comment { color: var(--ink-2); }
+tr.detail td { background: var(--accent-wash); white-space: normal; }
+.detail-body { display: flex; gap: 16px; align-items: flex-start; padding: 4px 0 8px; }
+.detail-body textarea {
+  flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; resize: vertical;
+}
+.detail-side { display: flex; flex-direction: column; gap: 4px; min-width: 220px; font-size: 13px; }
+.detail-side a { color: var(--accent); }
+.detail-side .raw { font-size: 12px; word-break: break-all; }
+.footnote { margin: -8px 0 0; font-size: 12px; }
+.nearby { margin: 4px 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.nearby table { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.nearby td { font-size: 13px; padding: 3px 8px; }
+.nearby tr.self td { font-weight: 600; }
+.nearby td.in { color: var(--good-text); }

@@ -30,7 +30,7 @@ pub fn run(
     let handler_state = state.clone();
     let port = webview_shell::server::start(
         &server::WEB_DIST,
-        Arc::new(move |path, stream| server::handle(&handler_state, path, stream)),
+        Arc::new(move |request, stream| server::handle(&handler_state, request, stream)),
     )
     .context("starting HTTP server")?;
     let url = format!("http://127.0.0.1:{port}/");
@@ -44,6 +44,7 @@ pub fn run(
         &url,
         &format!("log-viewer — {source_label}"),
         (1100.0, 720.0),
+        None,
     )
 }
 
