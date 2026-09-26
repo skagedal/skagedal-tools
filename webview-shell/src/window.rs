@@ -2,13 +2,13 @@
 
 use anyhow::Result;
 use tao::dpi::LogicalSize;
-use tao::event::{Event, WindowEvent};
+use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop};
 use tao::window::WindowBuilder;
 use wry::{NewWindowResponse, WebViewBuilder};
 
 /// `icon` is a PNG for the Dock, on macOS; elsewhere it is not used.
-pub fn open(url: &str, title: &str, size: (f64, f64), icon: Option<&[u8]>) -> Result<()> {
+pub fn open(url: &str, title: &str, size: (f64, f64), icon: Option<&'static [u8]>) -> Result<()> {
     let event_loop = EventLoop::new();
     #[cfg(target_os = "macos")]
     let menu = menu_bar(title)?;
@@ -35,16 +35,18 @@ pub fn open(url: &str, title: &str, size: (f64, f64), icon: Option<&[u8]>) -> Re
         })
         .build(&window)
         .map_err(|e| anyhow::anyhow!("creating webview: {e}"))?;
-    #[cfg(target_os = "macos")]
-    if let Some(png) = icon {
-        dock_icon(png);
-    }
     #[cfg(not(target_os = "macos"))]
     let _ = icon;
     event_loop.run(move |event, _, control_flow| {
         // The menu bar lives as long as the window does.
         #[cfg(target_os = "macos")]
         let _ = &menu;
+        // Only once the app has finished launching: an icon set before then
+        // is replaced by the default, which for a bare binary is "exec".
+        #[cfg(target_os = "macos")]
+        if let (Event::NewEvents(StartCause::Init), Some(png)) = (&event, icon) {
+            dock_icon(png);
+        }
         *control_flow = ControlFlow::Wait;
         if let Event::WindowEvent {
             event: WindowEvent::CloseRequested,
