@@ -38,6 +38,8 @@ function presets(first: string): Preset[] {
   const year = thisMonth().slice(0, 4);
   return [
     { label: "Last 12 months", range: () => [addMonths(last, -11), last] },
+    { label: "This month", range: () => [thisMonth(), thisMonth()] },
+    { label: "Last month", range: () => [last, last] },
     { label: "Last 3 months", range: () => [addMonths(last, -2), last] },
     { label: "This year", range: () => [`${year}-01`, thisMonth()] },
     { label: "Last year", range: () => [`${Number(year) - 1}-01`, `${Number(year) - 1}-12`] },

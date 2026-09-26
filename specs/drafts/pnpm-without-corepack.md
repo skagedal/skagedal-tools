@@ -119,9 +119,7 @@ Moving from 10 to 12 changes some things these projects touch:
   `.npmrc`, so nothing moves.
 - `allowBuilds` is already the form every `pnpm-workspace.yaml` uses.
 - pnpm 11 defaults `minimumReleaseAge` to 1440 minutes. `AGENTS.md` asks
-  for 4320, set explicitly, and the explicit setting still wins.
-  `linear-notifications/pnpm-workspace.yaml` is missing it today and gets
-  it in this change.
+  for 10080, set explicitly, and the explicit setting still wins.
 - pnpm 11 needs Node 22. CI runs 24 and Homebrew's `node` is 26.
 - `install-node` in `shared.sh` finishes with `pnpm link --global`, which
   is how `linear-notifications` ends up on `PATH`. pnpm 11 reworked

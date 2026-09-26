@@ -78,12 +78,13 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
   setup, including `@eslint/js`, `typescript-eslint`, `eslint-plugin-react`,
   and `eslint-plugin-react-hooks`. See `log-viewer/eslint.config.js` for a
   reference. Pin `eslint` to `^9.x` until `eslint-plugin-react` supports v10.
-- Set `minimumReleaseAge: 4320` in `pnpm-workspace.yaml` (4320 minutes = 3 days):
+- Set `minimumReleaseAge: 10080` in `pnpm-workspace.yaml`, with the unit in a comment beside it,
+  since pnpm counts in minutes (10080 minutes = one week):
   ```yaml
-  minimumReleaseAge: 4320
+  minimumReleaseAge: 10080 # minutes: one week
   ```
   This is a pnpm supply-chain security feature that prevents installing package versions
-  published fewer than 3 days ago, giving the community time to detect and pull compromised releases.
+  published less than a week ago, giving the community time to detect and pull compromised releases.
 - Use **[gunshi](https://github.com/kazupon/gunshi)** for CLI argument parsing. It is
   declarative (`define({ args, run })` + `cli()`), written in TypeScript with inferred
   argument types, and supports shell completion via `@gunshi/plugin-completion`. Prefer
