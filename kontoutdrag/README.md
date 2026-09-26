@@ -222,6 +222,7 @@ path.
 | `summary <statement>` | Totals `--by category`, `merchant`, `month` or `tag` |
 | `tables` | What is loaded. `--merchants` lists them all, `--bundled` lists what is compiled in, `--dump <name>` prints one to start your own from |
 | `explain <descriptor>` | Look one descriptor up and see which rule decided it, and what else would have matched |
+| `view <statement>...` | A window with charts to click through; see [The view](#the-view). `--json` prints the data behind it |
 | `edit-config` | Open `settings.toml`, creating it from the template |
 
 All of them take `--from` / `--to` to narrow the window, `--spending` or
@@ -239,6 +240,41 @@ $ kontoutdrag unmatched statement.csv -n 1 --yaml
     match:
       prefix: [KVARNBY LIVS]
 ```
+
+## The view
+
+`kontoutdrag view` opens the statements in a window: spending by category
+as ranked bars, the payees inside whatever is selected, spending per month,
+tags, and the transactions behind it all. Click a category to see its
+payees and its months; click a payee or a tag to narrow further. Several
+statements can be given at once, one per account, and toggled on and off.
+
+```
+kontoutdrag view savings.json everyday.json
+```
+
+The filters above the charts scope everything below them: a period (the
+last twelve full months by default), the accounts, and the categories that
+move money rather than spend it — `transfer`, `income` and `refunds` are
+left out of spending unless ticked back in. Spending is money out; a
+refund does not net against it.
+
+Categories are bars rather than a pie on purpose: a pie reads at five or
+six slices, and a personal statement has thirty categories.
+
+The uncategorised share of spending has its own tile, against a target of
+5 %, because that bucket is the work list. Click the tile to see what is in
+it; its payees are raw descriptors, which is exactly what `unmatched`
+prints.
+
+The window is a React app under `browser/`, embedded in the binary and
+served on a local port, the same way `log-viewer` does it — the plumbing
+is shared in the `webview-shell` crate. It needs the `web` feature, which
+`./install` turns on; building with it runs pnpm and Vite. Without it,
+`view --json` still works. `view --serve` prints a URL for an ordinary
+browser instead of opening a window, and `?category=…`, `?merchant=…` and
+`?tag=…` on that URL open on a selection. For work on the app itself,
+`KONTOUTDRAG_URL=<that URL> pnpm dev` in `browser/` proxies the data.
 
 ## Limits
 

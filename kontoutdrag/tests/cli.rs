@@ -250,3 +250,26 @@ fn explain_names_the_table_and_rule() {
     assert!(stdout.contains("merchant    ICA"), "{stdout}");
     assert!(stdout.contains("se-common"), "{stdout}");
 }
+
+#[test]
+fn view_json_carries_every_transaction_resolved() {
+    let f = fixture("[[table]]\nbundled = \"se-common\"\n\n[[table]]\npath = \"{TABLE}\"\n");
+    let (stdout, stderr, ok) = run(
+        &f.config,
+        &["view", "--json", f.statement.to_str().unwrap()],
+    );
+    assert!(ok, "{stderr}");
+    let data: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(data["accounts"], serde_json::json!(["kontoutdrag"]));
+    let rows = data["transactions"].as_array().unwrap();
+    assert_eq!(rows.len(), 6);
+    let kvarnby = rows
+        .iter()
+        .find(|r| r["merchant"] == "Kvarnby Livs")
+        .unwrap();
+    assert_eq!(kvarnby["category"], "groceries");
+    assert_eq!(kvarnby["tags"], serde_json::json!(["local"]));
+    assert_eq!(kvarnby["amount"], -100.0);
+    let swish = rows.iter().find(|r| r["kind"] == "swish").unwrap();
+    assert_eq!(swish["resolved"], false);
+}

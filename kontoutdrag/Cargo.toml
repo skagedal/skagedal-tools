@@ -8,6 +8,13 @@ rust-version = "1.85"
 name = "kontoutdrag"
 path = "src/main.rs"
 
+[features]
+default = []
+# Off by default, as in log-viewer: wry pulls in heavy system deps on Linux,
+# and the build runs pnpm and Vite via build.rs to build the React app under
+# browser/. ./install turns it on; ./check and CI stay on the defaults.
+web = ["dep:webview-shell"]
+
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
@@ -21,6 +28,10 @@ shellexpand.workspace = true
 skagedal-dirs.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+webview-shell = { workspace = true, optional = true, features = ["app"] }
+
+[build-dependencies]
+webview-shell.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
