@@ -174,6 +174,7 @@ fn transaction(account: usize, key: &str, resolved: &Resolved) -> Value {
         "descriptor": t.descriptor.key(),
         "text": t.text,
         "kind": t.descriptor.kind(),
+        "method": t.method,
         "resolved": resolved.is_resolved(),
     })
 }
@@ -193,6 +194,7 @@ mod tests {
             amount: amount.parse().unwrap(),
             balance: None,
             reference: reference.map(str::to_string),
+            method: None,
         }
     }
 
