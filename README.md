@@ -18,6 +18,7 @@ A collection of small tools.
 | [linear-notifications](linear-notifications/) | Interactive CLI for viewing and opening unread Linear notifications |
 | [cloudwatch-insights](cloudwatch-insights/) | Download logs from AWS CloudWatch Logs Insights with a flexible time-range syntax |
 | [gh-pr](gh-pr/) | Manage GitHub pull requests for the current branch via the `gh` CLI |
+| [imessage-log](imessage-log/) | Print Messages history for a span of days, optionally only the conversations with one contact |
 | [intellij-patch](intellij-patch/) | Apply XML patches to IntelliJ project files from a TOML config |
 | [sync-brewfile](sync-brewfile/) | Reconcile locally installed Homebrew packages against a Brewfile, prompting to add or uninstall each extra |
 | [package-json-merge](package-json-merge/) | Git merge driver for `package.json` that picks the higher semver range when both branches bumped the same dependency |

@@ -8,6 +8,7 @@ members = [
     "gh-pr",
     "git-branch-assistant",
     "git-dirty-checker",
+    "imessage-log",
     "intellij-patch",
     "kontoutdrag",
     "log-jsonify",
@@ -71,6 +72,7 @@ ratatui = "*"
 rayon = "*"
 regex = "*"
 reqwest = { version = "*", default-features = false, features = ["rustls", "json", "charset", "http2", "system-proxy"] }
+rusqlite = { version = "*", features = ["bundled"] }
 semver = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
