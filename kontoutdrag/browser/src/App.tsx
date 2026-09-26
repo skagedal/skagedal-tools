@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Version, fetchComments, fetchData, fetchVersion, saveComment } from "./api";
 import { BarList } from "./BarList";
+import { BudgetView } from "./BudgetView";
 import { MonthColumns } from "./MonthColumns";
 import { Transactions } from "./Transactions";
 import {
@@ -87,6 +88,11 @@ export function App() {
     };
   }, []);
 
+  // `?tab=budget` opens on the budget.
+  const [tab, setTab] = useState<"spending" | "budget">(() =>
+    new URLSearchParams(window.location.search).get("tab") === "budget" ? "budget" : "spending",
+  );
+
   const onComment = async (key: string, text: string) => {
     await saveComment(key, text);
     setComments(await fetchComments());
@@ -98,7 +104,28 @@ export function App() {
   return (
     <>
       {problem && <p className="banner">{problem}</p>}
-      <View data={data} comments={comments} onComment={onComment} />
+      <nav className="tabs" role="tablist">
+        {(["spending", "budget"] as const).map((t) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            className={tab === t ? "selected" : undefined}
+            onClick={() => setTab(t)}
+          >
+            {t === "spending" ? "Spending" : "Budget"}
+          </button>
+        ))}
+      </nav>
+      {/* Hidden rather than unmounted, so the filters survive a visit to the budget. */}
+      <div hidden={tab !== "spending"}>
+        <View data={data} comments={comments} onComment={onComment} />
+      </div>
+      {tab === "budget" && (
+        <div className="page">
+          <BudgetView data={data} comments={comments} onComment={onComment} />
+        </div>
+      )}
     </>
   );
 }

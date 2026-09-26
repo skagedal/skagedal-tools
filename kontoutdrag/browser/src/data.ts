@@ -1,5 +1,7 @@
 // The document `/api/data` serves, and the slicing the view does on it.
 
+import type { Budgets } from "./budget";
+
 export interface Transaction {
   /** Stable across reloads; what a comment is filed under. */
   key: string;
@@ -24,6 +26,8 @@ export interface Data {
   transactions: Transaction[];
   /** Where comments are saved, for showing, not for writing. */
   commentsFile: string;
+  /** Null when no budget directory is configured. */
+  budgets: Budgets | null;
 }
 
 export const UNCATEGORISED = "(uncategorised)";
