@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Spend, Transaction, categoryOf, formatKr } from "./data";
+import { Spend, Transaction, categoryOf, formatAmount, isSwish } from "./data";
 
 interface Props {
   rows: Spend[];
@@ -62,6 +62,7 @@ export function Transactions({ rows, all, accounts, comments, onComment, limit =
                     <td>{s.t.date}</td>
                     <td title={s.t.descriptor}>
                       {s.payee}
+                      {isSwish(s.t) && <SwishMark />}
                       {commented && (
                         <span className="has-comment" title={comments.get(s.t.key)}>
                           {" "}
@@ -72,7 +73,7 @@ export function Transactions({ rows, all, accounts, comments, onComment, limit =
                     <td>{s.category}</td>
                     <td>{s.t.tags.join(", ")}</td>
                     {accounts.length > 1 && <td>{accounts[s.t.account]}</td>}
-                    <td className="num">{formatKr(s.amount)}</td>
+                    <td className="num">{formatAmount(s.amount)}</td>
                   </tr>
                   {isOpen && (
                     <tr className="detail">
@@ -172,7 +173,7 @@ function Detail({
           Mail around {t.date}
         </a>
         <span className="muted raw" title="The statement's text field">
-          {t.kind} · {t.text}
+          {t.method ?? t.kind} · {t.text}
         </span>
       </div>
     </div>
@@ -212,6 +213,7 @@ function Nearby({
               <td>{t.date}</td>
               <td title={t.text}>
                 {t.merchant || t.descriptor}
+                {isSwish(t) && <SwishMark />}
                 {comments.has(t.key) && (
                   <span className="has-comment" title={comments.get(t.key)}>
                     {" "}
@@ -223,7 +225,7 @@ function Nearby({
               {accounts.length > 1 && <td>{accounts[t.account]}</td>}
               <td className={`num${t.amount > 0 ? " in" : ""}`}>
                 {t.amount > 0 ? "+" : "−"}
-                {formatKr(Math.abs(t.amount))}
+                {formatAmount(Math.abs(t.amount))}
               </td>
             </tr>
           ))}
@@ -235,6 +237,14 @@ function Nearby({
 
 function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function SwishMark() {
+  return (
+    <span className="swish" title="Paid by Swish">
+      Swish
+    </span>
+  );
 }
 
 function shift(date: string, days: number): Date {

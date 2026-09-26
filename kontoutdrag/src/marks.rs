@@ -290,6 +290,7 @@ mod tests {
             amount: amount.parse().unwrap(),
             balance: None,
             reference: None,
+            method: None,
         }
     }
 
