@@ -139,6 +139,13 @@ totals, and the unbudgeted sum; `--unbudgeted` lists what is in it. With
 no `--month` it is the current month. A file that does not parse is
 skipped with a warning naming it, rather than stopping the rest.
 
+The view has a **Budget** tab with the same figures: a month at a time,
+the rows grouped under their top-level category with subtotals, each with
+a bar for what is spent against what was budgeted, the part over drawn in
+red, and a mark for how far through the month it is — spending past the
+mark is ahead of pace. Click a line for its transactions; the unbudgeted
+ones are listed below. `?tab=budget` on the URL opens on it.
+
 ## The statement side
 
 Two formats.

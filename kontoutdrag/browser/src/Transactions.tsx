@@ -10,10 +10,19 @@ interface Props {
   comments: Map<string, string>;
   onComment: (key: string, text: string) => Promise<void>;
   limit?: number;
+  title?: string;
 }
 
 /** The rows behind whatever is selected, newest first: the table view. */
-export function Transactions({ rows, all, accounts, comments, onComment, limit = 300 }: Props) {
+export function Transactions({
+  rows,
+  all,
+  accounts,
+  comments,
+  onComment,
+  limit = 300,
+  title = "Transactions",
+}: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sorted = [...rows].sort((a, b) => b.t.date.localeCompare(a.t.date));
   const shown = sorted.slice(0, limit);
@@ -27,7 +36,7 @@ export function Transactions({ rows, all, accounts, comments, onComment, limit =
   return (
     <section className="card">
       <h2>
-        Transactions <span className="muted">{rows.length}</span>
+        {title} <span className="muted">{rows.length}</span>
       </h2>
       <div className="table-wrap">
         <table>

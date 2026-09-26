@@ -14,6 +14,8 @@
   --good: #0ca30c;
   --good-text: #006300;
   --warning: #fab219;
+  --bad: #d03b3b;
+  --bad-text: #b42323;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   color: var(--ink);
@@ -35,6 +37,8 @@
     --accent-wash: rgba(57, 135, 229, 0.15);
     --recede: #4a4a47;
     --good-text: #0ca30c;
+    --bad: #e5484d;
+    --bad-text: #ff7a7a;
   }
 }
 
@@ -153,3 +157,33 @@ tr.detail td { background: var(--accent-wash); white-space: normal; }
   margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 600;
   letter-spacing: 0.02em; color: var(--ink-2); border: 1px solid var(--border); vertical-align: 1px;
 }
+
+.tabs { max-width: 1200px; margin: 0 auto; padding: 12px 16px 0; display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.tabs button {
+  background: none; border: none; border-bottom: 2px solid transparent; padding: 6px 12px; cursor: pointer; color: var(--ink-2);
+}
+.tabs button:hover { color: var(--ink); }
+.tabs button.selected { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+.warnings { margin: 0; padding: 8px 16px 8px 32px; background: var(--warning); color: #0b0b0b; border-radius: 10px; font-size: 13px; }
+.budget-file { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.card pre { background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+
+table.budget th, table.budget td { white-space: nowrap; }
+table.budget thead th { position: static; }
+table.budget tr.group th, table.budget tr.group td { padding-top: 14px; font-weight: 600; font-size: 13px; color: var(--ink); border-bottom-color: var(--axis); }
+table.budget tr.group th { text-transform: capitalize; }
+table.budget tbody:first-of-type tr.group th, table.budget tbody:first-of-type tr.group td { padding-top: 5px; }
+table.budget tr.row td:first-child { padding-left: 20px; }
+table.budget tr.total td { font-weight: 600; border-top: 1px solid var(--axis); }
+.line-name { margin-right: 8px; }
+.line-detail { font-size: 12px; }
+.progress-col { width: 34%; min-width: 140px; }
+.over-text { color: var(--bad-text); font-weight: 600; }
+
+.progress { position: relative; display: block; height: 10px; }
+.progress-budget { position: absolute; inset: 0 auto 0 0; background: var(--grid); border-radius: 3px; }
+.progress-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 3px 0 0 3px; }
+.progress-over { position: absolute; top: 0; bottom: 0; background: var(--bad); border-radius: 0 3px 3px 0; }
+.progress-pace { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink-2); }
+.tile .progress { margin: 4px 0; }
