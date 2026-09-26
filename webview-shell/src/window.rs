@@ -5,7 +5,7 @@ use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop};
 use tao::window::WindowBuilder;
-use wry::WebViewBuilder;
+use wry::{NewWindowResponse, WebViewBuilder};
 
 pub fn open(url: &str, title: &str, size: (f64, f64)) -> Result<()> {
     let event_loop = EventLoop::new();
@@ -16,8 +16,22 @@ pub fn open(url: &str, title: &str, size: (f64, f64)) -> Result<()> {
         .with_inner_size(LogicalSize::new(size.0, size.1))
         .build(&event_loop)
         .map_err(|e| anyhow::anyhow!("creating window: {e}"))?;
+    // The app's own pages stay in the window; a link anywhere else opens in
+    // the browser, since a webview is a poor place to read mail.
+    let origin = url.trim_end_matches('/').to_string();
     let _webview = WebViewBuilder::new()
         .with_url(url)
+        .with_navigation_handler(move |target: String| {
+            if target.starts_with(&origin) || target.starts_with("about:") {
+                return true;
+            }
+            let _ = opener::open(&target);
+            false
+        })
+        .with_new_window_req_handler(|target: String, _| {
+            let _ = opener::open(&target);
+            NewWindowResponse::Deny
+        })
         .build(&window)
         .map_err(|e| anyhow::anyhow!("creating webview: {e}"))?;
     event_loop.run(move |event, _, control_flow| {

@@ -289,6 +289,7 @@ mod tests {
             text: text.to_string(),
             amount: amount.parse().unwrap(),
             balance: None,
+            reference: None,
         }
     }
 

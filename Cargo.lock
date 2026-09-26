@@ -5700,6 +5700,7 @@ dependencies = [
  "anyhow",
  "include_dir",
  "muda",
+ "opener",
  "tao",
  "wry",
 ]
