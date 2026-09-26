@@ -1,4 +1,4 @@
 allowBuilds:
   esbuild: false
 
-minimumReleaseAge: 4320
+minimumReleaseAge: 10080 # minutes: one week

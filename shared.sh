@@ -232,12 +232,11 @@ install-rust() {
     # `./install <single-tool>` — subsequent single installs are also
     # faster because dep artifacts persist in target/release/.
     export CARGO_TARGET_DIR="$SCRIPT_DIR/target"
-    if [[ "$dir" == "log-viewer" ]]; then
-        # log-viewer's --web mode embeds the React app from browser/web/dist
-        # into the Rust binary via include_dir!. The crate's build.rs runs
-        # `pnpm install && pnpm run build:web` in browser/ automatically when
-        # the `web` feature is on, so all this special case has to do is
-        # turn the feature on.
+    if [[ "$dir" == "log-viewer" || "$dir" == "kontoutdrag" ]]; then
+        # Their webviews embed a React app from browser/ into the binary via
+        # include_dir!. Each crate's build.rs runs pnpm and Vite in browser/
+        # automatically when the `web` feature is on, so all this special
+        # case has to do is turn the feature on.
         (cd "$SCRIPT_DIR" && cargo install --path "$dir" --bin "$dir" --features web)
         return
     fi

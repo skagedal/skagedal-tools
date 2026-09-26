@@ -10,6 +10,8 @@ mod matcher;
 mod output;
 mod paths;
 mod statement;
+#[cfg(feature = "web")]
+mod web;
 
 use anyhow::Result;
 use clap::Parser;
@@ -31,6 +33,7 @@ fn run() -> Result<()> {
         Subcommand::Tables(args) => commands::tables::run(&args),
         Subcommand::Marks(args) => commands::marks::run(&args),
         Subcommand::Explain(args) => commands::explain::run(&args),
+        Subcommand::View(args) => commands::view::run(&args),
         Subcommand::EditConfig => commands::edit_config::run(),
     }
 }

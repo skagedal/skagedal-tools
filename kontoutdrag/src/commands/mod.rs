@@ -7,6 +7,7 @@ pub mod marks;
 pub mod summary;
 pub mod tables;
 pub mod unmatched;
+pub mod view;
 
 use anyhow::{Context, Result};
 use chrono::NaiveDate;

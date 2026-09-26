@@ -2703,6 +2703,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 1.1.6+spec-1.1.0",
+ "webview-shell",
 ]
 
 [[package]]
@@ -2810,9 +2811,8 @@ dependencies = [
  "serde_json",
  "shell-escape",
  "skagedal-dirs",
- "tao",
  "toml 1.1.6+spec-1.1.0",
- "wry",
+ "webview-shell",
 ]
 
 [[package]]
@@ -5576,6 +5576,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b96554aa2acc8ccdb7e1c9a58a7a68dd5d13bccc69cd124cb09406db612a1c9b"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webview-shell"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "include_dir",
+ "tao",
+ "wry",
 ]
 
 [[package]]

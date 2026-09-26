@@ -1,0 +1,24 @@
+{
+  "name": "kontoutdrag-view",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The React app behind `kontoutdrag view`, embedded in the Rust binary",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "check": "tsc --noEmit",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

@@ -1,8 +1,8 @@
-//! Build script for log-viewer.
+//! Build script for kontoutdrag.
 //!
 //! With the `web` feature on, builds the React app under `browser/` so the
-//! `include_dir!` in `src/web/server.rs` embeds an up-to-date copy. Without
-//! it, does nothing.
+//! `include_dir!` in `src/web.rs` embeds an up-to-date copy. Without it,
+//! does nothing.
 
 use std::env;
 use std::path::PathBuf;
@@ -16,8 +16,8 @@ fn main() {
     let browser = manifest.join("browser");
     webview_shell::build::build_web_app(
         &browser,
-        "build:web",
-        &browser.join("web/dist/index.html"),
-        &[&browser.join("web"), &browser.join("src")],
+        "build",
+        &browser.join("dist/index.html"),
+        &[&browser.join("src"), &browser.join("index.html")],
     );
 }

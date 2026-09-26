@@ -19,6 +19,7 @@ members = [
     "sync-brewfile",
     "tracker",
     "trafikverket",
+    "webview-shell",
     "woke",
     "x-java-home",
 ]
@@ -85,5 +86,6 @@ tokio = { version = "*", features = ["rt-multi-thread", "macros", "fs", "process
 toml = "*"
 url = "*"
 uuid = { version = "*", features = ["v4"] }
+webview-shell = { path = "webview-shell" }
 wry = "*"
 xmltree = { version = "*", features = ["attribute-order"] }

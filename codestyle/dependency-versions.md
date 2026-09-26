@@ -22,8 +22,8 @@ A caret in the manifest changes none of that — it only narrows what a
 future `pnpm update` is allowed to pick.
 
 **`minimumReleaseAge` is the safety margin.** `pnpm-workspace.yaml` sets
-`minimumReleaseAge: 4320` — three days — so no version published in the
-last three days is installed at all, by `pnpm update` or by a plain
+`minimumReleaseAge: 10080` — a week, in minutes — so no version published
+in the last week is installed at all, by `pnpm update` or by a plain
 `pnpm install`. The thing a hand-written range is usually reached for is
 protection against a bad or hostile release, and a release-age floor is a
 far better answer to that than a major-version bound: a compromised

@@ -1,9 +1,7 @@
-//! Hand-rolled HTTP/SSE server. One thread per accepted connection.
+//! The log-viewer API, served by `webview_shell::server` beside the
+//! embedded React app.
 //!
 //! Endpoints:
-//!   GET /             -> embedded React app (index.html)
-//!   GET /assets/<f>   -> embedded React asset
-//!   GET /<other>      -> falls through to embedded asset lookup, then 404
 //!   GET /api/meta     -> JSON: { sourceLabel, config: { fields, defaultField } }
 //!   GET /api/stream   -> text/event-stream: replay then live entries
 //!
@@ -11,22 +9,21 @@
 //! `browser/src/browser/server.ts`) so the React app under `browser/web/`
 //! works without modification.
 
-use std::io::{self, BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::io::{self, Write};
+use std::net::TcpStream;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
 use include_dir::{Dir, include_dir};
 use serde_json::json;
+use webview_shell::server;
 
 use crate::config::Config;
 use crate::entry::Entry;
 
-static WEB_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/browser/web/dist");
+pub static WEB_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/browser/web/dist");
 
 /// Pre-rendered SSE payload (just the JSON body — the `event:`/`data:` framing
 /// is added on write).
@@ -95,134 +92,17 @@ fn entry_payload(entry: &Entry, id: u64) -> String {
     .to_string()
 }
 
-pub struct ServerHandle {
-    port: u16,
-}
-
-impl ServerHandle {
-    pub fn start(state: Arc<ServerState>) -> Result<Self> {
-        let listener = TcpListener::bind("127.0.0.1:0").context("binding 127.0.0.1:0")?;
-        let port = listener.local_addr()?.port();
-        thread::spawn(move || accept_loop(listener, state));
-        Ok(Self { port })
+/// Routes the API; everything else falls through to the embedded app.
+pub fn handle(state: &ServerState, path: &str, stream: &mut TcpStream) -> io::Result<bool> {
+    match path {
+        "/api/meta" => server::send_json(stream, &state.meta_json)?,
+        "/api/stream" => handle_sse(stream, state)?,
+        _ => return Ok(false),
     }
-
-    pub fn port(&self) -> u16 {
-        self.port
-    }
+    Ok(true)
 }
 
-fn accept_loop(listener: TcpListener, state: Arc<ServerState>) {
-    for conn in listener.incoming() {
-        let Ok(stream) = conn else { continue };
-        let s = state.clone();
-        thread::spawn(move || {
-            if let Err(err) = handle_connection(stream, &s) {
-                // Connection-level errors are common (clients disconnect);
-                // a debug log here would be noisy.
-                let _ = err;
-            }
-        });
-    }
-}
-
-fn handle_connection(mut stream: TcpStream, state: &ServerState) -> io::Result<()> {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    let path = read_request_path(&mut stream)?;
-    match path.as_str() {
-        "/api/meta" => send_json(&mut stream, &state.meta_json),
-        "/api/stream" => handle_sse(stream, state),
-        other => serve_asset(&mut stream, other),
-    }
-}
-
-fn read_request_path(stream: &mut TcpStream) -> io::Result<String> {
-    let mut reader = BufReader::new(stream.try_clone()?);
-    let mut line = String::new();
-    reader.read_line(&mut line)?;
-    let path = parse_request_path(&line).unwrap_or_else(|| "/".to_string());
-    // Drain the rest of the headers so the kernel buffer doesn't keep
-    // requests pending on close.
-    loop {
-        let mut hdr = String::new();
-        let n = reader.read_line(&mut hdr)?;
-        if n == 0 || hdr == "\r\n" || hdr == "\n" {
-            break;
-        }
-    }
-    Ok(path)
-}
-
-fn parse_request_path(request_line: &str) -> Option<String> {
-    let mut parts = request_line.split_whitespace();
-    let _method = parts.next()?;
-    let raw = parts.next()?;
-    Some(strip_query(raw).to_string())
-}
-
-fn strip_query(s: &str) -> &str {
-    s.split_once('?').map(|(p, _)| p).unwrap_or(s)
-}
-
-fn send_status(stream: &mut TcpStream, code: u16, msg: &str) -> io::Result<()> {
-    write!(
-        stream,
-        "HTTP/1.1 {code} {msg}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-    )?;
-    stream.flush()
-}
-
-fn send_json(stream: &mut TcpStream, body: &str) -> io::Result<()> {
-    write!(
-        stream,
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )?;
-    stream.write_all(body.as_bytes())?;
-    stream.flush()
-}
-
-fn serve_asset(stream: &mut TcpStream, path: &str) -> io::Result<()> {
-    let lookup = if path == "/" {
-        "index.html"
-    } else {
-        path.trim_start_matches('/')
-    };
-    let Some(file) = WEB_DIST.get_file(lookup) else {
-        return send_status(stream, 404, "Not Found");
-    };
-    let body = file.contents();
-    let mime = guess_mime(lookup);
-    write!(
-        stream,
-        "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )?;
-    stream.write_all(body)?;
-    stream.flush()
-}
-
-fn guess_mime(path: &str) -> &'static str {
-    let ext = path.rsplit('.').next().unwrap_or("");
-    match ext {
-        "html" | "htm" => "text/html; charset=utf-8",
-        "js" | "mjs" => "application/javascript; charset=utf-8",
-        "css" => "text/css; charset=utf-8",
-        "json" => "application/json",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "ico" => "image/x-icon",
-        "woff" => "font/woff",
-        "woff2" => "font/woff2",
-        "txt" => "text/plain; charset=utf-8",
-        "map" => "application/json",
-        _ => "application/octet-stream",
-    }
-}
-
-fn handle_sse(mut stream: TcpStream, state: &ServerState) -> io::Result<()> {
+fn handle_sse(stream: &mut TcpStream, state: &ServerState) -> io::Result<()> {
     // Long-lived: drop the read timeout, but cap writes so a wedged client
     // doesn't block forever.
     let _ = stream.set_read_timeout(None);
@@ -243,15 +123,15 @@ fn handle_sse(mut stream: TcpStream, state: &ServerState) -> io::Result<()> {
     };
 
     for payload in &snapshot {
-        write_event(&mut stream, "entry", payload)?;
+        write_event(stream, "entry", payload)?;
     }
     if state.ended.load(Ordering::SeqCst) {
-        write_event(&mut stream, "end", "{}")?;
+        write_event(stream, "end", "{}")?;
         return Ok(());
     }
 
     while let Ok(payload) = rx.recv() {
-        if write_event(&mut stream, "entry", &payload).is_err() {
+        if write_event(stream, "entry", &payload).is_err() {
             break;
         }
     }
@@ -301,31 +181,6 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["wrapped"], true);
         assert_eq!(value["data"]["message"], "plain text");
-    }
-
-    #[test]
-    fn parse_request_path_strips_query() {
-        assert_eq!(
-            parse_request_path("GET /api/meta?x=1 HTTP/1.1\r\n").as_deref(),
-            Some("/api/meta")
-        );
-        assert_eq!(
-            parse_request_path("GET / HTTP/1.1\r\n").as_deref(),
-            Some("/")
-        );
-        assert_eq!(parse_request_path("garbage"), None);
-    }
-
-    #[test]
-    fn guess_mime_for_common_extensions() {
-        assert_eq!(guess_mime("index.html"), "text/html; charset=utf-8");
-        assert_eq!(
-            guess_mime("main.js"),
-            "application/javascript; charset=utf-8"
-        );
-        assert_eq!(guess_mime("app.css"), "text/css; charset=utf-8");
-        assert_eq!(guess_mime("logo.svg"), "image/svg+xml");
-        assert_eq!(guess_mime("unknown"), "application/octet-stream");
     }
 
     #[test]

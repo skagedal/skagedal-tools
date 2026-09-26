@@ -14,7 +14,7 @@ default = []
 # pnpm + Vite via build.rs to (re)build the React app under browser/.
 # The repo's ./install enables this feature; CI / ./check stays on the
 # default feature set.
-web = ["dep:include_dir", "dep:tao", "dep:wry"]
+web = ["dep:include_dir", "dep:webview-shell"]
 
 [dependencies]
 anyhow.workspace = true
@@ -27,6 +27,8 @@ serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 shell-escape.workspace = true
 skagedal-dirs.workspace = true
-tao = { workspace = true, optional = true }
 toml.workspace = true
-wry = { workspace = true, optional = true }
+webview-shell = { workspace = true, optional = true, features = ["app"] }
+
+[build-dependencies]
+webview-shell.workspace = true

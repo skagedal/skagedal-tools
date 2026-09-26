@@ -27,6 +27,8 @@ pub enum Subcommand {
     Marks(MarksArgs),
     /// Look a single descriptor up and show which rule decided it
     Explain(ExplainArgs),
+    /// Open the statements in a window with charts to click through
+    View(ViewArgs),
     /// Open settings.toml in $EDITOR, creating it from the template if needed
     #[command(name = "edit-config")]
     EditConfig,
@@ -198,4 +200,32 @@ pub struct ExplainArgs {
     /// Ignore the configured tables and use only those given with --table
     #[arg(long)]
     pub only_tables: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ViewArgs {
+    /// Statement files to read; several accounts are shown side by side
+    #[arg(required = true)]
+    pub statements: Vec<PathBuf>,
+
+    /// Statement format (overrides the config)
+    #[arg(long)]
+    pub format: Option<String>,
+
+    /// Extra merchant table, after the configured ones (repeatable)
+    #[arg(long = "table", short = 't')]
+    pub tables: Vec<PathBuf>,
+
+    /// Ignore the configured tables and use only those given with --table
+    #[arg(long)]
+    pub only_tables: bool,
+
+    /// Serve the view and print its URL instead of opening a window, for
+    /// looking at it in an ordinary browser
+    #[arg(long, conflicts_with = "json")]
+    pub serve: bool,
+
+    /// Print the data the view is drawn from, as JSON, and exit
+    #[arg(long)]
+    pub json: bool,
 }
