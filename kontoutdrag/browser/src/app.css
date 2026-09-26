@@ -75,6 +75,7 @@ button.tile:hover { background: var(--accent-wash); }
 .meter-target { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-2); }
 
 .selection { display: flex; gap: 12px; align-items: baseline; }
+.link.up { margin-left: 10px; font-size: 12px; font-weight: normal; }
 .link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }

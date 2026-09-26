@@ -57,7 +57,33 @@ export function categoryOf(t: Transaction): string {
   return t.category || UNCATEGORISED;
 }
 
-/** Money out, in the chosen months and accounts, in a category that counts. */
+// Categories are slash paths: `car/fuel` lies within `car`, and `carpets`
+// does not.
+
+/** The first segment: `car` for `car/fuel`. */
+export const topOf = (category: string) => category.split("/")[0];
+
+/** Whether `category` is `ancestor` or lies below it. */
+export const isWithin = (category: string, ancestor: string) =>
+  category === ancestor || category.startsWith(`${ancestor}/`);
+
+/** The child of `parent` that `category` lies within: `car/fuel` for
+ * `car/fuel/diesel` under `car`. A category directly in `parent` is
+ * `parent` itself. */
+export function childOf(category: string, parent: string | null): string {
+  if (parent === null) return topOf(category);
+  if (category === parent) return parent;
+  const rest = category.slice(parent.length + 1).split("/")[0];
+  return `${parent}/${rest}`;
+}
+
+export function parentOf(category: string): string | null {
+  const i = category.lastIndexOf("/");
+  return i < 0 ? null : category.slice(0, i);
+}
+
+/** Money out, in the chosen months and accounts, in a category that
+ * counts. `notSpending` holds top-level categories. */
 export function spending(data: Data, f: Filters): Spend[] {
   const out: Spend[] = [];
   for (const t of data.transactions) {
@@ -66,7 +92,7 @@ export function spending(data: Data, f: Filters): Spend[] {
     if (month < f.from || month > f.to) continue;
     if (!f.accounts.has(t.account)) continue;
     const category = categoryOf(t);
-    if (f.notSpending.has(category)) continue;
+    if (f.notSpending.has(topOf(category))) continue;
     out.push({ t, amount: -t.amount, month, category, payee: t.merchant || t.descriptor });
   }
   return out;
@@ -74,7 +100,7 @@ export function spending(data: Data, f: Filters): Spend[] {
 
 export function matches(s: Spend, sel: Selection): boolean {
   return (
-    (sel.category === null || s.category === sel.category) &&
+    (sel.category === null || isWithin(s.category, sel.category)) &&
     (sel.merchant === null || s.payee === sel.merchant) &&
     (sel.tag === null || s.t.tags.includes(sel.tag))
   );
