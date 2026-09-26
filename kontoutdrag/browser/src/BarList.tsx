@@ -9,6 +9,10 @@ interface Props {
   selected: string | null;
   onSelect: (key: string | null) => void;
   limit?: number;
+  /** What a bar is called, when not its key. */
+  label?: (key: string) => string;
+  /** Shown as a link in the heading, for going back up a level. */
+  onUp?: () => void;
 }
 
 /**
@@ -16,13 +20,29 @@ interface Props {
  * keeps its colour and the rest recede. Every value is printed beside its
  * bar, so nothing depends on hovering.
  */
-export function BarList({ title, groups, whole, selected, onSelect, limit = 12 }: Props) {
+export function BarList({
+  title,
+  groups,
+  whole,
+  selected,
+  onSelect,
+  limit = 12,
+  label = (key) => key,
+  onUp,
+}: Props) {
   const [all, setAll] = useState(false);
   const shown = all ? groups : groups.slice(0, limit);
   const max = groups[0]?.total ?? 0;
   return (
     <section className="card">
-      <h2>{title}</h2>
+      <h2>
+        {title}
+        {onUp && (
+          <button className="link up" onClick={onUp}>
+            ↑ Up
+          </button>
+        )}
+      </h2>
       {groups.length === 0 && <p className="muted">Nothing in this selection.</p>}
       <ul className="bars" role="listbox" aria-label={title}>
         {shown.map((g) => {
@@ -37,7 +57,7 @@ export function BarList({ title, groups, whole, selected, onSelect, limit = 12 }
                 onClick={() => onSelect(isSelected ? null : g.key)}
                 title={`${g.key}: ${formatKr(g.total)}, ${g.count} transactions`}
               >
-                <span className="bar-label">{g.key}</span>
+                <span className="bar-label">{label(g.key)}</span>
                 <span className="bar-track">
                   <span
                     className={`bar-fill${g.key === UNCATEGORISED ? " unknown" : ""}`}

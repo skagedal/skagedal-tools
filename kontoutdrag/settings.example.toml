@@ -22,3 +22,8 @@ format = "seb"
 # Optional. A statement named on the command line without any directory
 # part is looked for here first.
 # directory = "~/notes/finances/data"
+
+# Optional. A directory of monthly budgets, one file per month named
+# YYYY-MM.yaml, for `kontoutdrag budget` and the Budget tab in the view.
+# [budgets]
+# path = "~/notes/finances/budget"
