@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 use crate::cli::{Common, ViewArgs};
 use crate::commands::{self, Resolved};
-use crate::comments::{self, Subject};
+use crate::comments::Subject;
 use crate::config;
 use crate::mapping;
 use crate::statement::Transaction;
@@ -52,7 +52,7 @@ fn open(args: &ViewArgs) -> Result<()> {
         crate::web::Source {
             build: Box::new(move || build(&owned)),
             watched: watched_files(args)?,
-            comments: comments_file(args)?,
+            comments: crate::paths::comments_path(),
         },
         first,
         args.serve,
@@ -95,7 +95,7 @@ pub fn build(args: &ViewArgs) -> Result<Built> {
     let json = json!({
         "accounts": accounts,
         "transactions": transactions,
-        "commentsFile": comments_file(args)?.display().to_string(),
+        "commentsFile": crate::paths::comments_path().display().to_string(),
     })
     .to_string();
     Ok(Built { json, subjects })
@@ -125,22 +125,6 @@ fn subject(key: &str, account: &str, t: &Transaction) -> Subject {
         text: t.text.clone(),
         reference: t.reference.clone(),
     }
-}
-
-/// Where comments are kept: the configured statements directory, or else
-/// beside the first statement.
-pub fn comments_file(args: &ViewArgs) -> Result<PathBuf> {
-    let settings = config::load(&crate::paths::config_path())?;
-    let directory = match &settings.statements.directory {
-        Some(dir) => mapping::expand(dir)?,
-        None => args
-            .statements
-            .first()
-            .and_then(|p| p.parent())
-            .map(Path::to_path_buf)
-            .unwrap_or_default(),
-    };
-    Ok(directory.join(comments::FILE_NAME))
 }
 
 /// Everything the document is built from, so the view can rebuild itself

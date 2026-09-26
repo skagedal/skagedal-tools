@@ -12,6 +12,7 @@
   --accent-wash: rgba(42, 120, 214, 0.1);
   --recede: #c3c2b7;
   --good: #0ca30c;
+  --good-text: #006300;
   --warning: #fab219;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -33,6 +34,7 @@
     --accent: #3987e5;
     --accent-wash: rgba(57, 135, 229, 0.15);
     --recede: #4a4a47;
+    --good-text: #0ca30c;
   }
 }
 
@@ -141,3 +143,8 @@ tr.detail td { background: var(--accent-wash); white-space: normal; }
 .detail-side a { color: var(--accent); }
 .detail-side .raw { font-size: 12px; word-break: break-all; }
 .footnote { margin: -8px 0 0; font-size: 12px; }
+.nearby { margin: 4px 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.nearby table { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.nearby td { font-size: 13px; padding: 3px 8px; }
+.nearby tr.self td { font-weight: 600; }
+.nearby td.in { color: var(--good-text); }

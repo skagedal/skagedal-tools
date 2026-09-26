@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Spend, formatKr } from "./data";
+import { Spend, Transaction, categoryOf, formatKr } from "./data";
 
 interface Props {
   rows: Spend[];
+  /** Every transaction, unfiltered, for the neighbours of an opened row. */
+  all: Transaction[];
   accounts: string[];
   /** Saved comments, by transaction key. */
   comments: Map<string, string>;
@@ -11,7 +13,7 @@ interface Props {
 }
 
 /** The rows behind whatever is selected, newest first: the table view. */
-export function Transactions({ rows, accounts, comments, onComment, limit = 300 }: Props) {
+export function Transactions({ rows, all, accounts, comments, onComment, limit = 300 }: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sorted = [...rows].sort((a, b) => b.t.date.localeCompare(a.t.date));
   const shown = sorted.slice(0, limit);
@@ -76,6 +78,12 @@ export function Transactions({ rows, accounts, comments, onComment, limit = 300 
                     <tr className="detail">
                       <td colSpan={columns}>
                         <Detail spend={s} saved={comments.get(s.t.key) ?? ""} onComment={onComment} />
+                        <Nearby
+                          of={s.t}
+                          all={all}
+                          accounts={accounts}
+                          comments={comments}
+                        />
                       </td>
                     </tr>
                   )}
@@ -169,6 +177,64 @@ function Detail({
       </div>
     </div>
   );
+}
+
+/**
+ * Everything booked from the day before to the day after, in every account
+ * and whatever the filters say: the repayment, the refund, the other half
+ * of a transfer, which the filters above would hide.
+ */
+function Nearby({
+  of,
+  all,
+  accounts,
+  comments,
+}: {
+  of: Transaction;
+  all: Transaction[];
+  accounts: string[];
+  comments: Map<string, string>;
+}) {
+  const from = isoDate(shift(of.date, -1));
+  const to = isoDate(shift(of.date, 1));
+  const near = all
+    .filter((t) => t.date >= from && t.date <= to)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.amount - b.amount);
+  return (
+    <div className="nearby">
+      <span className="muted">
+        {from} – {to}, every account, no filters
+      </span>
+      <table>
+        <tbody>
+          {near.map((t) => (
+            <tr key={t.key} className={t.key === of.key ? "self" : undefined}>
+              <td>{t.date}</td>
+              <td title={t.text}>
+                {t.merchant || t.descriptor}
+                {comments.has(t.key) && (
+                  <span className="has-comment" title={comments.get(t.key)}>
+                    {" "}
+                    ✎
+                  </span>
+                )}
+              </td>
+              <td>{categoryOf(t)}</td>
+              {accounts.length > 1 && <td>{accounts[t.account]}</td>}
+              <td className={`num${t.amount > 0 ? " in" : ""}`}>
+                {t.amount > 0 ? "+" : "−"}
+                {formatKr(Math.abs(t.amount))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function shift(date: string, days: number): Date {

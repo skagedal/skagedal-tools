@@ -113,6 +113,10 @@ pub fn send_json(stream: &mut TcpStream, body: &str) -> io::Result<()> {
     send_body(stream, "application/json", body.as_bytes())
 }
 
+pub fn send_png(stream: &mut TcpStream, body: &[u8]) -> io::Result<()> {
+    send_body(stream, "image/png", body)
+}
+
 fn send_body(stream: &mut TcpStream, mime: &str, body: &[u8]) -> io::Result<()> {
     write!(
         stream,

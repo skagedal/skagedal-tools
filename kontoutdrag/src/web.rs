@@ -32,6 +32,12 @@ use crate::comments::{self, Subject};
 
 static WEB_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/browser/dist");
 
+/// 💰, drawn by build.rs when appicon-generator was there to draw it.
+#[cfg(kontoutdrag_icon)]
+const ICON: Option<&[u8]> = Some(include_bytes!(concat!(env!("OUT_DIR"), "/icon.png")));
+#[cfg(not(kontoutdrag_icon))]
+const ICON: Option<&[u8]> = None;
+
 /// How to rebuild the document, and what it is built from.
 pub struct Source {
     pub build: Box<dyn Fn() -> Result<Built> + Send + Sync>,
@@ -83,7 +89,7 @@ pub fn run(source: Source, first: Built, serve_only: bool) -> Result<()> {
             std::thread::park();
         }
     }
-    webview_shell::window::open(&url, "kontoutdrag", (1200.0, 820.0))
+    webview_shell::window::open(&url, "kontoutdrag", (1200.0, 820.0), ICON)
 }
 
 fn handle(state: &State, request: &Request, stream: &mut TcpStream) -> io::Result<bool> {
@@ -108,6 +114,10 @@ fn handle(state: &State, request: &Request, stream: &mut TcpStream) -> io::Resul
             Err(e) => send_error(stream, 500, &format!("{e:#}"))?,
         },
         ("POST", "/api/comment") => save_comment(state, &request.body, stream)?,
+        ("GET", "/icon.png") => match ICON {
+            Some(png) => server::send_png(stream, png)?,
+            None => server::send_status(stream, 404, "Not Found")?,
+        },
         _ => return Ok(false),
     }
     Ok(true)

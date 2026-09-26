@@ -42,6 +42,30 @@ pub fn build_web_app(app_dir: &Path, script: &str, dist_index: &Path, watch: &[&
     }
 }
 
+/// Draw `emoji` on `background` as a 512-pixel PNG at `out` with
+/// appicon-generator, when it is installed, and say whether it did. The
+/// image is Apple's emoji font, so it is made at build time rather than
+/// committed; a machine without the tool builds an app without an icon.
+pub fn emoji_icon(emoji: &str, background: &str, out: &Path) -> bool {
+    Command::new("appicon-generator")
+        .args([
+            "--mode",
+            "raw",
+            "--size",
+            "512",
+            "--background",
+            background,
+            "--output",
+        ])
+        .arg(out)
+        .arg(emoji)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+        && out.exists()
+}
+
 fn require_pnpm() {
     if Command::new("pnpm").arg("--version").output().is_ok() {
         return;

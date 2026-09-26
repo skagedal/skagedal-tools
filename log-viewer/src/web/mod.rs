@@ -44,6 +44,7 @@ pub fn run(
         &url,
         &format!("log-viewer — {source_label}"),
         (1100.0, 720.0),
+        None,
     )
 }
 

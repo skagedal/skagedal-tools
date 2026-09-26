@@ -328,6 +328,7 @@ function View({ data, comments, onComment }: ViewProps) {
 
       <Transactions
         rows={selected}
+        all={data.transactions}
         accounts={data.accounts}
         comments={comments}
         onComment={onComment}

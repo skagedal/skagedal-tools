@@ -10,7 +10,6 @@ use std::path::Path;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-pub const FILE_NAME: &str = "kontoutdrag-comments.json";
 const VERSION: u32 = 1;
 
 /// The transaction a comment is about, as the view identifies it.
@@ -92,12 +91,38 @@ fn save(path: &Path, comments: Vec<Comment>) -> Result<()> {
         version: VERSION,
         comments,
     })?;
+    let path = &through_links(path)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("could not create {}", dir.display()))?;
+    }
     // Written beside the file and renamed over it, so a reader never sees
     // half of it.
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, body + "\n")
         .with_context(|| format!("could not write {}", tmp.display()))?;
     std::fs::rename(&tmp, path).with_context(|| format!("could not replace {}", path.display()))
+}
+
+/// The file a symlink finally points at, so that writing replaces the file
+/// and leaves the link in place. Renaming onto the link itself would turn it
+/// into an ordinary file.
+fn through_links(path: &Path) -> Result<std::path::PathBuf> {
+    let mut path = path.to_path_buf();
+    for _ in 0..40 {
+        match std::fs::symlink_metadata(&path) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                let target = std::fs::read_link(&path)
+                    .with_context(|| format!("could not read the link {}", path.display()))?;
+                path = match path.parent() {
+                    Some(dir) if target.is_relative() => dir.join(target),
+                    _ => target,
+                };
+            }
+            _ => return Ok(path),
+        }
+    }
+    bail!("{}: too many levels of symbolic links", path.display())
 }
 
 #[cfg(test)]
@@ -119,7 +144,7 @@ mod tests {
     #[test]
     fn a_missing_or_empty_file_is_no_comments() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(FILE_NAME);
+        let path = dir.path().join("comments.json");
         assert!(load(&path).unwrap().is_empty());
         std::fs::write(&path, "\n").unwrap();
         assert!(load(&path).unwrap().is_empty());
@@ -128,7 +153,7 @@ mod tests {
     #[test]
     fn upsert_adds_replaces_and_removes() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(FILE_NAME);
+        let path = dir.path().join("comments.json");
         upsert(&path, subject("b", "2026-02-01"), "groceries", "t1").unwrap();
         upsert(&path, subject("a", "2026-01-01"), "a jacket", "t2").unwrap();
         upsert(
@@ -150,10 +175,41 @@ mod tests {
         assert_eq!(load(&path).unwrap().len(), 1);
     }
 
+    /// A comments file kept elsewhere through a symlink stays linked.
+    #[cfg(unix)]
+    #[test]
+    fn writes_through_a_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("repo").join("comments.json");
+        std::fs::create_dir_all(real.parent().unwrap()).unwrap();
+        std::fs::write(&real, "").unwrap();
+        let link = dir.path().join("data").join("comments.json");
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink("../repo/comments.json", &link).unwrap();
+
+        upsert(&link, subject("a", "2026-01-01"), "a jacket", "t").unwrap();
+
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(load(&real).unwrap()[0].comment, "a jacket");
+    }
+
+    #[test]
+    fn creates_the_directory_on_first_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("not-yet").join("comments.json");
+        upsert(&path, subject("a", "2026-01-01"), "a jacket", "t").unwrap();
+        assert_eq!(load(&path).unwrap().len(), 1);
+    }
+
     #[test]
     fn the_subject_is_written_flat_beside_the_comment() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(FILE_NAME);
+        let path = dir.path().join("comments.json");
         upsert(&path, subject("a", "2026-01-01"), "a jacket", "t").unwrap();
         let raw: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
