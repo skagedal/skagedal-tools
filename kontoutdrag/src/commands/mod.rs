@@ -135,7 +135,7 @@ pub fn load(common: &Common) -> Result<Loaded> {
             }
         })
         .map(|transaction| {
-            let hit = matcher.lookup(transaction.descriptor.key());
+            let hit = matcher.lookup(transaction.descriptor.key(), Some(transaction.amount));
             let marked = marks.apply(&transaction);
             for index in &marked.applied {
                 mark_hits[*index] += 1;
