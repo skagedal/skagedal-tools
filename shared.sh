@@ -69,6 +69,7 @@ INSTALLED_RUST_TOOLS=(
     gh-pr
     git-branch-assistant
     git-dirty-checker
+    imessage-log
     intellij-patch
     kontoutdrag
     log-jsonify
