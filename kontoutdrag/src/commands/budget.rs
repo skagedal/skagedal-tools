@@ -110,6 +110,14 @@ pub fn run(args: &BudgetArgs) -> Result<()> {
         sum(&budget.rows),
         spent + outcome.unbudgeted.actual,
     );
+    let received: Amount = outcome.income.iter().map(|t| t.actual).sum();
+    rows.push([
+        "(balance)".to_string(),
+        String::new(),
+        (sum(&budget.income) + -sum(&budget.rows)).to_string(),
+        (received + -(spent + outcome.unbudgeted.actual)).to_string(),
+        String::new(),
+    ]);
     rows.write(&mut std::io::stdout(), args.output)
 }
 

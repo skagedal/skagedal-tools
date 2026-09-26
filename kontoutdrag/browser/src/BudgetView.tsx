@@ -74,6 +74,8 @@ export function BudgetView({ data, comments, onComment }: Props) {
   const rowTotal = totals(budget.rows);
   const incomeTotal = totals(budget.income);
   const spent = rowTotal.actual + budget.unbudgeted.actual;
+  const plannedBalance = incomeTotal.amount - rowTotal.amount;
+  const actualBalance = incomeTotal.actual - spent;
 
   const spends = (keys: string[], sign: number): Spend[] =>
     keys
@@ -132,6 +134,15 @@ export function BudgetView({ data, comments, onComment }: Props) {
           <span className="tile-value">{formatKr(incomeTotal.actual)}</span>
           <Progress planned={incomeTotal.amount} actual={incomeTotal.actual} pace={pace} income />
           <span className="muted">of {formatKr(incomeTotal.amount)} planned</span>
+        </div>
+        <div className="tile">
+          <span className="tile-label">Balance</span>
+          <span className="tile-value">
+            <Balance amount={plannedBalance} />
+          </span>
+          <span className="muted">
+            planned · so far <Balance amount={actualBalance} />
+          </span>
         </div>
         <div className="tile">
           <span className="tile-label">Unbudgeted</span>
@@ -219,6 +230,17 @@ export function BudgetView({ data, comments, onComment }: Props) {
               <td className="progress-col">
                 <Progress planned={rowTotal.amount} actual={spent} pace={pace} />
               </td>
+            </tr>
+            <tr className="total">
+              <td>Balance</td>
+              <td className="num">
+                <Balance amount={plannedBalance} />
+              </td>
+              <td className="num">
+                <Balance amount={actualBalance} />
+              </td>
+              <td className="num" />
+              <td />
             </tr>
           </tfoot>
         </table>
@@ -320,6 +342,12 @@ function LineRow({
 
 /** What is left of a row, or how far over it went. Income has no over:
  * more than planned is only good news. */
+/** Income less spending: signed, and marked when short. */
+function Balance({ amount }: { amount: number }) {
+  if (amount >= 0) return <>{"+" + formatKr(amount)}</>;
+  return <span className="over-text">{"−" + formatKr(-amount)}</span>;
+}
+
 function Left({
   planned,
   actual,
