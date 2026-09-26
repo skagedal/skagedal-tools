@@ -60,6 +60,7 @@ include_dir = "*"
 indexmap = { version = "*", features = ["serde"] }
 libc = "*"
 log = "*"
+muda = "*"
 node-semver = "*"
 num-traits = "*"
 once_cell = "*"
