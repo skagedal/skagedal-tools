@@ -7,10 +7,11 @@ edition.workspace = true
 default = []
 # The server and the window. Off by default so a build script can depend on
 # this crate for `build` alone without pulling in wry.
-app = ["dep:include_dir", "dep:tao", "dep:wry"]
+app = ["dep:include_dir", "dep:muda", "dep:tao", "dep:wry"]
 
 [dependencies]
 anyhow.workspace = true
 include_dir = { workspace = true, optional = true }
+muda = { workspace = true, optional = true }
 tao = { workspace = true, optional = true }
 wry = { workspace = true, optional = true }
