@@ -23,7 +23,7 @@ version: 1
 name: personal
 merchants:
   - name: Kvarnby Livs
-    category: groceries
+    category: food/groceries
     tags: [local]
     match:
       prefix: [KVARNBY]
@@ -162,7 +162,7 @@ fn summary_totals_by_category() {
             .to_string()
     };
     // ICA 450.00 + Kvarnby 100.00
-    assert_eq!(row("groceries"), "groceries\t2\t-550.00");
+    assert_eq!(row("food/groceries"), "food/groceries\t2\t-550.00");
     assert_eq!(row("income"), "income\t1\t5000.00");
     // The Swish payment resolved to nothing.
     assert_eq!(row("(uncategorised)"), "(uncategorised)\t1\t-200.00");
@@ -267,7 +267,7 @@ fn view_json_carries_every_transaction_resolved() {
         .iter()
         .find(|r| r["merchant"] == "Kvarnby Livs")
         .unwrap();
-    assert_eq!(kvarnby["category"], "groceries");
+    assert_eq!(kvarnby["category"], "food/groceries");
     assert_eq!(kvarnby["tags"], serde_json::json!(["local"]));
     assert_eq!(kvarnby["amount"], -100.0);
     // A CSV has no bank reference, so the key is built from the row itself.

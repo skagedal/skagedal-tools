@@ -11,15 +11,19 @@ import {
   UNCATEGORISED,
   addMonths,
   categoryOf,
+  childOf,
   formatKr,
   formatPct,
   groupBy,
   matches,
   monthsBetween,
+  parentOf,
   spending,
+  topOf,
 } from "./data";
 
-/** Categories that move money rather than spend it, left out by default. */
+/** Top-level categories that move money rather than spend it, left out by
+ * default. `transfer` leaves out `transfer/saving` too. */
 const DEFAULT_NOT_SPENDING = ["transfer", "income", "refunds"];
 
 /** The share of spending left uncategorised that counts as good enough. */
@@ -122,7 +126,7 @@ function View({ data, comments, onComment }: ViewProps) {
   });
 
   const categories = useMemo(
-    () => [...new Set(data.transactions.map(categoryOf))].sort(),
+    () => [...new Set(data.transactions.map((t) => topOf(categoryOf(t))))].sort(),
     [data],
   );
   const filters: Filters = { from: range[0], to: range[1], accounts, notSpending };
@@ -134,12 +138,25 @@ function View({ data, comments, onComment }: ViewProps) {
     .reduce((a, s) => a + s.amount, 0);
   const share = total > 0 ? uncategorised / total : 0;
 
+  // The category list shows one level: the top-level categories, or the
+  // children of a selected category that has any, or the siblings of a
+  // selected one that has none.
+  const hasChildren = (c: string) => rows.some((s) => s.category.startsWith(`${c}/`));
+  const level =
+    selection.category === null || hasChildren(selection.category)
+      ? selection.category
+      : parentOf(selection.category);
+
   // Each list is sliced by the other selections, never by its own, so
   // choosing a category does not collapse the category list to one bar.
   const byCategory = groupBy(
-    rows.filter((s) => matches(s, { ...selection, category: null })),
-    (s) => [s.category],
+    rows.filter((s) => matches(s, { ...selection, category: level })),
+    (s) => [childOf(s.category, level)],
   );
+  const levelTotal = byCategory.reduce((a, g) => a + g.total, 0);
+  const categoryTotal = rows
+    .filter((s) => matches(s, { ...NO_SELECTION, category: selection.category }))
+    .reduce((a, s) => a + s.amount, 0);
   const byPayee = groupBy(
     rows.filter((s) => matches(s, { ...selection, merchant: null })),
     (s) => [s.payee],
@@ -294,20 +311,24 @@ function View({ data, comments, onComment }: ViewProps) {
 
       <div className="grid">
         <BarList
-          title="Categories"
+          title={level ? `Categories in ${level}` : "Categories"}
           groups={byCategory}
-          whole={total}
-          selected={selection.category}
-          onSelect={(category) => setSelection({ ...selection, category, merchant: null })}
+          whole={level ? levelTotal : total}
+          selected={selection.category === level ? null : selection.category}
+          label={(key) => (key === level ? `${key} (itself)` : level ? key.slice(level.length + 1) : key)}
+          onSelect={(category) =>
+            setSelection({ ...selection, category: category ?? level, merchant: null })
+          }
+          onUp={
+            level === null
+              ? undefined
+              : () => setSelection({ ...selection, category: parentOf(level), merchant: null })
+          }
         />
         <BarList
           title={selection.category ? `Payees in ${selection.category}` : "Payees"}
           groups={byPayee}
-          whole={
-            selection.category
-              ? (byCategory.find((g) => g.key === selection.category)?.total ?? 0)
-              : total
-          }
+          whole={selection.category ? categoryTotal : total}
           selected={selection.merchant}
           onSelect={(merchant) => setSelection({ ...selection, merchant })}
         />

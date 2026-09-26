@@ -8,15 +8,35 @@ is, and looks the merchant up in YAML tables you control.
 
 ```
 $ kontoutdrag summary statement.csv --by category --spending -n 6
-category         count      total
----------------  -----  ---------
-(uncategorised)     64  -12800.00
-groceries          120  -11000.00
-housing             12   -9600.00
-transport           31   -4650.00
-utilities            8   -3200.00
-restaurants         22   -2750.00
+category                count      total
+----------------------  -----  ---------
+(uncategorised)            64  -12800.00
+food/groceries            120  -11000.00
+housing                    12   -9600.00
+transport                  31   -4650.00
+housing/utilities           8   -3200.00
+eating-out/restaurants     22   -2750.00
 ```
+
+## Categories
+
+A category is a path of segments separated by slashes: `car/fuel` is fuel,
+inside `car`. A plain `car` is a category too — the car itself, or
+anything about it that has no finer name. One segment is enough for most
+things; the second is for when a total needs to split.
+
+Ancestry goes by whole segments, so `car` holds `car/fuel` and
+`car/parking` but not `carpets`. That is what the view aggregates on: its
+charts start at the top-level segment, and clicking one opens its
+subcategories. A budget row for `car` takes all of it, unless a row for
+`car/fuel` is there to take the fuel.
+
+The bundled table uses these top-level categories: `food`, `eating-out`,
+`housing`, `transport`, `car`, `health`, `fees`, `subscriptions`,
+`leisure`, `things`, `travel`, `giving` and `refunds`. Your own tables can
+use any others. Three top-level categories mean money that moves rather
+than is spent — `transfer`, `income` and `refunds` — and everything below
+them counts the same way, so `transfer/saving` is not spending either.
 
 ## Marks
 
@@ -42,7 +62,7 @@ marks:
     date: 2024-03-15
     amount: "-25000.000"
     descriptor: ["10000000002"]
-    category: savings
+    category: transfer/saving
     merchant: Sparkontot
 ```
 
@@ -135,13 +155,13 @@ name: mine
 
 merchants:
   - name: Kvarnby Livs
-    category: groceries
+    category: food/groceries
     tags: [local, walkable]
     match:
       prefix: [KVARNBY]
 
   - name: Presshörnan
-    category: convenience
+    category: food/convenience
     match:
       prefix: [PRESSHORNAN, PRESSHÖRNAN, "PH "]
       regex: ['^\d{6,8} PRESSH']
@@ -175,7 +195,7 @@ amount, or an inclusive range, signed as in the statement:
 
 ```yaml
 - name: Parking
-  category: parking
+  category: car/parking
   match:
     prefix: [LANDLORD]
     amount: "-550"            # or a range: ["-600", "-500"]
@@ -272,9 +292,13 @@ kontoutdrag view savings.json everyday.json
 
 The filters above the charts scope everything below them: a period (the
 last twelve full months by default), the accounts, and the categories that
-move money rather than spend it — `transfer`, `income` and `refunds` are
-left out of spending unless ticked back in. Spending is money out; a
+move money rather than spend it — `transfer`, `income` and `refunds`, and
+everything below them, are left out of spending unless ticked back in. Spending is money out; a
 refund does not net against it.
+
+The category bars are the top-level categories. Click one that has
+subcategories and the bars become those, with the payees and the months
+narrowed to it; **↑ Up** goes back.
 
 Categories are bars rather than a pie on purpose: a pie reads at five or
 six slices, and a personal statement has thirty categories.
