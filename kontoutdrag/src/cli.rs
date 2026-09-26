@@ -29,6 +29,8 @@ pub enum Subcommand {
     Explain(ExplainArgs),
     /// Open the statements in a window with charts to click through
     View(ViewArgs),
+    /// Compare a month's spending with its budget file
+    Budget(BudgetArgs),
     /// Open settings.toml in $EDITOR, creating it from the template if needed
     #[command(name = "edit-config")]
     EditConfig,
@@ -233,4 +235,34 @@ pub struct ViewArgs {
     /// Print the data the view is drawn from, as JSON, and exit
     #[arg(long)]
     pub json: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct BudgetArgs {
+    /// Statement files to read; every account counts towards the budget
+    #[arg(required = true)]
+    pub statements: Vec<PathBuf>,
+
+    /// The month to show (YYYY-MM); the current month by default
+    #[arg(long, short = 'm')]
+    pub month: Option<String>,
+
+    /// List the transactions no budget row took, instead of the rows
+    #[arg(long)]
+    pub unbudgeted: bool,
+
+    /// Statement format (overrides the config)
+    #[arg(long)]
+    pub format: Option<String>,
+
+    /// Extra merchant table, after the configured ones (repeatable)
+    #[arg(long = "table", short = 't')]
+    pub tables: Vec<PathBuf>,
+
+    /// Ignore the configured tables and use only those given with --table
+    #[arg(long)]
+    pub only_tables: bool,
+
+    #[arg(long, short = 'o', value_enum, default_value_t)]
+    pub output: OutputFormat,
 }

@@ -1,5 +1,6 @@
 //! The subcommands, and the loading both of them share.
 
+pub mod budget;
 pub mod edit_config;
 pub mod explain;
 pub mod list;
@@ -154,6 +155,36 @@ pub fn load(common: &Common) -> Result<Loaded> {
         marks,
         mark_hits,
     })
+}
+
+/// Several statements, each loaded whole, with the path it was named by.
+pub fn load_statements(
+    statements: &[std::path::PathBuf],
+    format: &Option<String>,
+    tables: &[std::path::PathBuf],
+    only_tables: bool,
+) -> Result<Vec<(std::path::PathBuf, Loaded)>> {
+    statements
+        .iter()
+        .map(|path| {
+            let common = Common {
+                statement: path.clone(),
+                format: format.clone(),
+                tables: tables.to_vec(),
+                only_tables,
+                from: None,
+                to: None,
+                spending: false,
+                income: false,
+            };
+            Ok((path.clone(), load(&common)?))
+        })
+        .collect()
+}
+
+/// `YYYY-MM` of the booking date, which is what a month means everywhere.
+pub fn month_of(transaction: &Transaction) -> String {
+    transaction.booked.format("%Y-%m").to_string()
 }
 
 fn parse_date(value: Option<&str>, flag: &str) -> Result<Option<NaiveDate>> {

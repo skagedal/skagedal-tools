@@ -9,8 +9,8 @@
 //!   GET  /api/comments  the comments file
 //!   POST /api/comment   `{key, comment}`: set, or clear when blank
 //!
-//! The document is rebuilt when a statement, table, marks file or the
-//! settings change on disk. A rebuild that fails — a marks file saved
+//! The document is rebuilt when a statement, table, marks file, budget file
+//! or the settings change on disk. A rebuild that fails — a marks file saved
 //! half-edited, say — keeps the last good document and reports the error.
 
 use std::collections::HashMap;
@@ -164,11 +164,21 @@ fn refresh(state: &State) {
     }
 }
 
-/// Changes whenever any of the files is written, created or removed.
+/// Changes whenever any of the files is written, created or removed. A
+/// directory counts as every file directly inside it.
 fn fingerprint(files: &[PathBuf]) -> String {
     let mut hasher = DefaultHasher::new();
     for file in files {
         stamp(file).hash(&mut hasher);
+        if let Ok(entries) = std::fs::read_dir(file) {
+            let mut inside: Vec<PathBuf> =
+                entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+            inside.sort();
+            for path in inside {
+                path.hash(&mut hasher);
+                stamp(&path).hash(&mut hasher);
+            }
+        }
     }
     format!("{:016x}", hasher.finish())
 }

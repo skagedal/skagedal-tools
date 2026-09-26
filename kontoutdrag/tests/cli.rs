@@ -278,3 +278,88 @@ fn view_json_carries_every_transaction_resolved() {
     let swish = rows.iter().find(|r| r["kind"] == "swish").unwrap();
     assert_eq!(swish["resolved"], false);
 }
+
+fn budget_fixture() -> Fixture {
+    let f = fixture(
+        "[[table]]\nbundled = \"se-common\"\n\n[[table]]\npath = \"{TABLE}\"\n\n[budgets]\npath = \"{BUDGETS}\"\n",
+    );
+    let dir = f.config.parent().unwrap().join("budget");
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(
+        dir.join("2026-09.yaml"),
+        "version: 1\nmonth: 2026-09\nincome:\n  - {name: Salary, category: income, amount: 5000}\nrows:\n  - {name: Groceries, category: food/groceries, amount: 1000}\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("notes.txt"), "not a budget").unwrap();
+    let body = std::fs::read_to_string(&f.config)
+        .unwrap()
+        .replace("{BUDGETS}", dir.to_str().unwrap());
+    std::fs::write(&f.config, body).unwrap();
+    f
+}
+
+#[test]
+fn budget_compares_a_month_with_its_file() {
+    let f = budget_fixture();
+    let (stdout, stderr, ok) = run(
+        &f.config,
+        &[
+            "budget",
+            f.statement.to_str().unwrap(),
+            "--month",
+            "2026-09",
+            "-o",
+            "tsv",
+        ],
+    );
+    assert!(ok, "{stderr}");
+    let row = |name: &str| {
+        stdout
+            .lines()
+            .find(|l| l.starts_with(&format!("{name}\t")))
+            .unwrap_or_else(|| panic!("no {name} row in\n{stdout}"))
+            .to_string()
+    };
+    // ICA 450 + Kvarnby 100 in September; the salary came in August.
+    assert_eq!(
+        row("Groceries"),
+        "Groceries\tfood/groceries\t1000.00\t550.00\t450.00"
+    );
+    assert_eq!(row("Salary"), "Salary\tincome\t5000.00\t0.00\t5000.00");
+    // The kiosk and the Swish payment.
+    assert_eq!(row("(unbudgeted)"), "(unbudgeted)\t\t\t230.00\t");
+
+    let (stdout, stderr, ok) = run(
+        &f.config,
+        &[
+            "budget",
+            f.statement.to_str().unwrap(),
+            "--month",
+            "2026-09",
+            "--unbudgeted",
+            "-o",
+            "tsv",
+        ],
+    );
+    assert!(ok, "{stderr}");
+    assert_eq!(stdout.lines().count(), 3, "{stdout}");
+    assert!(stdout.contains("46700000001"), "{stdout}");
+}
+
+#[test]
+fn view_json_carries_the_budgets() {
+    let f = budget_fixture();
+    let (stdout, stderr, ok) = run(
+        &f.config,
+        &["view", "--json", f.statement.to_str().unwrap()],
+    );
+    assert!(ok, "{stderr}");
+    let data: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let months = data["budgets"]["months"].as_array().unwrap();
+    assert_eq!(months.len(), 1);
+    let groceries = &months[0]["rows"][0];
+    assert_eq!(groceries["amount"], 1000.0);
+    assert_eq!(groceries["actual"], 550.0);
+    assert_eq!(groceries["keys"].as_array().unwrap().len(), 2);
+    assert_eq!(months[0]["unbudgeted"]["actual"], 230.0);
+}

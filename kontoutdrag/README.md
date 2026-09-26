@@ -87,6 +87,58 @@ rule that quietly matches everything or nothing.
 caught, and says so when one caught nothing — almost always a typo in a
 date or an amount.
 
+## Budgets
+
+A budget is one YAML file per month, named `YYYY-MM.yaml`, in a directory
+of its own:
+
+    [budgets]
+    path = "~/notes/finances/budget"
+
+Anything else in that directory is ignored.
+
+```yaml
+version: 1
+month: 2031-05
+income:
+  - name: Salary, net
+    category: income
+    amount: 30000
+    basis: fixed          # optional free text: fixed, average, estimate
+rows:
+  - name: Groceries
+    category: food/groceries
+    amount: 4000          # planned money out, as a positive number
+    basis: average
+    note: optional, for the reader
+  - name: Eating out
+    category: eating-out
+    amount: 1500
+  - name: Gym
+    category: health/fitness
+    merchant: Some Gym    # only transactions resolved to this merchant
+    amount: 400
+```
+
+Each transaction booked in the month, in every statement given, after the
+tables and the marks, goes to the one most specific line that takes it:
+a line naming its merchant beats one that does not, then the line with
+the deepest category holding the transaction's, then the first in the
+file. Income lines take what is under `income`; rows take everything
+else. Spent is money out less money back, so a refund in a budgeted
+category makes what was spent smaller.
+
+What no row takes is ignored if it is under `transfer`, `income` or
+`refunds` — a row for `transfer/saving` still counts saving when it is
+there — and is **unbudgeted** otherwise, uncategorised included.
+
+    kontoutdrag budget --month 2031-05 everyday.json savings.json
+
+prints each line with its budget, what happened and what remains, the
+totals, and the unbudgeted sum; `--unbudgeted` lists what is in it. With
+no `--month` it is the current month. A file that does not parse is
+skipped with a warning naming it, rather than stopping the rest.
+
 ## The statement side
 
 Two formats.
@@ -259,6 +311,7 @@ path.
 | `summary <statement>` | Totals `--by category`, `merchant`, `month` or `tag` |
 | `tables` | What is loaded. `--merchants` lists them all, `--bundled` lists what is compiled in, `--dump <name>` prints one to start your own from |
 | `explain <descriptor>` | Look one descriptor up and see which rule decided it, and what else would have matched |
+| `budget <statement>...` | A month against its budget file; see [Budgets](#budgets) |
 | `view <statement>...` | A window with charts to click through; see [The view](#the-view). `--json` prints the data behind it |
 | `edit-config` | Open `settings.toml`, creating it from the template |
 

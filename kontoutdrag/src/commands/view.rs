@@ -1,10 +1,12 @@
 //! `kontoutdrag view` — the resolved statements as one JSON document, drawn
 //! as charts by the React app under `browser/`.
 //!
-//! All the aggregation happens in the browser: the document is every
+//! Most of the aggregation happens in the browser: the document is every
 //! transaction, resolved, and the app slices it by date, account and
 //! category as the filters change. A few years of a couple of accounts is a
-//! few thousand rows, which is nothing to a browser.
+//! few thousand rows, which is nothing to a browser. The one exception is
+//! the budgets, whose lines are filled here, by [`crate::budget`], so that
+//! `kontoutdrag budget` and the Budget tab agree.
 //!
 //! Each transaction gets a key, which is what a comment written in the view
 //! is filed under; see [`crate::comments`].
@@ -15,7 +17,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use serde_json::{Value, json};
 
-use crate::cli::{Common, ViewArgs};
+use crate::budget::{self, Budgets, Item};
+use crate::cli::ViewArgs;
 use crate::commands::{self, Resolved};
 use crate::comments::Subject;
 use crate::config;
@@ -68,37 +71,100 @@ fn open(_args: &ViewArgs) -> Result<()> {
 }
 
 pub fn build(args: &ViewArgs) -> Result<Built> {
+    let settings = config::load(&crate::paths::config_path())?;
+    let loaded = commands::load_statements(
+        &args.statements,
+        &args.format,
+        &args.tables,
+        args.only_tables,
+    )?;
     let mut accounts = Vec::new();
     let mut transactions = Vec::new();
     let mut subjects = HashMap::new();
-    for (index, path) in args.statements.iter().enumerate() {
-        let common = Common {
-            statement: path.clone(),
-            format: args.format.clone(),
-            tables: args.tables.clone(),
-            only_tables: args.only_tables,
-            from: None,
-            to: None,
-            spending: false,
-            income: false,
-        };
-        let loaded = commands::load(&common)?;
+    let mut keyed = Vec::new();
+    for (index, (path, loaded)) in loaded.iter().enumerate() {
         let account = account_name(path);
         let mut seen = HashMap::new();
         for resolved in &loaded.transactions {
             let key = key(&account, &resolved.transaction, &mut seen);
             subjects.insert(key.clone(), subject(&key, &account, &resolved.transaction));
             transactions.push(transaction(index, &key, resolved));
+            keyed.push((key, resolved));
         }
         accounts.push(account);
     }
+    let budgets = match (settings.budget_dir()?, settings.load_budgets()?) {
+        (Some(dir), Some(budgets)) => budgets_json(&dir, &budgets, &keyed),
+        _ => Value::Null,
+    };
     let json = json!({
         "accounts": accounts,
         "transactions": transactions,
         "commentsFile": crate::paths::comments_path().display().to_string(),
+        "budgets": budgets,
     })
     .to_string();
     Ok(Built { json, subjects })
+}
+
+/// Each month's budget with its lines filled in: the actual figure and the
+/// keys of the transactions behind it. Per month, so a quarter or a year is
+/// a sum over several.
+fn budgets_json(dir: &Path, budgets: &Budgets, keyed: &[(String, &Resolved)]) -> Value {
+    let months: Vec<Value> = budgets
+        .budgets
+        .iter()
+        .map(|b| {
+            let in_month: Vec<&(String, &Resolved)> = keyed
+                .iter()
+                .filter(|(_, r)| commands::month_of(&r.transaction) == b.month)
+                .collect();
+            let items: Vec<Item> = in_month.iter().map(|(_, r)| item(r)).collect();
+            let outcome = budget::tally(b, &items);
+            let keys = |tally: &budget::Tally| -> Vec<&str> {
+                tally
+                    .members
+                    .iter()
+                    .map(|&i| in_month[i].0.as_str())
+                    .collect()
+            };
+            let lines = |lines: &[budget::Line], tallies: &[budget::Tally]| -> Vec<Value> {
+                lines
+                    .iter()
+                    .zip(tallies)
+                    .map(|(line, tally)| {
+                        let mut value = serde_json::to_value(line).unwrap_or(Value::Null);
+                        value["actual"] = json!(tally.actual.as_f64());
+                        value["keys"] = json!(keys(tally));
+                        value
+                    })
+                    .collect()
+            };
+            json!({
+                "month": b.month,
+                "file": b.path.display().to_string(),
+                "income": lines(&b.income, &outcome.income),
+                "rows": lines(&b.rows, &outcome.rows),
+                "unbudgeted": {
+                    "actual": outcome.unbudgeted.actual.as_f64(),
+                    "keys": keys(&outcome.unbudgeted),
+                },
+            })
+        })
+        .collect();
+    json!({
+        "directory": dir.display().to_string(),
+        "warnings": budgets.warnings,
+        "months": months,
+    })
+}
+
+pub fn item(resolved: &Resolved) -> Item<'_> {
+    Item {
+        category: resolved.category(),
+        merchant: resolved.merchant(),
+        amount: resolved.transaction.amount,
+    }
 }
 
 /// Stable across reloads, so a comment still finds its row after the
@@ -145,13 +211,15 @@ pub fn watched_files(args: &ViewArgs) -> Result<Vec<PathBuf>> {
     for marks in &settings.marks {
         files.push(mapping::expand(&marks.path)?);
     }
+    // A directory stands for every file in it; see `web::fingerprint`.
+    files.extend(settings.budget_dir()?);
     files.extend(args.tables.iter().cloned());
     Ok(files)
 }
 
 /// What the account is called in the view: the file name without its
 /// extension, and without a `transactions-` prefix if it has one.
-fn account_name(path: &Path) -> String {
+pub fn account_name(path: &Path) -> String {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
