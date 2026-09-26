@@ -193,6 +193,11 @@ pub struct ExplainArgs {
     /// The descriptor to look up, as it appears in the statement
     pub descriptor: String,
 
+    /// The transaction's amount, signed, for rules that only apply at some
+    /// amounts
+    #[arg(long, allow_hyphen_values = true)]
+    pub amount: Option<String>,
+
     /// Extra merchant table, after the configured ones (repeatable)
     #[arg(long = "table", short = 't')]
     pub tables: Vec<PathBuf>,

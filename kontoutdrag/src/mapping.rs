@@ -89,6 +89,19 @@ pub struct Match {
     /// descriptor. Anchor it yourself with `^` when you mean to.
     #[serde(default)]
     pub regex: Vec<String>,
+    /// Only transactions of this amount, or within this inclusive range,
+    /// signed as in the statement: `"-550"` or `["-600", "-500"]`. For a
+    /// descriptor that stands for different things at different amounts —
+    /// one landlord billing rent and parking under the same name.
+    #[serde(default)]
+    pub amount: Option<AmountCondition>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum AmountCondition {
+    Exact(String),
+    Range(Vec<String>),
 }
 
 impl Match {

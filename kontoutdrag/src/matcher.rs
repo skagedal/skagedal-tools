@@ -1,9 +1,10 @@
 //! Turning a pile of merchant tables into something that can answer
 //! "who is `KVARNBY LIVS`?".
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use crate::mapping::{Match, Merchant, StripPrefix, Table};
+use crate::amount::Amount;
+use crate::mapping::{AmountCondition, Match, Merchant, StripPrefix, Table};
 
 /// Normalise a descriptor for matching: upper case, and runs of
 /// whitespace collapsed to one space.
@@ -55,6 +56,9 @@ fn normalize_inner(text: &str, keep_trailing_space: bool) -> String {
 /// accounted for, then by table position so a later table wins a tie.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Specificity {
+    /// A rule that also names an amount says more than any pattern can,
+    /// so it outranks every rule that does not.
+    by_amount: bool,
     kind: KindRank,
     pattern_length: usize,
     table_index: usize,
@@ -98,6 +102,8 @@ struct Rule {
     kind: KindRank,
     pattern: String,
     regex: Option<regex::Regex>,
+    /// Inclusive bounds, when the rule applies only to some amounts.
+    amount: Option<(Amount, Amount)>,
     merchant: usize,
     table_index: usize,
 }
@@ -180,9 +186,12 @@ impl Matcher {
     /// matches does it strip a payment-provider prefix and try the
     /// remainder, so a merchant that genuinely starts with those letters
     /// is not mis-attributed.
-    pub fn lookup(&self, descriptor: &str) -> Option<Hit> {
+    ///
+    /// `amount` is the transaction's; a rule with an amount condition only
+    /// matches when it is given and within the condition.
+    pub fn lookup(&self, descriptor: &str, amount: Option<Amount>) -> Option<Hit> {
         let normalized = normalize(descriptor);
-        if let Some(hit) = self.lookup_normalized(&normalized, None) {
+        if let Some(hit) = self.lookup_normalized(&normalized, amount, None) {
             return Some(hit);
         }
         for strip in &self.strip_prefixes {
@@ -195,7 +204,7 @@ impl Matcher {
                 if rest.is_empty() {
                     continue;
                 }
-                if let Some(hit) = self.lookup_normalized(rest, strip.provider.as_deref()) {
+                if let Some(hit) = self.lookup_normalized(rest, amount, strip.provider.as_deref()) {
                     return Some(hit);
                 }
             }
@@ -203,13 +212,22 @@ impl Matcher {
         None
     }
 
-    fn lookup_normalized(&self, normalized: &str, via: Option<&str>) -> Option<Hit> {
+    fn lookup_normalized(
+        &self,
+        normalized: &str,
+        amount: Option<Amount>,
+        via: Option<&str>,
+    ) -> Option<Hit> {
         let mut best: Option<(Specificity, &Rule)> = None;
         for rule in &self.rules {
             let Some(length) = rule.matches(normalized) else {
                 continue;
             };
+            if !rule.allows(amount) {
+                continue;
+            }
             let specificity = Specificity {
+                by_amount: rule.amount.is_some(),
                 kind: rule.kind,
                 pattern_length: length,
                 table_index: rule.table_index,
@@ -218,7 +236,7 @@ impl Matcher {
                 best = Some((specificity, rule));
             }
         }
-        let (specificity, rule) = best?;
+        let (_, rule) = best?;
         let entry = &self.entries[rule.merchant];
         Some(Hit {
             name: entry.name.clone(),
@@ -227,12 +245,12 @@ impl Matcher {
             note: entry.note.clone(),
             via: via.map(str::to_string),
             table: entry.table.clone(),
-            rule: format!("{} {:?}", specificity.kind.label(), rule.pattern),
+            rule: rule.describe(),
         })
     }
 
-    /// Every merchant that could match the descriptor, best first. Used by
-    /// `tables --conflicts` to show where two tables disagree.
+    /// Every merchant that could match the descriptor, at any amount, best
+    /// first. Used by `explain` to show what else is in play.
     pub fn candidates(&self, descriptor: &str) -> Vec<Hit> {
         let normalized = normalize(descriptor);
         let mut hits: Vec<(Specificity, &Rule)> = self
@@ -242,6 +260,7 @@ impl Matcher {
                 let length = rule.matches(&normalized)?;
                 Some((
                     Specificity {
+                        by_amount: rule.amount.is_some(),
                         kind: rule.kind,
                         pattern_length: length,
                         table_index: rule.table_index,
@@ -252,7 +271,7 @@ impl Matcher {
             .collect();
         hits.sort_by_key(|(specificity, _)| std::cmp::Reverse(*specificity));
         hits.into_iter()
-            .map(|(specificity, rule)| {
+            .map(|(_, rule)| {
                 let entry = &self.entries[rule.merchant];
                 Hit {
                     name: entry.name.clone(),
@@ -261,7 +280,7 @@ impl Matcher {
                     note: entry.note.clone(),
                     via: None,
                     table: entry.table.clone(),
-                    rule: format!("{} {:?}", specificity.kind.label(), rule.pattern),
+                    rule: rule.describe(),
                 }
             })
             .collect()
@@ -269,6 +288,23 @@ impl Matcher {
 }
 
 impl Rule {
+    fn allows(&self, amount: Option<Amount>) -> bool {
+        match self.amount {
+            None => true,
+            Some((low, high)) => amount.is_some_and(|a| low <= a && a <= high),
+        }
+    }
+
+    /// How the rule reads in `explain`.
+    fn describe(&self) -> String {
+        let base = format!("{} {:?}", self.kind.label(), self.pattern);
+        match self.amount {
+            None => base,
+            Some((low, high)) if low == high => format!("{base} at {low}"),
+            Some((low, high)) => format!("{base} at {low} to {high}"),
+        }
+    }
+
     /// How many characters of the descriptor the rule accounted for, or
     /// `None` if it did not match.
     fn matches(&self, normalized: &str) -> Option<usize> {
@@ -300,7 +336,10 @@ fn push_rules(
         prefix,
         contains,
         regex,
+        amount,
     } = &merchant.match_;
+    let amount = amount_bounds(amount.as_ref())
+        .with_context(|| format!("merchant {:?}: bad amount", merchant.name))?;
 
     let mut plain = |kind: KindRank, patterns: &Vec<String>| {
         for pattern in patterns {
@@ -308,6 +347,7 @@ fn push_rules(
                 kind,
                 pattern: normalize_pattern(pattern),
                 regex: None,
+                amount,
                 merchant: merchant_index,
                 table_index,
             });
@@ -322,11 +362,30 @@ fn push_rules(
             kind: KindRank::Regex,
             pattern: pattern.clone(),
             regex: Some(regex::Regex::new(pattern)?),
+            amount,
             merchant: merchant_index,
             table_index,
         });
     }
     Ok(())
+}
+
+/// An amount condition as inclusive bounds, either way round.
+fn amount_bounds(condition: Option<&AmountCondition>) -> Result<Option<(Amount, Amount)>> {
+    let Some(condition) = condition else {
+        return Ok(None);
+    };
+    let (low, high): (Amount, Amount) = match condition {
+        AmountCondition::Exact(raw) => {
+            let a = raw.parse()?;
+            (a, a)
+        }
+        AmountCondition::Range(raw) => match raw.as_slice() {
+            [a, b] => (a.parse()?, b.parse()?),
+            _ => anyhow::bail!("a range is two amounts, [low, high]; got {}", raw.len()),
+        },
+    };
+    Ok(Some((low.min(high), low.max(high))))
 }
 
 #[cfg(test)]
@@ -354,14 +413,14 @@ mod tests {
             "version: 1\nname: t\nmerchants:\n\
              - name: Köpmans\n  match:\n    prefix: [KÖPMANS, KOPMANS]\n",
         );
-        assert_eq!(m.lookup("KÖPMANS TORG").unwrap().name, "Köpmans");
-        assert_eq!(m.lookup("KOPMANS TORG").unwrap().name, "Köpmans");
+        assert_eq!(m.lookup("KÖPMANS TORG", None).unwrap().name, "Köpmans");
+        assert_eq!(m.lookup("KOPMANS TORG", None).unwrap().name, "Köpmans");
 
         let only_folded = matcher(
             "version: 1\nname: t\nmerchants:\n\
              - name: Köpmans\n  match:\n    prefix: [KOPMANS]\n",
         );
-        assert!(only_folded.lookup("KÖPMANS TORG").is_none());
+        assert!(only_folded.lookup("KÖPMANS TORG", None).is_none());
     }
 
     #[test]
@@ -371,9 +430,9 @@ mod tests {
              - name: Kvarnby\n  match:\n    prefix: [KVARNBY]\n\
              - name: Kvarnby Stormarknad\n  match:\n    prefix: [KVARNBY STOR]\n",
         );
-        assert_eq!(m.lookup("KVARNBY LIVS").unwrap().name, "Kvarnby");
+        assert_eq!(m.lookup("KVARNBY LIVS", None).unwrap().name, "Kvarnby");
         assert_eq!(
-            m.lookup("KVARNBY STORMARK").unwrap().name,
+            m.lookup("KVARNBY STORMARK", None).unwrap().name,
             "Kvarnby Stormarknad"
         );
     }
@@ -385,7 +444,7 @@ mod tests {
              - name: Long prefix\n  match:\n    prefix: [TONLIS]\n\
              - name: Exact\n  match:\n    exact: [TONLISTA]\n",
         );
-        assert_eq!(m.lookup("TONLISTA").unwrap().name, "Exact");
+        assert_eq!(m.lookup("TONLISTA", None).unwrap().name, "Exact");
     }
 
     #[test]
@@ -401,7 +460,7 @@ mod tests {
         )
         .unwrap();
         let m = Matcher::build(&[bundled, personal]).unwrap();
-        let hit = m.lookup("KVARNBY LIVS").unwrap();
+        let hit = m.lookup("KVARNBY LIVS", None).unwrap();
         assert_eq!(hit.name, "Kvarnby Livs");
         assert_eq!(hit.table, "personal");
     }
@@ -416,12 +475,12 @@ mod tests {
              - name: Zebrakiosken\n  match:\n    prefix: ['Z*ZEBRA']\n",
         );
 
-        let stripped = m.lookup("Z*BADRUMSBOLAGET.SE").unwrap();
+        let stripped = m.lookup("Z*BADRUMSBOLAGET.SE", None).unwrap();
         assert_eq!(stripped.name, "Badrumsbolaget");
         assert_eq!(stripped.via.as_deref(), Some("Zaldo"));
 
         // Matches as written, so the prefix is left alone.
-        let direct = m.lookup("Z*ZEBRAKIOSKEN").unwrap();
+        let direct = m.lookup("Z*ZEBRAKIOSKEN", None).unwrap();
         assert_eq!(direct.name, "Zebrakiosken");
         assert_eq!(direct.via, None);
     }
@@ -432,8 +491,11 @@ mod tests {
             "version: 1\nname: t\nmerchants:\n\
              - name: Presshörnan\n  match:\n    regex: ['^\\d{6,8} PRESSH']\n",
         );
-        assert_eq!(m.lookup("9900001 PRESSH").unwrap().name, "Presshörnan");
-        assert!(m.lookup("PRESSHORNAN 4").is_none());
+        assert_eq!(
+            m.lookup("9900001 PRESSH", None).unwrap().name,
+            "Presshörnan"
+        );
+        assert!(m.lookup("PRESSHORNAN 4", None).is_none());
     }
 
     /// A trailing space in a pattern is the table's only word boundary.
@@ -445,9 +507,9 @@ mod tests {
             "version: 1\nname: t\nmerchants:\n\
              - name: VT\n  match:\n    prefix: [\"VT \"]\n    exact: [VT]\n",
         );
-        assert_eq!(m.lookup("VT APP").unwrap().name, "VT");
-        assert_eq!(m.lookup("VT").unwrap().name, "VT");
-        assert!(m.lookup("VTABERGSKROGEN").is_none());
+        assert_eq!(m.lookup("VT APP", None).unwrap().name, "VT");
+        assert_eq!(m.lookup("VT", None).unwrap().name, "VT");
+        assert!(m.lookup("VTABERGSKROGEN", None).is_none());
     }
 
     #[test]
@@ -461,6 +523,67 @@ mod tests {
     fn an_unknown_descriptor_is_none_rather_than_a_guess() {
         let m =
             matcher("version: 1\nname: t\nmerchants:\n - name: A\n   match:\n    prefix: [AAA]\n");
-        assert!(m.lookup("VTABERGET").is_none());
+        assert!(m.lookup("VTABERGET", None).is_none());
+    }
+
+    fn amount(raw: &str) -> Option<Amount> {
+        Some(raw.parse().unwrap())
+    }
+
+    /// One landlord, two things: the fee, and a parking space billed under
+    /// the same name at its own amount.
+    const LANDLORD: &str = "version: 1\nname: t\nmerchants:\n\
+         \x20 - name: Fee\n    category: housing\n    match:\n      prefix: [LANDLORD]\n\
+         \x20 - name: Parking\n    category: parking\n    match:\n      prefix: [LANDLORD]\n      amount: \"-550\"\n";
+
+    #[test]
+    fn a_rule_with_an_amount_wins_at_that_amount_only() {
+        let m = matcher(LANDLORD);
+        assert_eq!(
+            m.lookup("LANDLORD AB", amount("-550")).unwrap().name,
+            "Parking"
+        );
+        assert_eq!(
+            m.lookup("LANDLORD AB", amount("-8000")).unwrap().name,
+            "Fee"
+        );
+        // Without an amount, a conditioned rule cannot apply.
+        assert_eq!(m.lookup("LANDLORD AB", None).unwrap().name, "Fee");
+    }
+
+    #[test]
+    fn a_range_is_inclusive_and_either_way_round() {
+        let m = matcher(
+            "version: 1\nname: t\nmerchants:\n\
+             \x20 - name: Small\n    match:\n      exact: [SHOP]\n      amount: [\"-100\", \"-10\"]\n",
+        );
+        for inside in ["-100", "-50", "-10"] {
+            assert_eq!(
+                m.lookup("SHOP", amount(inside)).unwrap().name,
+                "Small",
+                "{inside}"
+            );
+        }
+        assert!(m.lookup("SHOP", amount("-101")).is_none());
+        assert!(m.lookup("SHOP", amount("10")).is_none());
+    }
+
+    #[test]
+    fn a_range_of_the_wrong_length_is_an_error() {
+        let table = parse_table(
+            "version: 1\nname: t\nmerchants:\n\
+             \x20 - name: Bad\n    match:\n      exact: [SHOP]\n      amount: [\"-1\"]\n",
+            "t",
+        )
+        .unwrap();
+        let error = Matcher::build(&[table]).err().unwrap();
+        assert!(format!("{error:#}").contains("two amounts"), "{error:#}");
+    }
+
+    #[test]
+    fn explain_shows_the_amount_condition() {
+        let m = matcher(LANDLORD);
+        let hit = m.lookup("LANDLORD AB", amount("-550")).unwrap();
+        assert_eq!(hit.rule, "prefix \"LANDLORD\" at -550.00");
     }
 }

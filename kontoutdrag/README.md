@@ -168,6 +168,23 @@ kind, the longer pattern wins; and if that still ties, the table loaded
 last wins. That last rule is what lets your own table override the bundled
 one without editing it.
 
+**A rule can also name an amount.** Some payees bill different things
+under one name: a housing association sending the monthly fee and a
+parking space from the same account, say. `amount` narrows a rule to one
+amount, or an inclusive range, signed as in the statement:
+
+```yaml
+- name: Parking
+  category: parking
+  match:
+    prefix: [LANDLORD]
+    amount: "-550"            # or a range: ["-600", "-500"]
+```
+
+A rule with an amount outranks every rule without one, so here the
+parking rule takes the 550 kr rows and a plain `LANDLORD` rule keeps the
+rest. `explain` takes `--amount` to try one out.
+
 **A pattern ending in a space means a word boundary.** `prefix: "VT "`
 matches `VT APP` but not `VTABERGSKROGEN`. YAML strips a trailing space
 from an unquoted scalar, so write those patterns in quotes.

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::cli::ExplainArgs;
 use crate::commands;
@@ -16,7 +16,11 @@ pub fn run(args: &ExplainArgs) -> Result<()> {
     println!("descriptor  {:?}", descriptor.key());
     println!("normalised  {:?}", normalize(descriptor.key()));
 
-    match matcher.lookup(descriptor.key()) {
+    let amount = match &args.amount {
+        Some(raw) => Some(raw.parse().context("--amount")?),
+        None => None,
+    };
+    match matcher.lookup(descriptor.key(), amount) {
         Some(hit) => {
             println!("\nmerchant    {}", hit.name);
             println!("category    {}", hit.category.unwrap_or_default());
