@@ -63,6 +63,9 @@ log = "*"
 muda = "*"
 node-semver = "*"
 num-traits = "*"
+objc2 = "*"
+objc2-app-kit = { version = "*", default-features = false, features = ["std"] }
+objc2-foundation = { version = "*", default-features = false, features = ["std"] }
 once_cell = "*"
 opener = "*"
 percent-encoding = "*"

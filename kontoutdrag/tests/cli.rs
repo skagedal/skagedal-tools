@@ -270,6 +270,11 @@ fn view_json_carries_every_transaction_resolved() {
     assert_eq!(kvarnby["category"], "groceries");
     assert_eq!(kvarnby["tags"], serde_json::json!(["local"]));
     assert_eq!(kvarnby["amount"], -100.0);
+    // A CSV has no bank reference, so the key is built from the row itself.
+    assert_eq!(
+        kvarnby["key"],
+        "kontoutdrag|2026-09-10|-100.00|KVARNBY LIVS/26-09-09"
+    );
     let swish = rows.iter().find(|r| r["kind"] == "swish").unwrap();
     assert_eq!(swish["resolved"], false);
 }

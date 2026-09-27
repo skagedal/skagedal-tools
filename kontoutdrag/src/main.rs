@@ -3,6 +3,9 @@
 mod amount;
 mod cli;
 mod commands;
+// Written and read only by the window, so a build without it leaves them idle.
+#[cfg_attr(not(feature = "web"), allow(dead_code))]
+mod comments;
 mod config;
 mod mapping;
 mod marks;

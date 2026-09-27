@@ -1,6 +1,8 @@
 // The document `/api/data` serves, and the slicing the view does on it.
 
 export interface Transaction {
+  /** Stable across reloads; what a comment is filed under. */
+  key: string;
   account: number;
   date: string; // YYYY-MM-DD
   amount: number; // negative is money out
@@ -8,6 +10,8 @@ export interface Transaction {
   category: string;
   tags: string[];
   descriptor: string;
+  /** The statement's free-text field, as exported. */
+  text: string;
   kind: "card" | "swish" | "plain";
   resolved: boolean;
 }
@@ -15,6 +19,8 @@ export interface Transaction {
 export interface Data {
   accounts: string[];
   transactions: Transaction[];
+  /** Where comments are saved, for showing, not for writing. */
+  commentsFile: string;
 }
 
 export const UNCATEGORISED = "(uncategorised)";

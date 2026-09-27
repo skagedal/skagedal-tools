@@ -93,8 +93,12 @@ fn entry_payload(entry: &Entry, id: u64) -> String {
 }
 
 /// Routes the API; everything else falls through to the embedded app.
-pub fn handle(state: &ServerState, path: &str, stream: &mut TcpStream) -> io::Result<bool> {
-    match path {
+pub fn handle(
+    state: &ServerState,
+    request: &server::Request,
+    stream: &mut TcpStream,
+) -> io::Result<bool> {
+    match request.path.as_str() {
         "/api/meta" => server::send_json(stream, &state.meta_json)?,
         "/api/stream" => handle_sse(stream, state)?,
         _ => return Ok(false),

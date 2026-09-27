@@ -25,6 +25,9 @@ pub struct Transaction {
     /// Account balance after the transaction, when the export carries one.
     pub balance: Option<Amount>,
     pub descriptor: Descriptor,
+    /// The bank's own identifier for this one transaction, when the export
+    /// carries one. The CSV does not; Enable Banking's `entry_reference` is.
+    pub reference: Option<String>,
 }
 
 /// What the free-text field turned out to be.
@@ -235,6 +238,7 @@ fn parse_seb(contents: &str) -> Result<Vec<Transaction>> {
             text: text_value,
             amount: amount_value,
             balance: balance_value,
+            reference: None,
         });
     }
     Ok(transactions)
@@ -258,6 +262,7 @@ struct EbTransaction {
     credit_debit_indicator: Option<String>,
     /// `BOOK` once posted, `PDNG` while pending.
     status: Option<String>,
+    entry_reference: Option<String>,
     #[serde(default)]
     remittance_information: Vec<String>,
     bank_transaction_code: Option<EbBankTransactionCode>,
@@ -340,6 +345,7 @@ fn parse_enable_banking(contents: &str) -> Result<Vec<Transaction>> {
             balance: row
                 .balance_after_transaction
                 .and_then(|b| b.amount.parse::<Amount>().ok()),
+            reference: row.entry_reference,
         });
     }
     Ok(transactions)

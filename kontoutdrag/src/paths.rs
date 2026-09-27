@@ -1,4 +1,4 @@
-//! Where the tool keeps its configuration.
+//! Where the tool keeps its configuration, and the comments written in the view.
 
 use std::path::PathBuf;
 
@@ -13,4 +13,13 @@ pub fn config_path() -> PathBuf {
         return PathBuf::from(path);
     }
     skagedal_dirs::config_dir(TOOL).join("settings.toml")
+}
+
+/// Where comments written in `kontoutdrag view` are kept:
+/// `$XDG_DATA_HOME/skagedal-tools/kontoutdrag/comments.json`, by default
+/// `~/.local/share/skagedal-tools/kontoutdrag/comments.json`. Make it a
+/// symlink to keep the comments somewhere else, a git repository say; they
+/// are written through it.
+pub fn comments_path() -> PathBuf {
+    skagedal_dirs::data_dir(TOOL).join("comments.json")
 }

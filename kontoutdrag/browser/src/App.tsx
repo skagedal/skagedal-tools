@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Version, fetchComments, fetchData, fetchVersion, saveComment } from "./api";
 import { BarList } from "./BarList";
 import { MonthColumns } from "./MonthColumns";
 import { Transactions } from "./Transactions";
@@ -47,23 +48,64 @@ function presets(first: string): Preset[] {
   ];
 }
 
+/** How often to ask whether the rules or the comments changed on disk. */
+const POLL_MS = 2000;
+
 export function App() {
   const [data, setData] = useState<Data | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [comments, setComments] = useState<Map<string, string>>(new Map());
+  const [problem, setProblem] = useState<string | null>(null);
+  const seen = useRef<Version | null>(null);
 
+  // Poll for changes: a rule edited, a statement synced, the comments file
+  // cleared by whoever harvested it. Only what changed is fetched again,
+  // and the filters and selection stay as they are.
   useEffect(() => {
-    fetch("/api/data")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setData)
-      .catch((e) => setError(String(e)));
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const version = await fetchVersion();
+        if (stopped) return;
+        const previous = seen.current;
+        seen.current = version;
+        setProblem(version.error ? `The rules on disk did not load: ${version.error}` : null);
+        if (!previous || previous.data !== version.data) setData(await fetchData());
+        if (!previous || previous.comments !== version.comments) setComments(await fetchComments());
+      } catch (e) {
+        if (!stopped) setProblem(`Lost contact with kontoutdrag: ${e}`);
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, POLL_MS);
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
   }, []);
 
-  if (error) return <p className="page error">Could not load the data: {error}</p>;
-  if (!data) return <p className="page muted">Loading…</p>;
-  return <View data={data} />;
+  const onComment = async (key: string, text: string) => {
+    await saveComment(key, text);
+    setComments(await fetchComments());
+  };
+
+  if (!data) {
+    return <p className={`page ${problem ? "error" : "muted"}`}>{problem ?? "Loading…"}</p>;
+  }
+  return (
+    <>
+      {problem && <p className="banner">{problem}</p>}
+      <View data={data} comments={comments} onComment={onComment} />
+    </>
+  );
 }
 
-function View({ data }: { data: Data }) {
+interface ViewProps {
+  data: Data;
+  comments: Map<string, string>;
+  onComment: (key: string, text: string) => Promise<void>;
+}
+
+function View({ data, comments, onComment }: ViewProps) {
   const first = useMemo(
     () => data.transactions.reduce((m, t) => (t.date < m ? t.date : m), "9999").slice(0, 7),
     [data],
@@ -284,7 +326,18 @@ function View({ data }: { data: Data }) {
         />
       )}
 
-      <Transactions rows={selected} accounts={data.accounts} />
+      <Transactions
+        rows={selected}
+        all={data.transactions}
+        accounts={data.accounts}
+        comments={comments}
+        onComment={onComment}
+      />
+      {comments.size > 0 && (
+        <p className="muted footnote">
+          ✎ {comments.size} {comments.size === 1 ? "comment" : "comments"} in {data.commentsFile}
+        </p>
+      )}
     </div>
   );
 }
