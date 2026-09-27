@@ -534,17 +534,17 @@ mod tests {
     /// the same name at its own amount.
     const LANDLORD: &str = "version: 1\nname: t\nmerchants:\n\
          \x20 - name: Fee\n    category: housing\n    match:\n      prefix: [LANDLORD]\n\
-         \x20 - name: Parking\n    category: parking\n    match:\n      prefix: [LANDLORD]\n      amount: \"-550\"\n";
+         \x20 - name: Parking\n    category: parking\n    match:\n      prefix: [LANDLORD]\n      amount: \"-300\"\n";
 
     #[test]
     fn a_rule_with_an_amount_wins_at_that_amount_only() {
         let m = matcher(LANDLORD);
         assert_eq!(
-            m.lookup("LANDLORD AB", amount("-550")).unwrap().name,
+            m.lookup("LANDLORD AB", amount("-300")).unwrap().name,
             "Parking"
         );
         assert_eq!(
-            m.lookup("LANDLORD AB", amount("-8000")).unwrap().name,
+            m.lookup("LANDLORD AB", amount("-5000")).unwrap().name,
             "Fee"
         );
         // Without an amount, a conditioned rule cannot apply.
@@ -583,7 +583,7 @@ mod tests {
     #[test]
     fn explain_shows_the_amount_condition() {
         let m = matcher(LANDLORD);
-        let hit = m.lookup("LANDLORD AB", amount("-550")).unwrap();
-        assert_eq!(hit.rule, "prefix \"LANDLORD\" at -550.00");
+        let hit = m.lookup("LANDLORD AB", amount("-300")).unwrap();
+        assert_eq!(hit.rule, "prefix \"LANDLORD\" at -300.00");
     }
 }

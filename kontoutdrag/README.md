@@ -178,11 +178,11 @@ amount, or an inclusive range, signed as in the statement:
   category: parking
   match:
     prefix: [LANDLORD]
-    amount: "-550"            # or a range: ["-600", "-500"]
+    amount: "-300"            # or a range: ["-350", "-250"]
 ```
 
 A rule with an amount outranks every rule without one, so here the
-parking rule takes the 550 kr rows and a plain `LANDLORD` rule keeps the
+parking rule takes the 300 kr rows and a plain `LANDLORD` rule keeps the
 rest. `explain` takes `--amount` to try one out.
 
 **A pattern ending in a space means a word boundary.** `prefix: "VT "`
