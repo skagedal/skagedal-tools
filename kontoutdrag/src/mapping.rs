@@ -90,7 +90,7 @@ pub struct Match {
     #[serde(default)]
     pub regex: Vec<String>,
     /// Only transactions of this amount, or within this inclusive range,
-    /// signed as in the statement: `"-550"` or `["-600", "-500"]`. For a
+    /// signed as in the statement: `"-300"` or `["-350", "-250"]`. For a
     /// descriptor that stands for different things at different amounts —
     /// one landlord billing rent and parking under the same name.
     #[serde(default)]
