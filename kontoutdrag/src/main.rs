@@ -1,6 +1,8 @@
 //! Identify merchants and categorise spending in a bank statement export.
 
 mod amount;
+mod budget;
+mod category;
 mod cli;
 mod commands;
 // Written and read only by the window, so a build without it leaves them idle.
@@ -37,6 +39,7 @@ fn run() -> Result<()> {
         Subcommand::Marks(args) => commands::marks::run(&args),
         Subcommand::Explain(args) => commands::explain::run(&args),
         Subcommand::View(args) => commands::view::run(&args),
+        Subcommand::Budget(args) => commands::budget::run(&args),
         Subcommand::EditConfig => commands::edit_config::run(),
     }
 }

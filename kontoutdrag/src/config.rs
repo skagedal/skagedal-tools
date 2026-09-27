@@ -21,6 +21,17 @@ pub struct Settings {
     /// Files of hand-written marks, applied after the tables.
     #[serde(default, rename = "marks")]
     pub marks: Vec<MarkSource>,
+    /// Where the monthly budget files are.
+    #[serde(default)]
+    pub budgets: Option<BudgetSource>,
+}
+
+/// The `[budgets]` table.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BudgetSource {
+    /// A directory of `YYYY-MM.yaml` files. `~` and `$VAR` are expanded.
+    pub path: String,
 }
 
 /// One entry in the `[[marks]]` list.
@@ -42,6 +53,7 @@ impl Default for Settings {
             }],
             statements: Statements::default(),
             marks: Vec::new(),
+            budgets: None,
         }
     }
 }
@@ -133,6 +145,18 @@ impl Settings {
         }
         Ok(files)
     }
+
+    /// The budget directory, expanded, if one is configured.
+    pub fn budget_dir(&self) -> Result<Option<std::path::PathBuf>> {
+        self.budgets
+            .as_ref()
+            .map(|b| mapping::expand(&b.path))
+            .transpose()
+    }
+
+    pub fn load_budgets(&self) -> Result<Option<crate::budget::Budgets>> {
+        Ok(self.budget_dir()?.map(|dir| crate::budget::load_dir(&dir)))
+    }
 }
 
 /// Read settings from disk. A missing file means the defaults, so the tool
@@ -192,6 +216,17 @@ mod tests {
         let settings =
             parse("[[table]]\nbundled = \"se-common\"\npath = \"/tmp/x.yaml\"\n").unwrap();
         assert!(settings.load_tables().is_err());
+    }
+
+    #[test]
+    fn reads_the_budget_directory() {
+        let settings = parse("[budgets]\npath = \"/tmp/budget\"\n").unwrap();
+        assert_eq!(
+            settings.budget_dir().unwrap(),
+            Some(std::path::PathBuf::from("/tmp/budget"))
+        );
+        assert!(parse("[budgets]\ndirectory = \"/tmp/budget\"\n").is_err());
+        assert_eq!(parse("").unwrap().budget_dir().unwrap(), None);
     }
 
     #[test]
