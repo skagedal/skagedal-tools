@@ -13,6 +13,9 @@ export interface Transaction {
   /** The statement's free-text field, as exported. */
   text: string;
   kind: "card" | "swish" | "plain";
+  /** The bank's own word for how the money moved: "Card purchase",
+   * "Instant payment", "Direct debit". Only in Enable Banking data. */
+  method: string | null;
   resolved: boolean;
 }
 
@@ -121,6 +124,15 @@ export function addMonths(month: string, n: number): string {
 
 const kr = new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 });
 export const formatKr = (n: number) => `${kr.format(Math.round(n))} kr`;
+
+const kr2 = new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** One transaction's amount: whole kronor, or with öre when it has them —
+ * odd öre on a card purchase are often the trace of another currency. */
+export const formatAmount = (n: number) =>
+  Math.abs(n * 100 - Math.round(n) * 100) >= 0.5 ? `${kr2.format(n)} kr` : formatKr(n);
+
+/** Swish, whether to a person (a bare number) or to a company. */
+export const isSwish = (t: Transaction) => t.kind === "swish" || t.method === "Instant payment";
 
 const pct = new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 export const formatPct = (share: number) => `${pct.format(share * 100)} %`;

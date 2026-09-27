@@ -148,3 +148,7 @@ tr.detail td { background: var(--accent-wash); white-space: normal; }
 .nearby td { font-size: 13px; padding: 3px 8px; }
 .nearby tr.self td { font-weight: 600; }
 .nearby td.in { color: var(--good-text); }
+.swish {
+  margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.02em; color: var(--ink-2); border: 1px solid var(--border); vertical-align: 1px;
+}
