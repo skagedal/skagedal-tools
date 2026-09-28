@@ -367,10 +367,7 @@ mod carrying_over_balance {
 
         let path = tracker.week_file_created_if_needed(tracker.now.date());
 
-        assert_eq!(
-            "# balance carried over from 2024-W02\n* balance -27:30h\n\n",
-            fs::read_to_string(path).unwrap()
-        );
+        assert_eq!("* balance -27:30h\n\n", fs::read_to_string(path).unwrap());
     }
 
     #[test]

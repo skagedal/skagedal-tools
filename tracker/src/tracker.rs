@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::document::Line::{self, OpenShift};
 use crate::document::{Day, Document, Parser};
+use crate::duration::format_duration;
 use crate::paths::TrackerDirs;
 use crate::report::{Report, closing_balance, render};
 use chrono::{Datelike, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
@@ -158,6 +159,8 @@ impl Tracker {
     /// A new week starts with the balance the latest earlier week ended with.
     /// Weeks without a file in between are skipped, not counted as unworked.
     /// Future weeks get nothing, since the week before them is not over.
+    /// Only called when the file is actually created, so the carry-over is
+    /// reported exactly once.
     fn initial_document(&self, week: IsoWeek) -> Document {
         if self.explicit_weekfile.is_some() || week > self.now.iso_week() {
             return Document::empty(week);
@@ -168,12 +171,14 @@ impl Tracker {
         let content = fs::read_to_string(&path).expect("Could not read previous week file");
         let previous = self.parser.parse_document(previous_week, &content);
         let balance = closing_balance(&previous, &self.config.workweek);
+        eprintln!(
+            "A balance of {} was carried over from {}",
+            format_duration(balance),
+            format_week(previous_week)
+        );
         Document::new(
             week,
             vec![
-                Line::Comment {
-                    text: format!("balance carried over from {}", format_week(previous_week)),
-                },
                 Line::DurationShift {
                     text: String::from("balance"),
                     duration: balance,
