@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::document::Line::{self, OpenShift};
 use crate::document::{Day, Document, Parser};
+use crate::duration::format_duration;
 use crate::paths::TrackerDirs;
 use crate::report::{Report, closing_balance, render};
 use chrono::{Datelike, IsoWeek, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
@@ -10,6 +11,12 @@ use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
+
+/// The balance a new week file starts with, and the week it came from.
+struct CarriedBalance {
+    from: IsoWeek,
+    balance: TimeDelta,
+}
 
 pub struct Tracker {
     explicit_weekfile: Option<PathBuf>,
@@ -149,31 +156,38 @@ impl Tracker {
             .unwrap_or_else(|| self.week_tracker_file_for_date(date, self.weekdiff))
     }
 
+    /// Creates the week file if it does not exist yet, and tells the user
+    /// about any balance carried into it.
     fn week_file_created_if_needed(&self, date: NaiveDate) -> PathBuf {
         let path = self.week_tracker_file(date);
-        create_file_if_needed(&path, || self.initial_document(self.active_week(date)));
+        let created =
+            create_file_if_needed(&path, || self.initial_document(self.active_week(date)));
+        if let Some(Some(carried)) = created {
+            eprintln!(
+                "A balance of {} was carried over from {}",
+                format_duration(carried.balance),
+                format_week(carried.from)
+            );
+        }
         path
     }
 
     /// A new week starts with the balance the latest earlier week ended with.
     /// Weeks without a file in between are skipped, not counted as unworked.
     /// Future weeks get nothing, since the week before them is not over.
-    fn initial_document(&self, week: IsoWeek) -> Document {
+    fn initial_document(&self, week: IsoWeek) -> (Document, Option<CarriedBalance>) {
         if self.explicit_weekfile.is_some() || week > self.now.iso_week() {
-            return Document::empty(week);
+            return (Document::empty(week), None);
         }
         let Some((previous_week, path)) = self.latest_week_file_before(week) else {
-            return Document::empty(week);
+            return (Document::empty(week), None);
         };
         let content = fs::read_to_string(&path).expect("Could not read previous week file");
         let previous = self.parser.parse_document(previous_week, &content);
         let balance = closing_balance(&previous, &self.config.workweek);
-        Document::new(
+        let document = Document::new(
             week,
             vec![
-                Line::Comment {
-                    text: format!("balance carried over from {}", format_week(previous_week)),
-                },
                 Line::DurationShift {
                     text: String::from("balance"),
                     duration: balance,
@@ -181,7 +195,12 @@ impl Tracker {
                 Line::Blank,
             ],
             vec![],
-        )
+        );
+        let carried = CarriedBalance {
+            from: previous_week,
+            balance,
+        };
+        (document, Some(carried))
     }
 
     fn latest_week_file_before(&self, week: IsoWeek) -> Option<(IsoWeek, PathBuf)> {
@@ -436,19 +455,27 @@ impl TrackerBuilder {
 
 // Week tracker file
 
-fn create_file_if_needed(path: &Path, initial_document: impl FnOnce() -> Document) {
+/// Writes the initial document to `path` unless the file already exists.
+/// Returns what came along with the document when the file was created.
+fn create_file_if_needed<T>(
+    path: &Path,
+    initial_document: impl FnOnce() -> (Document, T),
+) -> Option<T> {
     if let Some(parent_path) = path.parent() {
         fs::create_dir_all(parent_path).unwrap_or_else(|err| eprintln!("Error: {}", err));
     }
     match OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut file) => {
-            file.write_all(initial_document().to_string().as_bytes())
+            let (document, extra) = initial_document();
+            file.write_all(document.to_string().as_bytes())
                 .expect("Could not write initial document to file");
+            Some(extra)
         }
         Err(err) => {
             if err.kind() != io::ErrorKind::AlreadyExists {
                 eprintln!("Error: {}", err);
             }
+            None
         }
     }
 }
