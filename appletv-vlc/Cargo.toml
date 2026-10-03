@@ -1,0 +1,24 @@
+[package]
+name = "appletv-vlc"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "appletv-vlc"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap = { workspace = true, features = ["env"] }
+companion-link = { workspace = true, features = ["client"] }
+if-addrs.workspace = true
+mdns-sd.workspace = true
+percent-encoding.workspace = true
+rand.workspace = true
+serde.workspace = true
+skagedal-dirs.workspace = true
+tiny_http.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
