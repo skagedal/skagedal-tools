@@ -1,6 +1,12 @@
-MIT License
+# MIT License
 
-Copyright (c) 2021 Simon Kågedal Reimer
+Copyright (c) 2026 Simon Kågedal Reimer
+
+Copyright (c) 2020 Pierre Ståhl
+
+This crate is a port of the Companion link protocol support in
+[pyatv](https://github.com/postlund/pyatv), by Pierre Ståhl, which is
+published under the MIT license.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
