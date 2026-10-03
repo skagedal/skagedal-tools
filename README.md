@@ -38,7 +38,7 @@ Shared code used by the tools above.
 ## Writing
 
 - [codestyle](codestyle/) — Conventions that apply across repos, not just this one
-- [comparison-aws-emulation](comparison-aws-emulation/) — Tools for emulating AWS services locally (LocalStack, Moto, DynamoDB Local, MinIO, Adobe S3Mock)
+- [comparison-aws-emulation](comparison-aws-emulation/) — Local emulators for S3, DynamoDB, SSM and Logs Insights: LocalStack and its 2026 successors, Moto, and single-service S3 and DynamoDB servers
 - [comparison-typescript-cli-arguments](comparison-typescript-cli-arguments/) — Side-by-side comparison of CLI argument parsing libraries for Node.js/TypeScript
 - [comparison-typescript-codemods](comparison-typescript-codemods/) — Overview of codemod tooling for TypeScript
 - [specs](specs/) — Design specs for changes that reach past a single tool
