@@ -1,4 +1,5 @@
-//! Serving one movie file over HTTP, with byte ranges so VLC can seek.
+//! Serving a movie, and optionally its subtitles, over HTTP, with byte
+//! ranges so VLC can seek.
 
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
@@ -8,7 +9,7 @@ use std::sync::Arc;
 use std::thread;
 
 use anyhow::{Context, Result, anyhow};
-use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
 /// What a path segment may contain unencoded, as Python's `urllib.parse.quote`.
@@ -20,19 +21,16 @@ const PATH_SEGMENT: &AsciiSet = &NON_ALPHANUMERIC
 
 const CHUNK: usize = 256 * 1024;
 
-/// The movie being served.
-pub struct Movie {
+/// A file being served: the movie or its subtitles.
+pub struct ServedFile {
     pub path: PathBuf,
     pub file_name: String,
     pub size: u64,
     pub content_type: &'static str,
-    /// The secret first path segment, so the open port does not expose the
-    /// file to everything else on the network.
-    pub token: String,
 }
 
-impl Movie {
-    pub fn open(path: &Path, token: String) -> Result<Self> {
+impl ServedFile {
+    pub fn open(path: &Path) -> Result<Self> {
         let path = path
             .canonicalize()
             .with_context(|| format!("no such file: {}", path.display()))?;
@@ -44,86 +42,101 @@ impl Movie {
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        Ok(Movie {
+        Ok(ServedFile {
             content_type: content_type(&path),
             path,
             file_name,
             size: metadata.len(),
-            token,
         })
-    }
-
-    /// The path the movie is served at.
-    pub fn url_path(&self) -> String {
-        format!(
-            "/{}/{}",
-            self.token,
-            utf8_percent_encode(&self.file_name, PATH_SEGMENT)
-        )
     }
 }
 
-/// Start serving `movie` on `port`, on every interface.
-pub fn serve(movie: Movie, port: u16) -> Result<thread::JoinHandle<()>> {
+/// The files being served, all under one secret first path segment, so the
+/// open port does not expose them to everything else on the network.
+pub struct Site {
+    pub token: String,
+    /// The movie first, then any subtitles.
+    pub files: Vec<ServedFile>,
+}
+
+impl Site {
+    /// The path `file` is served at.
+    pub fn url_path(&self, file: &ServedFile) -> String {
+        format!(
+            "/{}/{}",
+            self.token,
+            utf8_percent_encode(&file.file_name, PATH_SEGMENT)
+        )
+    }
+
+    /// The file a request path asks for. Anything under the token that names
+    /// none of the files gets the movie, as before there were subtitles to
+    /// serve.
+    fn file_for(&self, path: &str) -> Option<&ServedFile> {
+        let rest = path.strip_prefix(&format!("/{}", self.token))?;
+        let name = percent_decode_str(rest.trim_start_matches('/')).decode_utf8_lossy();
+        self.files
+            .iter()
+            .find(|file| file.file_name == name)
+            .or(self.files.first())
+    }
+}
+
+/// Start serving `site` on `port`, on every interface.
+pub fn serve(site: Site, port: u16) -> Result<thread::JoinHandle<()>> {
     let server = Server::http(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)))
         .map_err(|error| anyhow!("could not listen on port {port}: {error}"))?;
-    eprintln!(
-        "  [http] serving {} ({:.1} MiB) on port {port}",
-        movie.file_name,
-        movie.size as f64 / 1_048_576.0
-    );
-    let movie = Arc::new(movie);
+    for file in &site.files {
+        eprintln!(
+            "  [http] serving {} ({:.1} MiB) on port {port}",
+            file.file_name,
+            file.size as f64 / 1_048_576.0
+        );
+    }
+    let site = Arc::new(site);
     Ok(thread::spawn(move || {
         for request in server.incoming_requests() {
-            let movie = Arc::clone(&movie);
-            thread::spawn(move || handle(&movie, request));
+            let site = Arc::clone(&site);
+            thread::spawn(move || handle(&site, request));
         }
     }))
 }
 
-fn handle(movie: &Movie, request: Request) {
+fn handle(site: &Site, request: Request) {
     let range_header = request
         .headers()
         .iter()
         .find(|header| header.field.equiv("Range"))
         .map(|header| header.value.as_str().to_string());
     let line = format!("{} {}", request.method(), request.url());
-    let authorized = request
-        .url()
-        .split('?')
-        .next()
-        .unwrap_or_default()
-        .starts_with(&format!("/{}", movie.token));
+    let file = site.file_for(request.url().split('?').next().unwrap_or_default());
 
-    let (status, result) = if !authorized {
-        (404, request.respond(Response::empty(404)))
-    } else if *request.method() == Method::Head {
-        (
+    let (status, result) = match file {
+        None => (404, request.respond(Response::empty(404))),
+        Some(file) if *request.method() == Method::Head => (
             200,
-            request.respond(file_response(movie, 200, 0, movie.size, false)),
-        )
-    } else if *request.method() != Method::Get {
-        (405, request.respond(Response::empty(405)))
-    } else {
-        match parse_range(range_header.as_deref(), movie.size) {
+            request.respond(file_response(file, 200, 0, file.size, false)),
+        ),
+        Some(_) if *request.method() != Method::Get => (405, request.respond(Response::empty(405))),
+        Some(file) => match parse_range(range_header.as_deref(), file.size) {
             Range::Whole => (
                 200,
-                request.respond(file_response(movie, 200, 0, movie.size, true)),
+                request.respond(file_response(file, 200, 0, file.size, true)),
             ),
             Range::Part { start, end } => {
                 let response =
-                    file_response(movie, 206, start, end + 1 - start, true).with_header(header(
+                    file_response(file, 206, start, end + 1 - start, true).with_header(header(
                         "Content-Range",
-                        &format!("bytes {start}-{end}/{}", movie.size),
+                        &format!("bytes {start}-{end}/{}", file.size),
                     ));
                 (206, request.respond(response))
             }
             Range::Unsatisfiable => {
                 let response = Response::empty(416)
-                    .with_header(header("Content-Range", &format!("bytes */{}", movie.size)));
+                    .with_header(header("Content-Range", &format!("bytes */{}", file.size)));
                 (416, request.respond(response))
             }
-        }
+        },
     };
     eprintln!(
         "  [http] {line} {status} {}",
@@ -137,20 +150,20 @@ fn handle(movie: &Movie, request: Request) {
 }
 
 fn file_response(
-    movie: &Movie,
+    file: &ServedFile,
     status: u16,
     start: u64,
     length: u64,
     body: bool,
 ) -> Response<Box<dyn Read + Send>> {
-    let reader: Box<dyn Read + Send> = match (body, open_at(&movie.path, start)) {
-        (true, Ok(file)) => Box::new(io::BufReader::with_capacity(CHUNK, file.take(length))),
+    let reader: Box<dyn Read + Send> = match (body, open_at(&file.path, start)) {
+        (true, Ok(handle)) => Box::new(io::BufReader::with_capacity(CHUNK, handle.take(length))),
         _ => Box::new(io::empty()),
     };
     Response::new(
         StatusCode(status),
         vec![
-            header("Content-Type", movie.content_type),
+            header("Content-Type", file.content_type),
             header("Accept-Ranges", "bytes"),
         ],
         reader,
@@ -252,6 +265,9 @@ fn content_type(path: &Path) -> &'static str {
         "mpg" | "mpeg" => "video/mpeg",
         "ogv" => "video/ogg",
         "3gp" => "video/3gpp",
+        "srt" => "application/x-subrip",
+        "vtt" => "text/vtt",
+        "ass" | "ssa" => "text/x-ssa",
         _ => "application/octet-stream",
     }
 }
@@ -290,19 +306,52 @@ mod tests {
         assert_eq!(parse_range(Some("items=0-1"), 100), Range::Whole);
     }
 
+    fn served(file_name: &str) -> ServedFile {
+        ServedFile {
+            path: PathBuf::new(),
+            file_name: file_name.into(),
+            size: 0,
+            content_type: content_type(Path::new(file_name)),
+        }
+    }
+
+    fn site() -> Site {
+        Site {
+            token: "abc".into(),
+            files: vec![
+                served("Fanny och Alexander (1982).mkv"),
+                served("Fanny och Alexander (1982).sv.srt"),
+            ],
+        }
+    }
+
     #[test]
     fn url_path_encodes_like_python() {
-        let movie = Movie {
-            path: PathBuf::new(),
-            file_name: "Fanny och Alexander (1982).mkv".into(),
-            size: 0,
-            content_type: "video/x-matroska",
-            token: "abc".into(),
-        };
+        let site = site();
         assert_eq!(
-            movie.url_path(),
+            site.url_path(&site.files[0]),
             "/abc/Fanny%20och%20Alexander%20%281982%29.mkv"
         );
+    }
+
+    #[test]
+    fn requests_find_their_file() {
+        let site = site();
+        let name = |path: &str| site.file_for(path).map(|file| file.file_name.as_str());
+        assert_eq!(
+            name(&site.url_path(&site.files[1])),
+            Some("Fanny och Alexander (1982).sv.srt")
+        );
+        assert_eq!(
+            name("/abc/Fanny%20och%20Alexander%20(1982).sv.srt"),
+            Some("Fanny och Alexander (1982).sv.srt")
+        );
+        assert_eq!(
+            name(&site.url_path(&site.files[0])),
+            Some("Fanny och Alexander (1982).mkv")
+        );
+        assert_eq!(name("/abc/other"), Some("Fanny och Alexander (1982).mkv"));
+        assert_eq!(name("/xyz/Fanny%20och%20Alexander%20%281982%29.mkv"), None);
     }
 
     #[test]

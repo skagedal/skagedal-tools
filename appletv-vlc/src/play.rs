@@ -8,11 +8,12 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use companion_link::client::Client;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use rand::RngExt;
 
 use crate::discovery::{self, AppleTv};
 use crate::pairings::{Pairing, Pairings};
-use crate::server::{self, Movie};
+use crate::server::{self, ServedFile, Site};
 
 const SCAN_DURATION: Duration = Duration::from_secs(3);
 const FIND_TIMEOUT: Duration = Duration::from_secs(5);
@@ -82,9 +83,25 @@ pub fn pair(device: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub fn play(file: &Path, device: Option<&str>, port: u16, url_only: bool) -> Result<()> {
-    let token = format!("{:016x}", rand::rng().random::<u64>());
-    let movie = Movie::open(file, token)?;
+pub fn play(
+    file: &Path,
+    sub: Option<&Path>,
+    device: Option<&str>,
+    port: u16,
+    url_only: bool,
+) -> Result<()> {
+    let mut files = vec![ServedFile::open(file)?];
+    if let Some(sub) = sub {
+        let sub = ServedFile::open(sub)?;
+        if sub.file_name == files[0].file_name {
+            bail!("the subtitle file has the same name as the movie");
+        }
+        files.push(sub);
+    }
+    let site = Site {
+        token: format!("{:016x}", rand::rng().random::<u64>()),
+        files,
+    };
 
     let target = if url_only {
         None
@@ -103,17 +120,24 @@ pub fn play(file: &Path, device: Option<&str>, port: u16, url_only: bool) -> Res
     }
     .context("could not determine this machine's LAN IP address")?;
     let host = format!("{ip}:{port}");
-    let url_path = movie.url_path();
-    let file_name = movie.file_name.clone();
-    let server = server::serve(movie, port)?;
+    let paths: Vec<(String, String)> = site
+        .files
+        .iter()
+        .map(|file| (file.file_name.clone(), site.url_path(file)))
+        .collect();
+    let server = server::serve(site, port)?;
 
-    let http_url = format!("http://{host}{url_path}");
-    // VLC strips the vlc:// prefix and prepends http:// when no scheme
-    // remains, so the scheme-less form is what its tvOS handler expects.
-    let vlc_url = format!("vlc://{host}{url_path}");
+    let (movie_name, movie_path) = &paths[0];
+    let sub = paths.get(1);
+    let http_url = format!("http://{host}{movie_path}");
+    let vlc_url = vlc_url(&host, movie_path, sub.map(|(_, path)| path.as_str()));
 
-    println!("Serving: {file_name}");
+    println!("Serving: {movie_name}");
     println!("URL:     {http_url}");
+    if let Some((sub_name, sub_path)) = sub {
+        println!("Subs:    {sub_name}");
+        println!("         http://{host}{sub_path}");
+    }
 
     match target {
         None => {
@@ -139,6 +163,30 @@ pub fn play(file: &Path, device: Option<&str>, port: u16, url_only: bool) -> Res
         .join()
         .map_err(|_| anyhow!("the HTTP server stopped"))?;
     Ok(())
+}
+
+/// The URL that has VLC play the movie served at `movie_path`. VLC's plain
+/// `vlc://` handler takes only the movie, so subtitles go through its
+/// x-callback-url handler, which reads `url` and `sub` query parameters.
+fn vlc_url(host: &str, movie_path: &str, sub_path: Option<&str>) -> String {
+    match sub_path {
+        // VLC strips the vlc:// prefix and prepends http:// when no scheme
+        // remains, so the scheme-less form is what its tvOS handler expects.
+        None => format!("vlc://{host}{movie_path}"),
+        // VLC splits the query on & before decoding, and decodes a value
+        // only when it starts out encoded as http%3A%2F%2F, so each URL is
+        // encoded whole -- the percent signs already in it included.
+        Some(sub_path) => {
+            let encode = |path: &str| {
+                utf8_percent_encode(&format!("http://{host}{path}"), NON_ALPHANUMERIC).to_string()
+            };
+            format!(
+                "vlc-x-callback://x-callback-url/stream?url={}&sub={}",
+                encode(movie_path),
+                encode(sub_path)
+            )
+        }
+    }
 }
 
 fn launch(pairing: &Pairing, tv: Option<&AppleTv>, url: &str) -> Result<()> {
@@ -185,4 +233,27 @@ fn lan_address() -> Result<IpAddr> {
         .first()
         .map(|(_, ip)| IpAddr::V4(*ip))
         .ok_or_else(|| anyhow!("no private IPv4 address on an en* interface"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vlc_url_without_subtitles() {
+        assert_eq!(
+            vlc_url("10.0.0.2:8010", "/abc/A%20B.mkv", None),
+            "vlc://10.0.0.2:8010/abc/A%20B.mkv"
+        );
+    }
+
+    #[test]
+    fn vlc_url_with_subtitles() {
+        assert_eq!(
+            vlc_url("10.0.0.2:8010", "/abc/A%20B.mkv", Some("/abc/A%20B.srt")),
+            "vlc-x-callback://x-callback-url/stream\
+             ?url=http%3A%2F%2F10%2E0%2E0%2E2%3A8010%2Fabc%2FA%2520B%2Emkv\
+             &sub=http%3A%2F%2F10%2E0%2E0%2E2%3A8010%2Fabc%2FA%2520B%2Esrt"
+        );
+    }
 }

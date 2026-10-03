@@ -32,6 +32,10 @@ struct PlayArgs {
     #[arg(required = true)]
     file: Option<PathBuf>,
 
+    /// A subtitle file to serve alongside the movie and load in VLC.
+    #[arg(long)]
+    sub: Option<PathBuf>,
+
     /// The Apple TV, by its name on the network. Defaults to the only paired one.
     #[arg(long, env = "APPLETV_VLC_DEVICE")]
     device: Option<String>,
@@ -64,6 +68,7 @@ fn main() -> ExitCode {
         Some(Command::Pair { device }) => play::pair(device.as_deref()),
         None => play::play(
             cli.play.file.as_deref().expect("clap requires a file"),
+            cli.play.sub.as_deref(),
             cli.play.device.as_deref(),
             cli.play.port,
             cli.play.url_only,

@@ -29,6 +29,14 @@ Press Ctrl-C to stop serving.
 
 The movie is served until Ctrl-C. The server speaks byte ranges, so seeking in VLC works, and the URL has a random path segment so the open port does not expose the file to the rest of the network.
 
+To add subtitles from a separate file, pass `--sub`:
+
+```
+$ appletv-vlc --sub The.Movie.2019.sv.srt The.Movie.2019.mkv
+```
+
+The subtitle file is served next to the movie, under the same random path segment, and VLC is opened through its `vlc-x-callback://x-callback-url/stream?url=…&sub=…` URL instead of the plain `vlc://` one, since that one only carries the movie. Subtitles inside the movie file, as MKVs often have, need no flag.
+
 With several Apple TVs paired, pick one with `--device <name>` or `$APPLETV_VLC_DEVICE`. `--port` changes the port (8010 by default). `--url-only` skips the Apple TV and just prints the URL, to enter under Network Stream in VLC; that is also what to do if launching fails, and the URL is printed then too.
 
 Pairings are kept in `~/.local/share/skagedal-tools/appletv-vlc/pairings.toml`, which holds a private key and is readable only by you. If the pairing is removed on the TV (Settings → Remotes and Devices), run `appletv-vlc pair` again.
