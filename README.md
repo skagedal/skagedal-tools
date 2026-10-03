@@ -29,4 +29,6 @@ A collection of small tools.
 | [trafikverket](trafikverket/) | The next trains between two stations, with live delays, filtered to the ones your ticket covers |
 | [kontoutdrag](kontoutdrag/) | Identify merchants and categorise spending in a bank statement export, using YAML merchant tables |
 | [woke](woke/) | Keeps this Mac awake with the lid closed, restoring the setting when it exits |
+| [appletv-vlc](appletv-vlc/) | Plays a local movie file on an Apple TV in VLC, serving it over HTTP and opening it on the TV |
+| [companion-link](companion-link/) | Shared library: IO-free client for the parts of Apple's Companion protocol needed to pair with an Apple TV and launch apps |
 | [skagedal-dirs](skagedal-dirs/) | Shared library: the XDG config/data/cache directories every tool stores its files in |

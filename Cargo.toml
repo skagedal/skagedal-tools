@@ -1,9 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
+    "appletv-vlc",
     "assistant",
     "chrome-page-notes",
     "cloudwatch-insights",
+    "companion-link",
     "disky",
     "gh-pr",
     "git-branch-assistant",
@@ -43,6 +45,7 @@ strip = true
 # here but unused by every member don't get compiled.
 [workspace.dependencies]
 anyhow = "*"
+apple-opack = "*"
 aws-config = { version = "*", features = ["behavior-version-latest"] }
 aws-sdk-cloudwatchlogs = "*"
 aws-sdk-sts = "*"
@@ -50,16 +53,22 @@ base64 = "*"
 chrono = { version = "*", default-features = false, features = ["clock", "serde"] }
 clap = { version = "*", features = ["derive"] }
 clap_complete = "*"
+companion-link = { path = "companion-link" }
 console = "*"
 crossterm = "*"
 dialoguer = "*"
 dirs = "*"
 filetime = "*"
 flexi_logger = "*"
+hap-crypto = "*"
+hap-tlv8 = "*"
+hkdf = "*"
+if-addrs = "*"
 include_dir = "*"
 indexmap = { version = "*", features = ["serde"] }
 libc = "*"
 log = "*"
+mdns-sd = "*"
 muda = "*"
 node-semver = "*"
 num-traits = "*"
@@ -70,6 +79,7 @@ once_cell = "*"
 opener = "*"
 percent-encoding = "*"
 plist = "*"
+rand = "*"
 ratatui = "*"
 rayon = "*"
 regex = "*"
@@ -78,6 +88,7 @@ semver = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 serde_yaml_ng = "*"
+sha2 = "*"
 shell-escape = "*"
 shellexpand = "*"
 signal-hook = "*"
@@ -86,6 +97,7 @@ tao = "*"
 temp-dir = "*"
 tempfile = "*"
 thiserror = "*"
+tiny_http = "*"
 tokio = { version = "*", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "io-util", "io-std", "time"] }
 toml = "*"
 url = "*"

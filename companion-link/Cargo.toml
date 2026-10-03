@@ -1,0 +1,19 @@
+[package]
+name = "companion-link"
+version = "0.1.0"
+edition.workspace = true
+description = "IO-free client for the parts of Apple's Companion link protocol needed to pair with an Apple TV and send it requests"
+
+[features]
+client = ["dep:rand"]
+
+[dependencies]
+apple-opack.workspace = true
+hap-crypto.workspace = true
+hap-tlv8.workspace = true
+hkdf.workspace = true
+log.workspace = true
+rand = { workspace = true, optional = true }
+sha2.workspace = true
+thiserror.workspace = true
+
