@@ -5,8 +5,6 @@ use apple_opack::Value;
 use hap_crypto::aead::{chacha20poly1305_open, chacha20poly1305_seal};
 use hap_crypto::{ControllerKeypair, EphemeralKeypair, verify_ed25519};
 use hap_tlv8::{Tlv8Map, Tlv8Writer};
-use hkdf::Hkdf;
-use sha2::Sha512;
 
 use crate::coroutine::{Coroutine, Reply, State};
 use crate::credentials::Credentials;
@@ -14,7 +12,8 @@ use crate::error::Error;
 use crate::exchange::Exchange;
 use crate::frame::FrameType;
 use crate::pairing_data::{
-    ENCRYPTED_DATA, IDENTIFIER, PUBLIC_KEY, SIGNATURE, STATE, field, pairing_data,
+    ENCRYPTED_DATA, IDENTIFIER, PUBLIC_KEY, SIGNATURE, STATE, derive, field, label_nonce,
+    pairing_data,
 };
 use crate::session::Session;
 
@@ -169,20 +168,4 @@ impl Coroutine for PairVerify {
         self.step(arg)
             .unwrap_or_else(|error| State::Complete(Err(error)))
     }
-}
-
-/// HKDF-SHA512 of the shared secret.
-fn derive(shared: &[u8; 32], salt: &[u8], info: &[u8]) -> [u8; 32] {
-    let mut key = [0; 32];
-    Hkdf::<Sha512>::new(Some(salt), shared)
-        .expand(info, &mut key)
-        .expect("32 bytes is a valid HKDF-SHA512 output length");
-    key
-}
-
-/// An eight-byte label as a nonce, padded at the front.
-fn label_nonce(label: &[u8; 8]) -> [u8; 12] {
-    let mut nonce = [0; 12];
-    nonce[4..].copy_from_slice(label);
-    nonce
 }

@@ -93,6 +93,9 @@ shell-escape = "*"
 shellexpand = "*"
 signal-hook = "*"
 skagedal-dirs = { path = "skagedal-dirs" }
+# A release candidate: 0.6 has no HomeKit-compatible SRP, and "*" never
+# picks a prerelease.
+srp = "0.7.0-rc.3"
 tao = "*"
 temp-dir = "*"
 tempfile = "*"

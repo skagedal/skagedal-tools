@@ -15,5 +15,6 @@ hkdf.workspace = true
 log.workspace = true
 rand = { workspace = true, optional = true }
 sha2.workspace = true
+srp.workspace = true
 thiserror.workspace = true
 

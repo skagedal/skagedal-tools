@@ -10,6 +10,6 @@ client.verify(&credentials)?;
 client.open_url("vlc://192.168.1.23:8010/movie.mkv")?;
 ```
 
-OPACK comes from [apple-opack](https://crates.io/crates/apple-opack), TLV8 from [hap-tlv8](https://crates.io/crates/hap-tlv8), and the pair setup state machine and crypto helpers from [hap-crypto](https://crates.io/crates/hap-crypto). Pair verify is written here, since Companion derives its session keys differently from HomeKit.
+OPACK comes from [apple-opack](https://crates.io/crates/apple-opack), TLV8 from [hap-tlv8](https://crates.io/crates/hap-tlv8), SRP arithmetic from [srp](https://crates.io/crates/srp), and keys, signatures and encryption from [hap-crypto](https://crates.io/crates/hap-crypto). The pairing protocol itself is written here: Companion names the client in pair setup and derives its session keys differently from HomeKit, which `hap-crypto`'s state machines have no room for.
 
 Used by [appletv-vlc](../appletv-vlc/).

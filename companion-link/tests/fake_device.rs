@@ -6,11 +6,12 @@ use companion_link::coroutine::{Coroutine, Reply, State, Wants};
 use companion_link::credentials::Credentials;
 use companion_link::error::{Error, Refusal};
 use companion_link::frame::{FrameBuffer, FrameType, header};
+use companion_link::pair_setup::{PairSetupFinish, PairSetupStart};
 use companion_link::pair_verify::PairVerify;
 use companion_link::request::Request;
 use companion_link::session::Session;
 use hap_crypto::aead::{chacha20poly1305_open, chacha20poly1305_seal};
-use hap_crypto::{ControllerKeypair, EphemeralKeypair, verify_ed25519};
+use hap_crypto::{ControllerKeypair, EphemeralKeypair, HapPairSetupSrpServer, verify_ed25519};
 use hap_tlv8::{Tlv8Map, Tlv8Writer};
 use hkdf::Hkdf;
 use sha2::Sha512;
@@ -32,6 +33,12 @@ struct FakeDevice {
     /// Refuses pair verify with this TLV8 error code.
     refuse_with: Option<u8>,
     requests: Vec<Value>,
+    /// Pair setup: the PIN the device shows, and SRP state once M1 is in.
+    pin: &'static str,
+    srp: Option<HapPairSetupSrpServer>,
+    setup_key: Option<Vec<u8>>,
+    /// What the client sent in M5.
+    paired_client: Option<(String, [u8; 32], String)>,
 }
 
 impl FakeDevice {
@@ -55,6 +62,10 @@ impl FakeDevice {
             fail_with: None,
             refuse_with: None,
             requests: vec![],
+            pin: "1111",
+            srp: None,
+            setup_key: None,
+            paired_client: None,
         };
         (device, credentials)
     }
@@ -76,11 +87,102 @@ impl FakeDevice {
 
     fn answer(&mut self, frame_type: FrameType, message: &Value) -> Vec<u8> {
         match frame_type {
+            FrameType::PS_START => self.setup_m2(message),
+            FrameType::PS_NEXT => self.setup_next(message),
             FrameType::PV_START => self.m2(message),
             FrameType::PV_NEXT => self.m4(message),
             FrameType::E_OPACK => self.response(message),
             other => panic!("unexpected frame {other:?}"),
         }
+    }
+
+    fn setup_m2(&mut self, message: &Value) -> Vec<u8> {
+        assert_eq!(message.get("_pwTy").and_then(Value::as_u64), Some(1));
+        let (srp, salt) = HapPairSetupSrpServer::new(self.pin).unwrap();
+        let mut tlv = vec![];
+        let mut writer = Tlv8Writer::new(&mut tlv);
+        writer.push_u8(0x06, 2);
+        writer.push(0x02, &salt);
+        writer.push(0x03, &srp.b_pub_bytes());
+        self.srp = Some(srp);
+        self.frame(FrameType::PS_NEXT, pairing(tlv))
+    }
+
+    fn setup_next(&mut self, message: &Value) -> Vec<u8> {
+        let tlv = Tlv8Map::parse(message.get("_pd").unwrap().as_bytes().unwrap()).unwrap();
+        match tlv.get_u8(0x06).unwrap() {
+            Some(3) => self.setup_m4(&tlv),
+            Some(5) => self.setup_m6(&tlv),
+            other => panic!("unexpected pair setup state {other:?}"),
+        }
+    }
+
+    fn setup_m4(&mut self, m3: &Tlv8Map) -> Vec<u8> {
+        let srp = self.srp.as_ref().unwrap();
+        let a_pub = m3.get(0x03).unwrap();
+        let mut tlv = vec![];
+        let mut writer = Tlv8Writer::new(&mut tlv);
+        writer.push_u8(0x06, 4);
+        match srp.verify_m1_prove_m2(a_pub, m3.get(0x04).unwrap()) {
+            Ok(proof) => {
+                self.setup_key = Some(srp.session_key(a_pub).unwrap());
+                writer.push(0x04, &proof);
+            }
+            Err(_) => writer.push_u8(0x07, 0x02),
+        }
+        self.frame(FrameType::PS_NEXT, pairing(tlv))
+    }
+
+    fn setup_m6(&mut self, m5: &Tlv8Map) -> Vec<u8> {
+        let key = self.setup_key.clone().unwrap();
+        let encryption = derive(&key, b"Pair-Setup-Encrypt-Salt", b"Pair-Setup-Encrypt-Info");
+        let inner =
+            chacha20poly1305_open(&encryption, &nonce(b"PS-Msg05"), b"", m5.get(0x05).unwrap())
+                .unwrap();
+        let inner = Tlv8Map::parse(&inner).unwrap();
+        let client_id = String::from_utf8(inner.get(0x01).unwrap().to_vec()).unwrap();
+        let client_key: [u8; 32] = inner.get(0x03).unwrap().try_into().unwrap();
+        let signature: [u8; 64] = inner.get(0x0A).unwrap().try_into().unwrap();
+        let controller_x = derive(
+            &key,
+            b"Pair-Setup-Controller-Sign-Salt",
+            b"Pair-Setup-Controller-Sign-Info",
+        );
+        verify_ed25519(
+            &client_key,
+            &[&controller_x[..], client_id.as_bytes(), &client_key].concat(),
+            &signature,
+        )
+        .unwrap();
+        let (name, _) = unpack(inner.get(0x11).unwrap()).unwrap();
+        let name = name
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap()
+            .to_string();
+        self.paired_client = Some((client_id, client_key, name));
+
+        let device_x = derive(
+            &key,
+            b"Pair-Setup-Accessory-Sign-Salt",
+            b"Pair-Setup-Accessory-Sign-Info",
+        );
+        let ours = self.keypair.ltpk();
+        let signature = self
+            .keypair
+            .sign(&[&device_x[..], DEVICE_ID.as_bytes(), &ours].concat());
+        let mut inner = vec![];
+        let mut writer = Tlv8Writer::new(&mut inner);
+        writer.push(0x01, DEVICE_ID.as_bytes());
+        writer.push(0x03, &ours);
+        writer.push(0x0A, &signature);
+        let encrypted =
+            chacha20poly1305_seal(&encryption, &nonce(b"PS-Msg06"), b"", &inner).unwrap();
+        let mut tlv = vec![];
+        let mut writer = Tlv8Writer::new(&mut tlv);
+        writer.push_u8(0x06, 6);
+        writer.push(0x05, &encrypted);
+        self.frame(FrameType::PS_NEXT, pairing(tlv))
     }
 
     fn m2(&mut self, message: &Value) -> Vec<u8> {
@@ -222,6 +324,44 @@ fn verified(device: &mut FakeDevice, credentials: Credentials) -> Session {
     .unwrap()
 }
 
+fn pair(device: &mut FakeDevice, pin: &str) -> Result<Credentials, Error> {
+    let pending = run(device, PairSetupStart::new(Session::new(1)))?;
+    let finish = PairSetupFinish::new(
+        pending,
+        pin,
+        "skagedal-tools",
+        CLIENT_ID.into(),
+        [3; 32],
+        [4; 32],
+    );
+    run(device, finish)
+}
+
+#[test]
+fn pair_setup_exchanges_keys_and_name() {
+    let (mut device, expected) = FakeDevice::new();
+    let credentials = pair(&mut device, "1111").unwrap();
+    assert_eq!(credentials, expected);
+    let (client_id, client_key, name) = device.paired_client.clone().unwrap();
+    assert_eq!(client_id, CLIENT_ID);
+    assert_eq!(client_key, device.client_public_key);
+    assert_eq!(name, "skagedal-tools");
+
+    // The new credentials work for pair verify.
+    let session = verified(&mut device, credentials);
+    assert!(session.is_encrypted());
+}
+
+#[test]
+fn pair_setup_reports_wrong_pin() {
+    let (mut device, _) = FakeDevice::new();
+    let result = pair(&mut device, "1234");
+    assert!(matches!(
+        result,
+        Err(Error::Refused(Refusal::Authentication))
+    ));
+}
+
 #[test]
 fn pair_verify_encrypts_the_session() {
     let (mut device, credentials) = FakeDevice::new();
@@ -318,7 +458,7 @@ fn pairing(tlv: Vec<u8>) -> Value {
     Value::Dict(vec![("_pd".into(), Value::Bytes(tlv))])
 }
 
-fn derive(shared: &[u8; 32], salt: &[u8], info: &[u8]) -> [u8; 32] {
+fn derive(shared: &[u8], salt: &[u8], info: &[u8]) -> [u8; 32] {
     let mut key = [0; 32];
     Hkdf::<Sha512>::new(Some(salt), shared)
         .expand(info, &mut key)

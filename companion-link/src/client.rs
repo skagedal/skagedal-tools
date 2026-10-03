@@ -58,12 +58,12 @@ impl Client {
     }
 
     /// Finish pairing with the PIN the device shows, returning the
-    /// credentials to keep.
-    pub fn pair_finish(&mut self, pin: &str) -> Result<Credentials, Error> {
+    /// credentials to keep. The device lists us as `name`.
+    pub fn pair_finish(&mut self, pin: &str, name: &str) -> Result<Credentials, Error> {
         let pending = self.pending.take().ok_or(Error::NotPairing)?;
         let mut rng = rand::rng();
         let client_id = format_uuid(rng.random());
-        let pair = PairSetupFinish::new(pending, pin, client_id, rng.random(), rng.random());
+        let pair = PairSetupFinish::new(pending, pin, name, client_id, rng.random(), rng.random());
         drive(&mut self.stream, pair)
     }
 

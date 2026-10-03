@@ -86,7 +86,9 @@ HomePods — and are left out, by their model string.
 connects, asks the TV to show a PIN, prompts for it on the terminal, and
 stores the result. Without `--device` it pairs with the only Apple TV on
 the network, and with several it says to pick one. Pairing again with a
-TV already paired replaces the old entry.
+TV already paired replaces the old entry here, though not on the TV,
+where the earlier pairing stays listed until removed under Settings →
+Remotes and Devices. The TV lists this tool as `skagedal-tools`.
 
 When playing, an Apple TV that is not paired is an error saying to run
 `appletv-vlc pair`. A TV that refuses the stored pairing — it was removed
@@ -154,15 +156,18 @@ server, and `play.rs` putting them together.
   pyatv's, tested against it.
 - **[hap-tlv8](https://crates.io/crates/hap-tlv8)** — TLV8, which the
   pairing messages are written in inside the OPACK `_pd` field.
-- **[hap-crypto](https://crates.io/crates/hap-crypto)** — its
-  `PairSetupClient` is an IO-free HomeKit pair setup state machine (SRP-6a
-  with the 3072-bit group and SHA-512, then the Ed25519 exchange), and
-  Companion's pair setup is the same exchange in different framing. Its
+- **[hap-crypto](https://crates.io/crates/hap-crypto)** — HomeKit
+  pairing, which Companion's is in different framing. Its
   `ControllerKeypair`, `EphemeralKeypair`, Ed25519 verification and
-  ChaCha20-Poly1305 wrappers are used for pair verify too.
+  ChaCha20-Poly1305 wrappers are used throughout, and its device-side SRP
+  plays the Apple TV in the pair setup tests.
+- **[srp](https://crates.io/crates/srp)** — the modular arithmetic of
+  SRP-6a. A release candidate, 0.7.0-rc.3, since 0.6 has none of the
+  RFC 5054 parts, and pinned as such because `"*"` never picks a
+  prerelease.
 - **[hkdf](https://crates.io/crates/hkdf)** and
-  **[sha2](https://crates.io/crates/sha2)** — HKDF-SHA512 for the pair
-  verify keys.
+  **[sha2](https://crates.io/crates/sha2)** — HKDF-SHA512 for the pairing
+  keys, and SHA-512 for the SRP hashes.
 - **[mdns-sd](https://crates.io/crates/mdns-sd)** — browsing
   `_companion-link._tcp.local.`, in the tool.
 - **[tiny_http](https://crates.io/crates/tiny_http)** — the HTTP server,
@@ -180,13 +185,16 @@ HomeKit uses `Control-Salt` and `Control-*-Encryption-Key`, and the
 client does not give the shared secret out. Writing pair verify is about
 eighty lines on the primitives above.
 
-`PairSetupClient` takes the PIN in its constructor, before M1, but the
-Apple TV only shows the PIN in response to M1. `PairSetupStart` therefore
-sends M1 itself and keeps M2, and `PairSetupFinish` builds the client
-from the PIN, calls `start` to put it in the state of awaiting M2 (the M1
-it returns is dropped, being identical to the one sent), and hands it M2.
-Its M5 has no `Name` item, which pyatv adds as an OPACK
-`{"name": "pyatv"}`; see the open questions.
+`hap-crypto`'s `PairSetupClient` is not used either, though it was at
+first. Its M5 has no `Name` item, which pyatv adds as an OPACK
+`{"name": "pyatv"}`, and without one the Apple TV lists the pairing as
+an unknown device under Remotes and Devices ("Okänd enhet"). So
+`PairSetupFinish` does M3 to M6 itself, sending the name `skagedal-tools`.
+The `srp` crate's own RFC 5054 client cannot be used whole: its proof
+hashes `PAD(g)` where HomeKit hashes `g`. It does the modular
+arithmetic, and the hashes are done here, every number padded to the
+length of N as `hap-crypto` does it, since that is what the Apple TV was
+seen to accept.
 
 ### On disk
 
@@ -206,7 +214,7 @@ client_secret_key = "…"                              # hex, Ed25519 seed
 ### Repository changes
 
 - `Cargo.toml`: both crates as workspace members; `apple-opack`,
-  `hap-crypto`, `hap-tlv8`, `hkdf`, `sha2`, `mdns-sd`, `tiny_http`,
+  `hap-crypto`, `hap-tlv8`, `hkdf`, `sha2`, `srp`, `mdns-sd`, `tiny_http`,
   `if-addrs`, `rand` and `companion-link` (by path) in `[workspace.dependencies]`.
 - `shared.sh`: `appletv-vlc` in `INSTALLED_RUST_TOOLS`. `companion-link` is a
   library and, like `skagedal-dirs`, is checked by the workspace pass.
@@ -214,13 +222,13 @@ client_secret_key = "…"                              # hex, Ed25519 seed
 
 ### Testing
 
-The library's tests drive pair verify and requests against a fake Apple
-TV written in the test, all in memory, which is what being IO-free buys.
-Pair setup needs the device's half of SRP, which `hap-crypto` does not
-expose, so it is exercised by hand against pyatv's own fake device
+The library's tests drive pair setup, pair verify and requests against a
+fake Apple TV written in the test, all in memory, which is what being
+IO-free buys. Its SRP is `hap-crypto`'s, an implementation independent of
+ours. The whole flow — scan, pair, verify, `_systemInfo`, `_launchApp` —
+was also run by hand against pyatv's own fake device
 (`scripts/fake_device.py --companion` in the pyatv repository, PIN 1111),
-which runs the whole flow — scan, pair, verify, `_systemInfo`,
-`_launchApp` — against pyatv's server-side implementation of it.
+whose SRP is srptools.
 
 ### Outside this repository
 
@@ -230,15 +238,10 @@ In the dotfiles:
 - `other-package-systems.sh` loses `uv tool install pyatv`, and
   `setup/30-other-packages.sh` the `~/.local/bin/atvremote` it checks for.
 - `README.md` and `migrate.sh` lose `~/.pyatv.conf`, and gain
-  `~/.local/share/skagedal-tools/appletv-vlc/` if the latter lists state
-  worth carrying to a new machine.
+  `~/.local/share/skagedal-tools/appletv-vlc/` in its place.
 
 ## Open questions
 
-- **The pairing name.** pyatv sends a name in M5 and `hap-crypto` does
-  not. The Apple TV accepts the pairing without one. If it lists the
-  pairing without a name under Remotes and Devices, and that matters,
-  pair setup M5 can be built here instead, from the same primitives.
 - **What the Apple TV needs before `_launchApp`.** pyatv sends
   `_systemInfo`, `_touchStart`, `_sessionStart`, `TVRCSessionStart`,
   `_tiStart` and an `_interest` subscription on every connect, because it

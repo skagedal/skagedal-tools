@@ -17,7 +17,8 @@ use crate::server::{self, Movie};
 const SCAN_DURATION: Duration = Duration::from_secs(3);
 const FIND_TIMEOUT: Duration = Duration::from_secs(5);
 const DEVICE_TIMEOUT: Duration = Duration::from_secs(5);
-const CLIENT_NAME: &str = "appletv-vlc";
+/// What the Apple TV lists us as, under Remotes and Devices.
+const CLIENT_NAME: &str = "skagedal-tools";
 
 pub fn scan() -> Result<()> {
     let pairings = Pairings::load(&Pairings::default_path())?;
@@ -72,7 +73,7 @@ pub fn pair(device: Option<&str>) -> Result<()> {
     io::stdout().flush()?;
     let mut pin = String::new();
     io::stdin().lock().read_line(&mut pin)?;
-    let credentials = client.pair_finish(pin.trim())?;
+    let credentials = client.pair_finish(pin.trim(), CLIENT_NAME)?;
 
     let mut pairings = Pairings::load(&Pairings::default_path())?;
     pairings.insert(Pairing::new(&tv.name, &credentials));
