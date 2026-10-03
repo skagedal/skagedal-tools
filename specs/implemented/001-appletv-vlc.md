@@ -236,15 +236,14 @@ In the dotfiles:
 ## Open questions
 
 - **The pairing name.** pyatv sends a name in M5 and `hap-crypto` does
-  not. If the Apple TV lists the pairing without a name under Remotes and
-  Devices, or refuses it, pair setup M5 is built here instead, from the
-  same primitives.
+  not. The Apple TV accepts the pairing without one. If it lists the
+  pairing without a name under Remotes and Devices, and that matters,
+  pair setup M5 can be built here instead, from the same primitives.
 - **What the Apple TV needs before `_launchApp`.** pyatv sends
   `_systemInfo`, `_touchStart`, `_sessionStart`, `TVRCSessionStart`,
   `_tiStart` and an `_interest` subscription on every connect, because it
-  sets up for everything. This sends `_systemInfo` alone, which pyatv's
-  fake device accepts; if a real Apple TV wants `_sessionStart` too, it is
-  one more request.
+  sets up for everything. This sends `_systemInfo` alone, and that is
+  enough for a real Apple TV to open the URL in VLC.
 - **Naming devices by name.** A renamed TV needs pairing again, or editing
   the name in `pairings.toml`. The TV's pairing identifier is stable but
   is not in its Bonjour record, so matching by it means a connection to
