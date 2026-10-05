@@ -273,7 +273,19 @@ impl<P: Prompt> GitCleaner<P> {
                     .upstream
                     .as_ref()
                     .ok_or_else(|| anyhow!("branch has no upstream to rebase onto"))?;
-                repo.rebase(&branch.refname, &upstream.name)?;
+                let current = repo.current_branch()?;
+                if current.as_deref() == Some(branch.refname.as_str()) {
+                    repo.rebase(&branch.refname, &upstream.name)?;
+                } else if upstream.status == UpstreamStatus::UpstreamIsAheadOfLocal {
+                    // `git rebase <upstream> <branch>` checks the branch out
+                    // first and stays there. A fast-forward needs no checkout.
+                    repo.fast_forward(&branch.refname, &upstream.name)?;
+                } else {
+                    repo.rebase(&branch.refname, &upstream.name)?;
+                    if let Some(previous) = current {
+                        repo.checkout_branch(&previous)?;
+                    }
+                }
                 Ok(ActionResult::Handled)
             }
             BranchAction::Delete => {
@@ -560,6 +572,84 @@ mod tests {
         if !status.success() {
             return Err(anyhow!("git {:?} failed", args));
         }
+        Ok(())
+    }
+
+    /// A clone whose `main` is one commit behind `origin/main`, standing on a
+    /// branch `work`. Returns the clone's directory and the temp dirs to keep.
+    fn clone_with_main_behind_origin()
+    -> Result<(tempfile::TempDir, tempfile::TempDir, std::path::PathBuf)> {
+        let origin = tempdir()?;
+        git(origin.path(), &["init", "-b", "main"])?;
+        fs::write(origin.path().join("file.txt"), "one")?;
+        git(origin.path(), &["add", "."])?;
+        git(origin.path(), &["commit", "-m", "one"])?;
+
+        let parent = tempdir()?;
+        let clone = parent.path().join("clone");
+        git(
+            parent.path(),
+            &["clone", "-q", origin.path().to_str().unwrap(), "clone"],
+        )?;
+
+        fs::write(origin.path().join("file.txt"), "two")?;
+        git(origin.path(), &["commit", "-qam", "two"])?;
+        git(&clone, &["fetch", "-q"])?;
+        git(&clone, &["checkout", "-q", "-b", "work"])?;
+        Ok((origin, parent, clone))
+    }
+
+    #[test]
+    fn forward_fast_forwards_another_branch_without_checking_it_out() -> Result<()> {
+        let (_origin, _parent, clone) = clone_with_main_behind_origin()?;
+        let repo = GitRepo::new(clone.clone());
+        let branch = Branch {
+            refname: "main".into(),
+            upstream: Some(Upstream {
+                name: "origin/main".into(),
+                status: UpstreamStatus::UpstreamIsAheadOfLocal,
+            }),
+            worktree_path: None,
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.perform_action(&repo, &branch, BranchAction::Rebase)?;
+        assert!(matches!(result, ActionResult::Handled));
+        assert_eq!(repo.current_branch()?.as_deref(), Some("work"));
+        let rev = |r: &str| -> Result<String> {
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", r])
+                .current_dir(&clone)
+                .output()?;
+            Ok(String::from_utf8(out.stdout)?.trim().to_string())
+        };
+        assert_eq!(rev("main")?, rev("origin/main")?);
+        Ok(())
+    }
+
+    #[test]
+    fn forward_of_a_diverged_branch_returns_to_the_branch_the_user_was_on() -> Result<()> {
+        let (_origin, _parent, clone) = clone_with_main_behind_origin()?;
+        git(&clone, &["checkout", "-q", "main"])?;
+        fs::write(clone.join("other.txt"), "local")?;
+        git(&clone, &["add", "."])?;
+        git(&clone, &["commit", "-qm", "local"])?;
+        git(&clone, &["checkout", "-q", "work"])?;
+
+        let repo = GitRepo::new(clone.clone());
+        let branch = Branch {
+            refname: "main".into(),
+            upstream: Some(Upstream {
+                name: "origin/main".into(),
+                status: UpstreamStatus::MergeNeeded,
+            }),
+            worktree_path: None,
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.perform_action(&repo, &branch, BranchAction::Rebase)?;
+        assert!(matches!(result, ActionResult::Handled));
+        assert_eq!(repo.current_branch()?.as_deref(), Some("work"));
         Ok(())
     }
 
