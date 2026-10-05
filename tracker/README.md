@@ -131,14 +131,13 @@ The time should be in `HH:MM` format (24-hour format).
 Tracker only looks at the current week file when stating your report, so the balance a week ends with is carried into the next one as a line at the top of the new file:
 
 ```
-# balance carried over from 2024-W03
 * balance 3:12h
 
 [monday 2024-01-22]
 * 08:28-
 ```
 
-This happens once, when the week file is created – by whichever command touches the new week first. The carried balance is the one the previous week *ended* with: every expected work day of that week counts, whether or not it was worked, and a shift that was never closed counts as nothing.
+This happens once, when the week file is created – by whichever command touches the new week first – and tracker tells you about it: `A balance of 3:12h was carried over from 2024-W03`. The carried balance is the one the previous week *ended* with: every expected work day of that week counts, whether or not it was worked, and a shift that was never closed counts as nothing.
 
 "Previous week" means the latest earlier week that has a file. A week without one – a holiday you never ran `tracker` in – is skipped rather than counted as a week of missed work. No balance is carried into a future week (`tracker -w 1`), since the week before it is not over, or into a file given with `-f`.
 

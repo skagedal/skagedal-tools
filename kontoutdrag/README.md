@@ -8,15 +8,35 @@ is, and looks the merchant up in YAML tables you control.
 
 ```
 $ kontoutdrag summary statement.csv --by category --spending -n 6
-category         count      total
----------------  -----  ---------
-(uncategorised)     64  -12800.00
-groceries          120  -11000.00
-housing             12   -9600.00
-transport           31   -4650.00
-utilities            8   -3200.00
-restaurants         22   -2750.00
+category                count      total
+----------------------  -----  ---------
+(uncategorised)            64  -12800.00
+food/groceries            120  -11000.00
+housing                    12   -9600.00
+transport                  31   -4650.00
+housing/utilities           8   -3200.00
+eating-out/restaurants     22   -2750.00
 ```
+
+## Categories
+
+A category is a path of segments separated by slashes: `car/fuel` is fuel,
+inside `car`. A plain `car` is a category too — the car itself, or
+anything about it that has no finer name. One segment is enough for most
+things; the second is for when a total needs to split.
+
+Ancestry goes by whole segments, so `car` holds `car/fuel` and
+`car/parking` but not `carpets`. That is what the view aggregates on: its
+charts start at the top-level segment, and clicking one opens its
+subcategories. A budget row for `car` takes all of it, unless a row for
+`car/fuel` is there to take the fuel.
+
+The bundled table uses these top-level categories: `food`, `eating-out`,
+`housing`, `transport`, `car`, `health`, `fees`, `subscriptions`,
+`leisure`, `things`, `travel`, `giving` and `refunds`. Your own tables can
+use any others. Three top-level categories mean money that moves rather
+than is spent — `transfer`, `income` and `refunds` — and everything below
+them counts the same way, so `transfer/saving` is not spending either.
 
 ## Marks
 
@@ -42,7 +62,7 @@ marks:
     date: 2024-03-15
     amount: "-25000.000"
     descriptor: ["10000000002"]
-    category: savings
+    category: transfer/saving
     merchant: Sparkontot
 ```
 
@@ -66,6 +86,65 @@ rule that quietly matches everything or nothing.
 `kontoutdrag marks <statement>` lists them with the number of rows each one
 caught, and says so when one caught nothing — almost always a typo in a
 date or an amount.
+
+## Budgets
+
+A budget is one YAML file per month, named `YYYY-MM.yaml`, in a directory
+of its own:
+
+    [budgets]
+    path = "~/notes/finances/budget"
+
+Anything else in that directory is ignored.
+
+```yaml
+version: 1
+month: 2031-05
+income:
+  - name: Salary, net
+    category: income
+    amount: 30000
+    basis: fixed          # optional free text: fixed, average, estimate
+rows:
+  - name: Groceries
+    category: food/groceries
+    amount: 4000          # planned money out, as a positive number
+    basis: average
+    note: optional, for the reader
+  - name: Eating out
+    category: eating-out
+    amount: 1500
+  - name: Gym
+    category: health/fitness
+    merchant: Some Gym    # only transactions resolved to this merchant
+    amount: 400
+```
+
+Each transaction booked in the month, in every statement given, after the
+tables and the marks, goes to the one most specific line that takes it:
+a line naming its merchant beats one that does not, then the line with
+the deepest category holding the transaction's, then the first in the
+file. Income lines take what is under `income`; rows take everything
+else. Spent is money out less money back, so a refund in a budgeted
+category makes what was spent smaller.
+
+What no row takes is ignored if it is under `transfer`, `income` or
+`refunds` — a row for `transfer/saving` still counts saving when it is
+there — and is **unbudgeted** otherwise, uncategorised included.
+
+    kontoutdrag budget --month 2031-05 everyday.json savings.json
+
+prints each line with its budget, what happened and what remains, the
+totals, and the unbudgeted sum; `--unbudgeted` lists what is in it. With
+no `--month` it is the current month. A file that does not parse is
+skipped with a warning naming it, rather than stopping the rest.
+
+The view has a **Budget** tab with the same figures: a month at a time,
+the rows grouped under their top-level category with subtotals, each with
+a bar for what is spent against what was budgeted, the part over drawn in
+red, and a mark for how far through the month it is — spending past the
+mark is ahead of pace. Click a line for its transactions; the unbudgeted
+ones are listed below. `?tab=budget` on the URL opens on it.
 
 ## The statement side
 
@@ -135,13 +214,13 @@ name: mine
 
 merchants:
   - name: Kvarnby Livs
-    category: groceries
+    category: food/groceries
     tags: [local, walkable]
     match:
       prefix: [KVARNBY]
 
   - name: Presshörnan
-    category: convenience
+    category: food/convenience
     match:
       prefix: [PRESSHORNAN, PRESSHÖRNAN, "PH "]
       regex: ['^\d{6,8} PRESSH']
@@ -167,6 +246,23 @@ When more than one rule matches, the most specific kind wins; within a
 kind, the longer pattern wins; and if that still ties, the table loaded
 last wins. That last rule is what lets your own table override the bundled
 one without editing it.
+
+**A rule can also name an amount.** Some payees bill different things
+under one name: a housing association sending the monthly fee and a
+parking space from the same account, say. `amount` narrows a rule to one
+amount, or an inclusive range, signed as in the statement:
+
+```yaml
+- name: Parking
+  category: car/parking
+  match:
+    prefix: [LANDLORD]
+    amount: "-300"            # or a range: ["-350", "-250"]
+```
+
+A rule with an amount outranks every rule without one, so here the
+parking rule takes the 300 kr rows and a plain `LANDLORD` rule keeps the
+rest. `explain` takes `--amount` to try one out.
 
 **A pattern ending in a space means a word boundary.** `prefix: "VT "`
 matches `VT APP` but not `VTABERGSKROGEN`. YAML strips a trailing space
@@ -222,6 +318,7 @@ path.
 | `summary <statement>` | Totals `--by category`, `merchant`, `month` or `tag` |
 | `tables` | What is loaded. `--merchants` lists them all, `--bundled` lists what is compiled in, `--dump <name>` prints one to start your own from |
 | `explain <descriptor>` | Look one descriptor up and see which rule decided it, and what else would have matched |
+| `budget <statement>...` | A month against its budget file; see [Budgets](#budgets) |
 | `view <statement>...` | A window with charts to click through; see [The view](#the-view). `--json` prints the data behind it |
 | `edit-config` | Open `settings.toml`, creating it from the template |
 
@@ -255,9 +352,13 @@ kontoutdrag view savings.json everyday.json
 
 The filters above the charts scope everything below them: a period (the
 last twelve full months by default), the accounts, and the categories that
-move money rather than spend it — `transfer`, `income` and `refunds` are
-left out of spending unless ticked back in. Spending is money out; a
+move money rather than spend it — `transfer`, `income` and `refunds`, and
+everything below them, are left out of spending unless ticked back in. Spending is money out; a
 refund does not net against it.
+
+The category bars are the top-level categories. Click one that has
+subcategories and the bars become those, with the payees and the months
+narrowed to it; **↑ Up** goes back.
 
 Categories are bars rather than a pie on purpose: a pie reads at five or
 six slices, and a personal statement has thirty categories.
@@ -267,11 +368,40 @@ The uncategorised share of spending has its own tile, against a target of
 it; its payees are raw descriptors, which is exactly what `unmatched`
 prints.
 
+### Comments
+
+Click a transaction in the table to open it. The box that opens takes a
+comment — what the payment was for, who a number belongs to — which is
+saved as you type to
+
+    ~/.local/share/skagedal-tools/kontoutdrag/comments.json
+
+(`$XDG_DATA_HOME` moves it, as for every tool here). To keep comments
+somewhere else, a git repository say, make that file a symlink; it is
+written through the link, not over it. Each comment carries the account,
+date, amount, descriptor and text of its transaction, so it can be turned
+into a mark or a table rule later without going back to the statement.
+
+The opened row also lists every transaction from the day before to the day
+after, in every account and regardless of the filters — where the other
+half of a transfer, a repayment or a refund turns up — and links to Google
+Calendar on the booking date and to Gmail for the week around it.
+
+The view watches the settings, the statements, the tables, the marks and
+the comments file, and reloads whatever changed, keeping the filters and
+selection. So a rule edited elsewhere shows up in the window a couple of
+seconds later, and so does a comments file that has been harvested and
+cleared. If a rule file fails to load, the last good data stays up with
+a banner saying why.
+
 The window is a React app under `browser/`, embedded in the binary and
 served on a local port, the same way `log-viewer` does it — the plumbing
 is shared in the `webview-shell` crate. It needs the `web` feature, which
 `./install` turns on; building with it runs pnpm and Vite. Without it,
-`view --json` still works. `view --serve` prints a URL for an ordinary
+`view --json` still works. The app icon, a 💰, is drawn at build time by
+[appicon-generator](../appicon-generator) when it is installed, and set as
+the Dock icon on macOS; it is Apple's emoji, so it is not committed, and a
+build without the tool has no icon. `view --serve` prints a URL for an ordinary
 browser instead of opening a window, and `?category=…`, `?merchant=…` and
 `?tag=…` on that URL open on a selection. For work on the app itself,
 `KONTOUTDRAG_URL=<that URL> pnpm dev` in `browser/` proxies the data.

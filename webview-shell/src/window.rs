@@ -2,12 +2,13 @@
 
 use anyhow::Result;
 use tao::dpi::LogicalSize;
-use tao::event::{Event, WindowEvent};
+use tao::event::{Event, StartCause, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoop};
 use tao::window::WindowBuilder;
-use wry::WebViewBuilder;
+use wry::{NewWindowResponse, WebViewBuilder};
 
-pub fn open(url: &str, title: &str, size: (f64, f64)) -> Result<()> {
+/// `icon` is a PNG for the Dock, on macOS; elsewhere it is not used.
+pub fn open(url: &str, title: &str, size: (f64, f64), icon: Option<&'static [u8]>) -> Result<()> {
     let event_loop = EventLoop::new();
     #[cfg(target_os = "macos")]
     let menu = menu_bar(title)?;
@@ -16,14 +17,36 @@ pub fn open(url: &str, title: &str, size: (f64, f64)) -> Result<()> {
         .with_inner_size(LogicalSize::new(size.0, size.1))
         .build(&event_loop)
         .map_err(|e| anyhow::anyhow!("creating window: {e}"))?;
+    // The app's own pages stay in the window; a link anywhere else opens in
+    // the browser, since a webview is a poor place to read mail.
+    let origin = url.trim_end_matches('/').to_string();
     let _webview = WebViewBuilder::new()
         .with_url(url)
+        .with_navigation_handler(move |target: String| {
+            if target.starts_with(&origin) || target.starts_with("about:") {
+                return true;
+            }
+            let _ = opener::open(&target);
+            false
+        })
+        .with_new_window_req_handler(|target: String, _| {
+            let _ = opener::open(&target);
+            NewWindowResponse::Deny
+        })
         .build(&window)
         .map_err(|e| anyhow::anyhow!("creating webview: {e}"))?;
+    #[cfg(not(target_os = "macos"))]
+    let _ = icon;
     event_loop.run(move |event, _, control_flow| {
         // The menu bar lives as long as the window does.
         #[cfg(target_os = "macos")]
         let _ = &menu;
+        // Only once the app has finished launching: an icon set before then
+        // is replaced by the default, which for a bare binary is "exec".
+        #[cfg(target_os = "macos")]
+        if let (Event::NewEvents(StartCause::Init), Some(png)) = (&event, icon) {
+            dock_icon(png);
+        }
         *control_flow = ControlFlow::Wait;
         if let Event::WindowEvent {
             event: WindowEvent::CloseRequested,
@@ -73,4 +96,42 @@ fn menu_bar(title: &str) -> Result<muda::Menu> {
     let menu = Menu::with_items(&[&app, &edit, &window])?;
     menu.init_for_nsapp();
     Ok(menu)
+}
+
+/// Show `png` as the app's icon in the Dock, shaped like the other icons
+/// there: a rounded square with a margin, on Apple's 1024-point grid.
+/// A binary started from a terminal has no bundle to carry an icon, so
+/// without this the Dock shows a generic one.
+#[cfg(target_os = "macos")]
+fn dock_icon(png: &[u8]) {
+    use objc2::AllocAnyThread;
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSBezierPath, NSCompositingOperation, NSImage};
+    use objc2_foundation::{NSData, NSPoint, NSRect, NSSize};
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let data = NSData::with_bytes(png);
+    let Some(source) = NSImage::initWithData(NSImage::alloc(), &data) else {
+        return;
+    };
+    const SIDE: f64 = 1024.0;
+    const SQUARE: f64 = 824.0;
+    const RADIUS: f64 = 185.0;
+    let inset = (SIDE - SQUARE) / 2.0;
+    let square = NSRect::new(NSPoint::new(inset, inset), NSSize::new(SQUARE, SQUARE));
+    let canvas = NSImage::initWithSize(NSImage::alloc(), NSSize::new(SIDE, SIDE));
+    #[allow(deprecated)]
+    canvas.lockFocus();
+    NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(square, RADIUS, RADIUS).addClip();
+    source.drawInRect_fromRect_operation_fraction(
+        square,
+        NSRect::ZERO,
+        NSCompositingOperation::SourceOver,
+        1.0,
+    );
+    #[allow(deprecated)]
+    canvas.unlockFocus();
+    unsafe { NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&canvas)) };
 }
