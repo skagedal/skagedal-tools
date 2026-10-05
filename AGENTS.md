@@ -10,23 +10,25 @@ or whose interesting part is a decision — get a written spec under
 `specs/implemented/` when they ship. See `specs/README.md` for when to
 write one, how, and why a numbered spec is never rewritten afterwards.
 
-## Tools Table Maintenance
+## README Maintenance
 
-The README.md file contains a table listing all tools in the repository. **This table must be kept up-to-date** whenever:
+README.md lists every top-level directory in the repository, in three
+alphabetical bullet lists: **Tools** (things you run), **Libraries** (crates
+shared between tools) and **Writing** (comparisons, conventions, specs).
+**These lists must be kept up-to-date** whenever:
 
-- A new tool is added to the repository
-- A tool is removed from the repository
-- A tool's description changes significantly
+- A new tool, library or document is added to the repository
+- One is removed from the repository
+- Its description changes significantly
 
-The table format is:
+Each entry looks like this:
 
 ```markdown
-| Tool | Description |
-|------|-------------|
-| [tool-name](tool-name/) | Brief description of the tool |
+- [tool-name](tool-name/) — Brief description of the tool
 ```
 
-Each tool name should be a link to its directory, and the description should be concise (one line).
+The name links to its directory, and the description is concise (one line).
+Repo infrastructure (`ci/`, `scripts/`) is not listed.
 
 ## Java Code Formatting
 
