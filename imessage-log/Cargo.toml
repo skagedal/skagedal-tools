@@ -1,0 +1,17 @@
+[package]
+name = "imessage-log"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "imessage-log"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+rusqlite.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

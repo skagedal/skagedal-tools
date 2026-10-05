@@ -13,6 +13,7 @@ A collection of small tools.
 - [gh-pr](gh-pr/) — Manage GitHub pull requests for the current branch via the `gh` CLI
 - [git-branch-assistant](git-branch-assistant/) — Interactively syncs local git branches with their upstreams across one or many repos, and lists repos by latest commit
 - [git-dirty-checker](git-dirty-checker/) — Checks git repositories for uncommitted changes
+- [imessage-log](imessage-log/) — Print Messages history for a span of days, optionally only the conversations with one contact
 - [intellij-patch](intellij-patch/) — Apply XML patches to IntelliJ project files from a TOML config
 - [kontoutdrag](kontoutdrag/) — Identify merchants and categorise spending in a bank statement export, using YAML merchant tables
 - [linear-notifications](linear-notifications/) — Interactive CLI for viewing and opening unread Linear notifications
