@@ -630,6 +630,9 @@ mod tests {
     #[test]
     fn forward_of_a_diverged_branch_returns_to_the_branch_the_user_was_on() -> Result<()> {
         let (_origin, _parent, clone) = clone_with_main_behind_origin()?;
+        // The rebase runs through GitRepo, without the test helper's identity.
+        git(&clone, &["config", "user.name", "Test"])?;
+        git(&clone, &["config", "user.email", "test@example.com"])?;
         git(&clone, &["checkout", "-q", "main"])?;
         fs::write(clone.join("other.txt"), "local")?;
         git(&clone, &["add", "."])?;
