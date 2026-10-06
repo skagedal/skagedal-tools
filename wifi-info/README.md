@@ -6,6 +6,7 @@ Prints the current Wi-Fi network's name and BSSID.
 wifi-info              # ssid<TAB>name, bssid<TAB>access point
 wifi-info --ssid       # just the name
 wifi-info --bssid      # just the access point's MAC address
+wifi-info --json       # {"bssid":"…","ssid":"…"}, bssid null when unknown
 wifi-info --authorize  # ask for Location Services permission (once)
 ```
 

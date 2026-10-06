@@ -20,11 +20,20 @@ struct WifiInfo: ParsableCommand {
     @Flag(help: "Print only the BSSID, the access point's MAC address.")
     var bssid = false
 
+    @Flag(help: "Print both as a JSON object.")
+    var json = false
+
     @Flag(help: "Ask for Location Services permission, waiting for the answer.")
     var authorize = false
 
     @Flag(help: .hidden)
     var launched = false
+
+    func validate() throws {
+        if [ssid, bssid, json].filter({ $0 }).count > 1 {
+            throw ValidationError("--ssid, --bssid and --json are alternatives; pick one")
+        }
+    }
 
     func run() throws {
         guard launched else {
@@ -41,14 +50,38 @@ struct WifiInfo: ParsableCommand {
         guard let interface = CWWiFiClient.shared().interface(), let name = interface.ssid() else {
             throw ExitCode(1)
         }
-        let station = interface.bssid() ?? ""
+        let station = interface.bssid()
         if ssid {
             print(name)
         } else if bssid {
-            print(station)
+            print(station ?? "")
+        } else if json {
+            print(try Network(ssid: name, bssid: station).json())
         } else {
             print("ssid\t\(name)")
-            print("bssid\t\(station)")
+            print("bssid\t\(station ?? "")")
         }
+    }
+}
+
+struct Network: Encodable {
+    let ssid: String
+    let bssid: String?
+
+    enum CodingKeys: CodingKey {
+        case ssid, bssid
+    }
+
+    // Spelled out so a missing BSSID is null rather than an absent key.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(ssid, forKey: .ssid)
+        try container.encode(bssid, forKey: .bssid)
+    }
+
+    func json() throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return String(decoding: try encoder.encode(self), as: UTF8.self)
     }
 }
