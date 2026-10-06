@@ -98,6 +98,7 @@ RUST_TOOLS=(
 # macOS job.
 INSTALLED_SWIFT_TOOLS=(
     appicon-generator
+    wifi-info
 )
 
 SWIFT_TOOLS=(
@@ -185,9 +186,13 @@ check-swift() {
         cd "$SCRIPT_DIR/$dir"
         # --strict fails on lint findings rather than just printing them, which
         # is what makes this a check rather than a report.
-        swift format lint --strict --recursive --parallel Package.swift Sources Tests
+        local paths=(Package.swift Sources)
+        [[ -d Tests ]] && paths+=(Tests)
+        swift format lint --strict --recursive --parallel "${paths[@]}"
         swift build
-        swift test
+        if [[ -d Tests ]]; then
+            swift test
+        fi
     )
 }
 
@@ -198,10 +203,45 @@ install-swift() {
         cd "$SCRIPT_DIR/$dir"
         swift build --configuration release
         mkdir -p "$SWIFT_BIN_DIR"
-        install -m 0755 "$(swift build --configuration release --show-bin-path)/$dir" \
-            "$SWIFT_BIN_DIR/$dir"
+        local built
+        built="$(swift build --configuration release --show-bin-path)/$dir"
+        if [[ -f Bundle/Info.plist ]]; then
+            install-swift-app "$dir" "$built"
+            return
+        fi
+        install -m 0755 "$built" "$SWIFT_BIN_DIR/$dir"
         echo "    installed to $SWIFT_BIN_DIR/$dir"
     )
+}
+
+# install-swift-app NAME BINARY — wrap a tool in an app bundle, for one that
+# needs a privacy permission only an app can be granted (see wifi-info). The
+# bundle lives in the tool's data directory and the bin entry is a symlink into
+# it. Ad-hoc signing ties a permission to the exact binary, so an unchanged
+# binary is left alone rather than re-signed.
+install-swift-app() {
+    local name="$1" built="$2"
+    local data="${XDG_DATA_HOME:-$HOME/.local/share}/skagedal-tools/$name"
+    local app="$data/$name.app"
+    local binary="$app/Contents/MacOS/$name"
+    # Signing rewrites the binary, so what is compared is a hash of the build
+    # and the plist, kept beside the bundle rather than in it.
+    local stamp="$data/$name.app.source"
+    local source
+    source="$(cat "$built" Bundle/Info.plist | shasum -a 256)"
+    if [[ -f "$binary" && "$(cat "$stamp" 2>/dev/null)" == "$source" ]]; then
+        echo "    $app is unchanged"
+    else
+        rm -rf "$app"
+        mkdir -p "$app/Contents/MacOS"
+        cp Bundle/Info.plist "$app/Contents/Info.plist"
+        install -m 0755 "$built" "$binary"
+        codesign --force --sign - "$app"
+        echo "$source" > "$stamp"
+        echo "    installed to $app; any permission it had must be granted again"
+    fi
+    ln -sf "$binary" "$SWIFT_BIN_DIR/$name"
+    echo "    linked from $SWIFT_BIN_DIR/$name"
 }
 
 update-swift() {
