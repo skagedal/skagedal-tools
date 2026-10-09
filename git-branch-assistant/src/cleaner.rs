@@ -102,6 +102,8 @@ impl<P: Prompt> GitCleaner<P> {
                                 branch.refname
                             );
                             Ok(TaskResult::Proceed)
+                        } else if forward_in_worktree(&path, branch, &upstream.name)? {
+                            Ok(TaskResult::Proceed)
                         } else {
                             print_worktree_redirect(branch, &path);
                             Ok(TaskResult::ShellActionRequired(path))
@@ -265,14 +267,17 @@ impl<P: Prompt> GitCleaner<P> {
                 Ok(ActionResult::Handled)
             }
             BranchAction::Rebase => {
-                if let Some(path) = worktree_elsewhere_path(branch, repo) {
-                    print_worktree_redirect(branch, &path);
-                    return Ok(ActionResult::ExitToShell(path));
-                }
                 let upstream = branch
                     .upstream
                     .as_ref()
                     .ok_or_else(|| anyhow!("branch has no upstream to rebase onto"))?;
+                if let Some(path) = worktree_elsewhere_path(branch, repo) {
+                    if forward_in_worktree(&path, branch, &upstream.name)? {
+                        return Ok(ActionResult::Handled);
+                    }
+                    print_worktree_redirect(branch, &path);
+                    return Ok(ActionResult::ExitToShell(path));
+                }
                 let current = repo.current_branch()?;
                 if current.as_deref() == Some(branch.refname.as_str()) {
                     repo.rebase(&branch.refname, &upstream.name)?;
@@ -368,6 +373,18 @@ pub enum ActionResult {
     Handled,
     NotHandled,
     ExitToShell(PathBuf),
+}
+
+/// Forwards a branch from inside the worktree that has it checked out, since
+/// git refuses to move it from anywhere else. Returns false, leaving it to the
+/// user, when that worktree has uncommitted changes.
+fn forward_in_worktree(path: &Path, branch: &Branch, upstream: &str) -> Result<bool> {
+    let worktree = GitRepo::new(path.to_path_buf());
+    if worktree.is_dirty()? {
+        return Ok(false);
+    }
+    worktree.rebase(&branch.refname, upstream)?;
+    Ok(true)
 }
 
 fn worktree_elsewhere_path(branch: &Branch, repo: &GitRepo) -> Option<PathBuf> {
@@ -481,28 +498,83 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn rebase_redirects_when_branch_in_other_worktree() -> Result<()> {
-        let temp_repo = tempdir()?;
-        let temp_worktree = tempdir()?;
-        let repo = GitRepo::new(temp_repo.path().to_path_buf());
-        let branch = Branch {
-            refname: "feature".into(),
+    /// [`clone_with_main_behind_origin`] with `main` checked out in a second
+    /// worktree. Returns that worktree's path last.
+    fn clone_with_main_in_worktree() -> Result<(
+        tempfile::TempDir,
+        tempfile::TempDir,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    )> {
+        let (origin, parent, clone) = clone_with_main_behind_origin()?;
+        let worktree = parent.path().join("worktree");
+        git(&clone, &["worktree", "add", "-q", "../worktree", "main"])?;
+        // The rebase runs through GitRepo, without the test helper's identity.
+        git(&clone, &["config", "user.name", "Test"])?;
+        git(&clone, &["config", "user.email", "test@example.com"])?;
+        Ok((origin, parent, clone, worktree))
+    }
+
+    fn main_behind_in(worktree: &Path) -> Branch {
+        Branch {
+            refname: "main".into(),
             upstream: Some(Upstream {
-                name: "origin/feature".into(),
+                name: "origin/main".into(),
                 status: UpstreamStatus::UpstreamIsAheadOfLocal,
             }),
-            worktree_path: Some(temp_worktree.path().to_path_buf()),
-        };
+            worktree_path: Some(worktree.to_path_buf()),
+        }
+    }
+
+    fn rev(dir: &Path, r: &str) -> Result<String> {
+        let out = std::process::Command::new("git")
+            .args(["rev-parse", r])
+            .current_dir(dir)
+            .output()?;
+        Ok(String::from_utf8(out.stdout)?.trim().to_string())
+    }
+
+    #[test]
+    fn forward_moves_a_branch_checked_out_in_another_worktree() -> Result<()> {
+        let (_origin, _parent, clone, worktree) = clone_with_main_in_worktree()?;
+        let repo = GitRepo::new(clone.clone());
+        let branch = main_behind_in(&worktree);
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.perform_action(&repo, &branch, BranchAction::Rebase)?;
+        assert!(matches!(result, ActionResult::Handled));
+        assert_eq!(rev(&clone, "main")?, rev(&clone, "origin/main")?);
+        assert_eq!(rev(&worktree, "HEAD")?, rev(&clone, "origin/main")?);
+        assert_eq!(repo.current_branch()?.as_deref(), Some("work"));
+        Ok(())
+    }
+
+    #[test]
+    fn upstream_ahead_forwards_a_branch_checked_out_in_another_worktree() -> Result<()> {
+        let (_origin, _parent, clone, worktree) = clone_with_main_in_worktree()?;
+        let repo = GitRepo::new(clone.clone());
+        let branch = main_behind_in(&worktree);
 
         let cleaner = GitCleaner::new(TestPrompt::default());
         let result = cleaner.handle_branch(&repo, &branch)?;
-        match result {
-            TaskResult::ShellActionRequired(path) => {
-                assert_eq!(path, temp_worktree.path().to_path_buf());
-            }
-            TaskResult::Proceed => panic!("expected shell action"),
+        assert!(matches!(result, TaskResult::Proceed));
+        assert_eq!(rev(&clone, "main")?, rev(&clone, "origin/main")?);
+        Ok(())
+    }
+
+    #[test]
+    fn forward_redirects_to_a_dirty_worktree() -> Result<()> {
+        let (_origin, _parent, clone, worktree) = clone_with_main_in_worktree()?;
+        fs::write(worktree.join("file.txt"), "uncommitted")?;
+        let repo = GitRepo::new(clone.clone());
+        let branch = main_behind_in(&worktree);
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        match cleaner.perform_action(&repo, &branch, BranchAction::Rebase)? {
+            ActionResult::ExitToShell(path) => assert_eq!(path, worktree),
+            _ => panic!("expected shell action"),
         }
+        assert_ne!(rev(&clone, "main")?, rev(&clone, "origin/main")?);
         Ok(())
     }
 
