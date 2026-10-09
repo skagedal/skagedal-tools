@@ -69,6 +69,9 @@ jobs:
       # stands on main.
       - uses: git-pkgs/actions/setup@da601438e0f1287b863efaad6b6e3e421c9a604d # v0.2.0
         with:
+          # A pinned version, because "latest" asks the GitHub API without a
+          # token and that lookup has failed the run before.
+          version: "0.21.0"
           reindex: "false"
       - name: Install simons-misc-helpers
         run: cargo install --locked --path simons-misc-helpers
