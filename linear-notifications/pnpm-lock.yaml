@@ -14,7 +14,7 @@ importers:
     devDependencies:
       '@types/node':
         specifier: latest
-        version: 26.6.3
+        version: 26.6.4
       '@types/terminal-kit':
         specifier: latest
         version: 2.5.7
@@ -189,8 +189,8 @@ packages:
   '@types/nextgen-events@1.1.4':
     resolution: {integrity: sha512-YczHp+887i3MpHUOCOztk7y10SklNZ3aQlToKnu0LON0ZdFpgwq8POtnATAoFz8V1IxyR6d8pp8ZyYkUIy26Cw==}
 
-  '@types/node@26.6.3':
-    resolution: {integrity: sha512-dsqMQQoeTLqu9wynDD00q573mNzso3IdQOAfHRJqLCcmCFPoGo9A1bDpUcv/9tnKpErQWv9uKeGfl37EIS02Yg==}
+  '@types/node@26.6.4':
+    resolution: {integrity: sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg==}
 
   '@types/terminal-kit@2.5.7':
     resolution: {integrity: sha512-IpbCBFSb3OqCEZBZlk368tGftqss88eNQaJdD9msEShRbksEiVahEqroONi60ppUt9/arLM6IDrHMx9jpzzCOw==}
@@ -491,7 +491,7 @@ snapshots:
 
   '@types/nextgen-events@1.1.4': {}
 
-  '@types/node@26.6.3':
+  '@types/node@26.6.4':
     dependencies:
       undici-types: 8.9.0
 
