@@ -170,6 +170,16 @@ impl GitRepo {
         self.run_interactive_printing("git", &["rebase", upstream, refname])
     }
 
+    /// Moves `refname` up to `upstream` without checking it out. Git refuses
+    /// unless it is a fast-forward.
+    pub fn fast_forward(&self, refname: &str, upstream: &str) -> Result<()> {
+        // Fetching from `.` is from this repository itself: no network, just
+        // a ref update with git's fast-forward check.
+        let refspec = format!("{upstream}:refs/heads/{refname}");
+        self.run_and_capture("git", &["fetch", "--quiet", ".", &refspec])?;
+        Ok(())
+    }
+
     pub fn delete_branch_forcefully(&self, branch: &str) -> Result<()> {
         self.run_interactive_printing("git", &["branch", "-D", branch])
     }
