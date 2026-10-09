@@ -85,6 +85,7 @@ show-dependency-changes() {
         return 0
     fi
     if [[ "$diff_json" == "{"* ]]; then
+        diff_json="$(printf '%s\n' "$diff_json" | lockfiles-and-actions)"
         printf '%s\n' "$diff_json" | simons-misc-helpers format-dependency-changes
         if [[ -n "${DEPENDENCY_CHANGES_FILE:-}" ]]; then
             printf '%s\n' "$diff_json" |
@@ -94,6 +95,13 @@ show-dependency-changes() {
     else
         printf '%s\n' "$diff_json"
     fi
+}
+
+# An update moves lockfiles and workflow pins, never the other manifests.
+# git-pkgs reports a crate listed twice in one Cargo.toml, as a dependency
+# and a dev-dependency, as added on every run, so manifest entries are noise.
+lockfiles-and-actions() {
+    jq 'map_values(map(select(.manifest_kind == "lockfile" or .ecosystem == "github-actions")))'
 }
 
 main "$@"
