@@ -63,6 +63,16 @@ jobs:
 
       - uses: skagedal/action-pinact-setup@0e686abf491418977fb6de9e8ba8ce17104e288a # v1.0.0
 
+      # git-pkgs and simons-misc-helpers are what the script uses to describe
+      # the update; the description goes in the pull request. The helper is
+      # built before `cargo update` moves anything, from the lockfile as it
+      # stands on main.
+      - uses: git-pkgs/actions/setup@da601438e0f1287b863efaad6b6e3e421c9a604d # v0.2.0
+        with:
+          reindex: "false"
+      - name: Install simons-misc-helpers
+        run: cargo install --locked --path simons-misc-helpers
+
       - name: Run ci/update-dependencies
         env:
           # The script lends pinact a token when it finds one in the
@@ -70,6 +80,7 @@ jobs:
           # not set up here. Unauthenticated, pinact gets 60 GitHub API calls
           # an hour, which a single run can get through.
           PINACT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPENDENCY_CHANGES_FILE: ${{ runner.temp }}/dependency-changes.txt
         run: ./ci/update-dependencies
 
       - name: Did anything move?
@@ -113,6 +124,13 @@ jobs:
               echo
               echo "CI on this pull request is what says whether it builds."
               echo
+              changes="$RUNNER_TEMP/dependency-changes.txt"
+              if [[ -s "$changes" ]]; then
+                  echo '```'
+                  cat "$changes"
+                  echo '```'
+                  echo
+              fi
               echo '```'
               git --no-pager diff --stat 'HEAD^'
               echo '```'
