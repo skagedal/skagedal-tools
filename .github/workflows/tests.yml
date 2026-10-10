@@ -49,3 +49,10 @@ jobs:
           check-swift appicon-generator
         env:
           SCRIPT_DIR: ${{ github.workspace }}
+      - name: check-swift wifi-info
+        run: |
+          set -euo pipefail
+          source ./shared.sh
+          check-swift wifi-info
+        env:
+          SCRIPT_DIR: ${{ github.workspace }}

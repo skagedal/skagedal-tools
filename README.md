@@ -25,6 +25,7 @@ A collection of small tools.
 - [sync-brewfile](sync-brewfile/) — Reconcile locally installed Homebrew packages against a Brewfile, prompting to add or uninstall each extra
 - [tracker](tracker/) — Tracks weekly work hours in a simple per-week text file with start/stop/report commands
 - [trafikverket](trafikverket/) — The next trains between two stations, with live delays, filtered to the ones your ticket covers
+- [wifi-info](wifi-info/) — Prints the current Wi-Fi network name and BSSID, which macOS otherwise redacts for command-line tools
 - [woke](woke/) — Keeps this Mac awake with the lid closed, restoring the setting when it exits
 - [x-java-home](x-java-home/) — A drop-in replacement for macOS `java_home` with JSON output support
 
