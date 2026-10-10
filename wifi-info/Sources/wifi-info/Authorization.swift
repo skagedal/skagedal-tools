@@ -7,12 +7,9 @@ enum Authorization {
     @MainActor
     static var isGranted: Bool {
         let manager = CLLocationManager()
-        let delegate = Delegate()
-        manager.delegate = delegate
-        let deadline = Date().addingTimeInterval(2)
-        while !delegate.answered && Date() < deadline {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        }
+        let observer = AnswerObserver()
+        manager.delegate = observer
+        observer.wait(timeout: 2)
         return manager.authorizationStatus == .authorizedAlways
     }
 
@@ -21,13 +18,10 @@ enum Authorization {
     @MainActor
     static func request() throws {
         let manager = CLLocationManager()
-        let delegate = Delegate()
-        manager.delegate = delegate
+        let observer = AnswerObserver()
+        manager.delegate = observer
         manager.requestWhenInUseAuthorization()
-        let deadline = Date().addingTimeInterval(120)
-        while !delegate.answered && Date() < deadline {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-        }
+        observer.wait(timeout: 120)
         switch manager.authorizationStatus {
         case .authorizedAlways:
             print("Location Services permission granted.")
@@ -49,12 +43,23 @@ enum Authorization {
         FileHandle.standardError.write(Data((message + "\n").utf8))
     }
 
-    private final class Delegate: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
-        var answered = false
+    /// Runs the main run loop until locationd has given an answer. The
+    /// callback is delivered on the main run loop, so it has to keep running;
+    /// blocking on a semaphore instead would never see the answer.
+    private final class AnswerObserver: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
+        private var answered = false
+
+        func wait(timeout: TimeInterval) {
+            let deadline = Date().addingTimeInterval(timeout)
+            while !answered, case let remaining = deadline.timeIntervalSinceNow, remaining > 0 {
+                CFRunLoopRunInMode(.defaultMode, remaining, false)
+            }
+        }
 
         func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
             if manager.authorizationStatus != .notDetermined {
                 answered = true
+                CFRunLoopStop(CFRunLoopGetMain())
             }
         }
     }
