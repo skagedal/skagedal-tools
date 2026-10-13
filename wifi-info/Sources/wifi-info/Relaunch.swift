@@ -31,6 +31,8 @@ enum Relaunch {
         // so the arguments reach it.
         open.arguments =
             ["-W", "-g", "-n", "--stdout", out.path, "--stderr", err.path, bundle.path, "--args"] + arguments
+        let openErrors = Pipe()
+        open.standardError = openErrors
         try open.run()
         open.waitUntilExit()
 
@@ -38,9 +40,12 @@ enum Relaunch {
         let errors = (try? Data(contentsOf: err)) ?? Data()
         FileHandle.standardOutput.write(output)
         FileHandle.standardError.write(errors)
-        // open does not pass on the app's exit status; an answer with nothing
-        // on stdout is the failure case.
-        if open.terminationStatus != 0 || output.isEmpty {
+        // open does not pass on the app's exit status, so an answer with
+        // nothing on stdout is the failure case. Its own status is no better:
+        // when the app exits before -W starts watching it, open fails with
+        // "Unable to block on applications" although the answer is there.
+        if output.isEmpty {
+            FileHandle.standardError.write(openErrors.fileHandleForReading.readDataToEndOfFile())
             throw ExitCode(1)
         }
     }
