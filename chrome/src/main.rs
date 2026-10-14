@@ -10,7 +10,7 @@ use serde::Deserialize;
 /// scripts check for.
 const NOT_SIGNED_IN: u8 = 3;
 
-/// Opens URLs in the Chrome profile signed in as an account.
+/// Opens URLs in Chrome, optionally in the profile signed in as an account.
 ///
 /// Chrome names profile directories ("Default", "Profile 1", ...) in creation
 /// order, so they differ between machines. This looks the directory up in
@@ -18,19 +18,38 @@ const NOT_SIGNED_IN: u8 = 3;
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-    /// The address the profile is signed in as.
-    #[arg(required_unless_present = "list")]
+    /// Open in the profile signed in as this address; without it, Chrome picks.
+    #[arg(long, short)]
     account: Option<String>,
 
-    /// URLs to open; with none, just a window in that profile.
+    /// URLs to open; with none, just a window.
     urls: Vec<String>,
 
-    /// Print the profile directory instead of opening Chrome.
-    #[arg(long, conflicts_with = "urls")]
+    /// Open the URLs in a new window rather than as tabs in the last one.
+    #[arg(long)]
+    new_window: bool,
+
+    /// Open an incognito window.
+    #[arg(long)]
+    incognito: bool,
+
+    /// Open URL in its own window, without tabs or address bar.
+    #[arg(long, value_name = "URL", conflicts_with = "urls")]
+    app: Option<String>,
+
+    /// Print the account's profile directory instead of opening Chrome.
+    #[arg(
+        long,
+        requires = "account",
+        conflicts_with_all = ["urls", "new_window", "incognito", "app"]
+    )]
     profile_dir: bool,
 
     /// List every profile directory and the account signed into it.
-    #[arg(long, conflicts_with_all = ["account", "profile_dir"])]
+    #[arg(
+        long,
+        conflicts_with_all = ["account", "urls", "new_window", "incognito", "app", "profile_dir"]
+    )]
     list: bool,
 }
 
@@ -98,28 +117,45 @@ fn run(args: Args) -> Result<ExitCode> {
     if args.list {
         return list();
     }
-    let account = args
-        .account
-        .expect("clap requires an account without --list");
 
-    let dir = read_profiles()?.and_then(|profiles| find_profile_dir(&profiles, &account));
-    let Some(dir) = dir else {
-        eprintln!("No Chrome profile signed in as {account}.");
-        eprintln!("Add it in Chrome (profile menu → Add), then re-run.");
-        return Ok(ExitCode::from(NOT_SIGNED_IN));
+    let profile_dir = match &args.account {
+        None => None,
+        Some(account) => {
+            let dir = read_profiles()?.and_then(|profiles| find_profile_dir(&profiles, account));
+            let Some(dir) = dir else {
+                eprintln!("No Chrome profile signed in as {account}.");
+                eprintln!("Add it in Chrome (profile menu → Add), then re-run.");
+                return Ok(ExitCode::from(NOT_SIGNED_IN));
+            };
+            Some(dir)
+        }
     };
 
     if args.profile_dir {
-        println!("{dir}");
+        println!(
+            "{}",
+            profile_dir.expect("clap requires --account with --profile-dir")
+        );
         return Ok(ExitCode::SUCCESS);
     }
 
-    let status = Command::new("open")
-        .args(["-na", "Google Chrome", "--args"])
-        .arg(format!("--profile-directory={dir}"))
-        .args(&args.urls)
-        .status()
-        .context("running open")?;
+    let mut command = Command::new("open");
+    command.args(["-na", "Google Chrome", "--args"]);
+    if let Some(dir) = profile_dir {
+        command.arg(format!("--profile-directory={dir}"));
+    }
+    if args.new_window {
+        command.arg("--new-window");
+    }
+    if args.incognito {
+        command.arg("--incognito");
+    }
+    if let Some(app) = &args.app {
+        command.arg(format!("--app={app}"));
+    }
+    command.args(&args.urls);
+
+    let status = command.status().context("running open")?;
     if !status.success() {
         bail!("open exited with {status}");
     }
@@ -176,6 +212,12 @@ mod tests {
             find_profile_dir(&profiles(STATE), "nobody@example.com"),
             None
         );
+    }
+
+    #[test]
+    fn arguments_are_consistent() {
+        use clap::CommandFactory;
+        Args::command().debug_assert();
     }
 
     #[test]
