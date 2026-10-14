@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 use anyhow::{Context, Result, bail};
-use clap::Parser;
+use clap::error::ErrorKind;
+use clap::{CommandFactory, Parser};
 use serde::Deserialize;
 
 /// Exit status when no profile is signed in as the account, which setup
@@ -33,9 +34,9 @@ struct Args {
     #[arg(long)]
     incognito: bool,
 
-    /// Open URL in its own window, without tabs or address bar.
-    #[arg(long, value_name = "URL", conflicts_with = "urls")]
-    app: Option<String>,
+    /// Open the URL in its own window, without tabs or address bar.
+    #[arg(long, requires = "urls")]
+    app: bool,
 
     /// Print the account's profile directory instead of opening Chrome.
     #[arg(
@@ -150,10 +151,12 @@ fn run(args: Args) -> Result<ExitCode> {
     if args.incognito {
         command.arg("--incognito");
     }
-    if let Some(app) = &args.app {
-        command.arg(format!("--app={app}"));
+    if args.app {
+        // Chrome takes the app's URL as the switch's value, not positionally.
+        command.arg(format!("--app={}", args.urls[0]));
+    } else {
+        command.args(&args.urls);
     }
-    command.args(&args.urls);
 
     let status = command.status().context("running open")?;
     if !status.success() {
@@ -163,7 +166,13 @@ fn run(args: Args) -> Result<ExitCode> {
 }
 
 fn main() -> ExitCode {
-    match run(Args::parse()) {
+    let args = Args::parse();
+    if args.app && args.urls.len() > 1 {
+        Args::command()
+            .error(ErrorKind::TooManyValues, "--app opens exactly one URL")
+            .exit();
+    }
+    match run(args) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("chrome: {e:#}");
@@ -216,7 +225,6 @@ mod tests {
 
     #[test]
     fn arguments_are_consistent() {
-        use clap::CommandFactory;
         Args::command().debug_assert();
     }
 
