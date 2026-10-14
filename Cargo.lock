@@ -904,6 +904,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrome"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "chrome-page-notes"
 version = "0.1.0"
 dependencies = [
