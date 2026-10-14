@@ -7,6 +7,7 @@ A collection of small tools.
 - [appicon-generator](appicon-generator/) — Generates placeholder app icons from an emoji, for Xcode and Flutter projects
 - [appletv-vlc](appletv-vlc/) — Plays a local movie file on an Apple TV in VLC, serving it over HTTP and opening it on the TV
 - [assistant](assistant/) — Drives a daily routine by running configured tasks when they're due
+- [chrome](chrome/) — Opens URLs in the Chrome profile signed in as a given account, whatever Chrome named its directory
 - [chrome-page-notes](chrome-page-notes/) — Chrome extension, plus the CLI that registers and serves it, for attaching your own notes to a page
 - [cloudwatch-insights](cloudwatch-insights/) — Download logs from AWS CloudWatch Logs Insights with a flexible time-range syntax
 - [disky](disky/) — Offload and onload big directories between this machine and a remote, deleting locally only after checksum verification

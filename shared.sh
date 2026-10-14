@@ -64,6 +64,7 @@ NODE_TOOLS=(
 INSTALLED_RUST_TOOLS=(
     appletv-vlc
     assistant
+    chrome
     chrome-page-notes
     cloudwatch-insights
     disky
