@@ -9,6 +9,19 @@
 //! fields @timestamp, @message
 //! ```
 //!
+//! Several log groups take one `SOURCE` command each, with the time window on
+//! the first. The console does not understand a comma-separated list: it keeps
+//! the first name and folds the rest into the query text. Links the console
+//! produces itself name log groups by ARN and may start with an empty
+//! `SOURCE ""` that carries only the time window:
+//!
+//! ```text
+//! SOURCE "" START=2026-10-21T09:14:30.000Z END=2026-10-21T09:17:00.000Z |
+//! SOURCE "arn:aws:logs:eu-north-1:123456789012:log-group:/eks/prod/team-icc" |
+//! SOURCE "arn:aws:logs:eu-north-1:123456789012:log-group:/eks/prod/team-pi" |
+//! fields @timestamp, @message
+//! ```
+//!
 //! Only the explicit-name form maps back onto log group names. The
 //! `logGroups(…)` / `logGroupTags(…)` / `dataSource(…)` selectors from the
 //! query-syntax docs describe a *set* of log groups that only CloudWatch can
@@ -17,6 +30,7 @@
 
 use thiserror::Error;
 
+use crate::console_link::parse_log_group_arn;
 use crate::time_range::{format_duration_ms, try_parse_duration_ms};
 
 #[derive(Debug, Error)]
@@ -41,18 +55,29 @@ pub struct SourceCommand {
     pub end: Option<SourceTime>,
 }
 
-/// Split a query whose first command is `SOURCE …` into that command and the
-/// rest of the pipeline. Returns `None` when the query has no `SOURCE` prefix.
+/// Split a query that starts with one or more `SOURCE …` commands into those
+/// commands, merged, and the rest of the pipeline. Returns `None` when the
+/// query has no `SOURCE` prefix.
 pub fn split_source_command(
     query: &str,
 ) -> Result<Option<(SourceCommand, String)>, SourceParseError> {
-    let trimmed = query.trim_start();
-    if !starts_with_source_keyword(trimmed) {
+    let mut rest = query.trim_start();
+    if !starts_with_source_keyword(rest) {
         return Ok(None);
     }
-    let (head, rest) = split_at_top_level_pipe(trimmed);
-    let command = parse_source_command(head["SOURCE".len()..].trim())?;
-    Ok(Some((command, rest.trim_start().to_string())))
+    let mut merged = SourceCommand::default();
+    while starts_with_source_keyword(rest) {
+        let (head, tail) = split_at_top_level_pipe(rest);
+        let command = parse_source_command(head["SOURCE".len()..].trim())?;
+        merged.log_groups.extend(command.log_groups);
+        merged
+            .unresolved_selectors
+            .extend(command.unresolved_selectors);
+        merged.start = merged.start.or(command.start);
+        merged.end = merged.end.or(command.end);
+        rest = tail.trim_start();
+    }
+    Ok(Some((merged, rest.to_string())))
 }
 
 fn starts_with_source_keyword(s: &str) -> bool {
@@ -103,7 +128,14 @@ fn parse_source_command(body: &str) -> Result<SourceCommand, SourceParseError> {
         } else if let Some(name) = selector_function_name(&token) {
             command.unresolved_selectors.push(name);
         } else {
-            command.log_groups.push(unquote(&token));
+            let name = unquote(&token);
+            if name.is_empty() {
+                continue;
+            }
+            match parse_log_group_arn(&name) {
+                Some((_, _, name)) => command.log_groups.push(name),
+                None => command.log_groups.push(name),
+            }
         }
     }
     Ok(command)
@@ -223,25 +255,38 @@ fn parse_source_time(raw: &str, keyword: &str) -> Result<SourceTime, SourceParse
     )))
 }
 
-/// Render the `SOURCE …` command that heads a Log Analytics query and prepend
-/// it to `query` — the inverse of [`split_source_command`] for the explicit
-/// log-group form that this tool builds.
+/// Render the `SOURCE …` commands that head a Log Analytics query and prepend
+/// them to `query` — one per log group, with the time window on the first. The
+/// inverse of [`split_source_command`] for the explicit log-group form that
+/// this tool builds.
 pub fn prepend_source_command(
     log_groups: &[String],
     start: Option<SourceTime>,
     end: Option<SourceTime>,
     query: &str,
 ) -> String {
-    let names: Vec<String> = log_groups.iter().map(|g| format!("\"{g}\"")).collect();
-    let mut command = format!("SOURCE {}", names.join(", "));
+    let mut window = String::new();
     if let Some(start) = start {
-        command.push_str(&format!(" START={}", format_source_time(start)));
+        window.push_str(&format!(" START={}", format_source_time(start)));
     }
     if let Some(end) = end {
-        command.push_str(&format!(" END={}", format_source_time(end)));
+        window.push_str(&format!(" END={}", format_source_time(end)));
     }
-    // The console puts the pipe on the SOURCE line and the pipeline below it.
-    format!("{command} |\n{query}")
+    let mut commands: Vec<String> = log_groups
+        .iter()
+        .map(|g| format!("SOURCE \"{g}\""))
+        .collect();
+    if let Some(first) = commands.first_mut() {
+        first.push_str(&window);
+    }
+    // The console puts the pipe on each SOURCE line and the pipeline below.
+    let mut rendered = String::new();
+    for command in commands {
+        rendered.push_str(&command);
+        rendered.push_str(" |\n");
+    }
+    rendered.push_str(query);
+    rendered
 }
 
 fn format_source_time(time: SourceTime) -> String {
@@ -291,6 +336,52 @@ mod tests {
         );
         assert_eq!(cmd.end, Some(SourceTime::Relative { offset_ms: 0 }));
         assert_eq!(rest, "fields @timestamp\n| limit 200");
+    }
+
+    #[test]
+    fn one_source_command_per_log_group() {
+        let (cmd, rest) = split(
+            "SOURCE \"/a\" START=-1h END=0s |\nSOURCE \"/b\" |\nfields @timestamp\n| limit 20",
+        );
+        assert_eq!(cmd.log_groups, vec!["/a".to_string(), "/b".to_string()]);
+        assert_eq!(
+            cmd.start,
+            Some(SourceTime::Relative {
+                offset_ms: -3_600_000
+            })
+        );
+        assert_eq!(cmd.end, Some(SourceTime::Relative { offset_ms: 0 }));
+        assert_eq!(rest, "fields @timestamp\n| limit 20");
+    }
+
+    #[test]
+    fn console_form_with_empty_source_and_arns() {
+        let (cmd, rest) = split(
+            "SOURCE \"\" START=2026-10-21T09:14:30.000Z END=2026-10-21T09:17:00.000Z | \
+             SOURCE \"arn:aws:logs:eu-north-1:123456789012:log-group:/eks/prod/team-icc\" | \
+             SOURCE \"arn:aws:logs:eu-north-1:123456789012:log-group:/eks/prod/team-pi\" |\n\
+             fields @timestamp",
+        );
+        assert_eq!(
+            cmd.log_groups,
+            vec![
+                "/eks/prod/team-icc".to_string(),
+                "/eks/prod/team-pi".to_string()
+            ]
+        );
+        assert_eq!(
+            cmd.start,
+            Some(SourceTime::Absolute {
+                epoch_ms: 1_792_574_070_000
+            })
+        );
+        assert_eq!(
+            cmd.end,
+            Some(SourceTime::Absolute {
+                epoch_ms: 1_792_574_220_000
+            })
+        );
+        assert_eq!(rest, "fields @timestamp");
     }
 
     #[test]
@@ -397,6 +488,23 @@ mod tests {
                 "fields @timestamp\n| limit 200",
             ),
             "SOURCE \"/eks/prod/team-icc\" START=-1w END=0s |\nfields @timestamp\n| limit 200"
+        );
+    }
+
+    #[test]
+    fn render_puts_each_log_group_in_its_own_source_command() {
+        assert_eq!(
+            prepend_source_command(
+                &["/a".to_string(), "/b".to_string()],
+                Some(SourceTime::Absolute {
+                    epoch_ms: 1_700_000_000_000
+                }),
+                Some(SourceTime::Absolute {
+                    epoch_ms: 1_700_003_600_000
+                }),
+                "fields @timestamp",
+            ),
+            "SOURCE \"/a\" START=1700000000000 END=1700003600000 |\nSOURCE \"/b\" |\nfields @timestamp"
         );
     }
 
