@@ -25,11 +25,40 @@ jobs:
       - name: ./check
         run: ./check
 
+  # Whether a pull request touches the Swift code or what checks it. On a push
+  # to main, always.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      swift: ${{ steps.diff.outputs.swift }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A pull request checks out a merge commit; its first parent is the
+          # base branch, so two commits are enough to diff against it.
+          fetch-depth: 2
+      - id: diff
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != pull_request ]] ||
+              git diff --name-only HEAD^1 HEAD |
+              grep -qE '^(appicon-generator/|shared\.sh$|\.github/workflows/tests\.yml$)'; then
+              echo "swift=true" >> "$GITHUB_OUTPUT"
+          else
+              echo "swift=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # appicon-generator draws through AppKit and Core Text, so it can only be
   # built and tested on macOS. Kept as its own job rather than moving the whole
   # check onto a macOS runner, which is slower and more expensive for the Rust
   # and Node tools that do not need it.
+  #
+  # Skipped rather than filtered out with `paths:`, because check-swift is a
+  # required check on main: a skipped job counts as passing, while a workflow
+  # that never runs leaves the pull request waiting for it.
   check-swift:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
