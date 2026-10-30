@@ -5,7 +5,9 @@ use std::process::{Command, ExitCode};
 use anyhow::{Context, Result, bail};
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+const TOOL: &str = "chrome";
 
 /// Exit status when no profile is signed in as the account, which setup
 /// scripts check for.
@@ -15,7 +17,8 @@ const NOT_SIGNED_IN: u8 = 3;
 ///
 /// Chrome names profile directories ("Default", "Profile 1", ...) in creation
 /// order, so they differ between machines. This looks the directory up in
-/// Chrome's Local State by the address signed into it instead.
+/// Chrome's Local State by the address signed into it instead, or in the copy
+/// of it saved the last time Local State could be read.
 #[derive(Parser)]
 #[command(version)]
 struct Args {
@@ -66,7 +69,7 @@ struct Profiles {
     info_cache: BTreeMap<String, ProfileInfo>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ProfileInfo {
     #[serde(default)]
     user_name: String,
@@ -79,17 +82,66 @@ fn local_state_path() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join("Library/Application Support/Google/Chrome/Local State"))
 }
 
+/// The profiles as last read from Local State. macOS can close Chrome's data
+/// directory to everything but Chrome and apps with Full Disk Access, and
+/// lookups from anywhere else fall back to this.
+fn snapshot_path() -> PathBuf {
+    skagedal_dirs::data_dir(TOOL).join("profiles.json")
+}
+
+struct KnownProfiles {
+    by_dir: BTreeMap<String, ProfileInfo>,
+    from_snapshot: bool,
+}
+
 /// The profiles, keyed by directory; `None` if Chrome has never run.
-fn read_profiles() -> Result<Option<BTreeMap<String, ProfileInfo>>> {
+fn read_profiles() -> Result<Option<KnownProfiles>> {
     let path = local_state_path()?;
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            return read_snapshot().map(Some);
+        }
         Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
     };
     let state: LocalState =
         serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
-    Ok(Some(state.profile.info_cache))
+    let by_dir = state.profile.info_cache;
+    if let Err(e) = save_snapshot(&by_dir) {
+        eprintln!("chrome: could not save the profile list: {e:#}");
+    }
+    Ok(Some(KnownProfiles {
+        by_dir,
+        from_snapshot: false,
+    }))
+}
+
+fn read_snapshot() -> Result<KnownProfiles> {
+    let path = snapshot_path();
+    let text = std::fs::read_to_string(&path).with_context(|| {
+        format!(
+            "Chrome's Local State is not readable from here, and there is no saved \
+             copy at {} yet; run `chrome --list` once from a terminal with Full \
+             Disk Access",
+            path.display()
+        )
+    })?;
+    let by_dir =
+        serde_json::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
+    Ok(KnownProfiles {
+        by_dir,
+        from_snapshot: true,
+    })
+}
+
+fn save_snapshot(by_dir: &BTreeMap<String, ProfileInfo>) -> Result<()> {
+    let path = snapshot_path();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let json = serde_json::to_string_pretty(by_dir)?;
+    std::fs::write(&path, json).with_context(|| format!("writing {}", path.display()))
 }
 
 fn find_profile_dir(profiles: &BTreeMap<String, ProfileInfo>, account: &str) -> Option<String> {
@@ -103,7 +155,10 @@ fn list() -> Result<ExitCode> {
     let Some(profiles) = read_profiles()? else {
         bail!("No Chrome profiles yet: {}", local_state_path()?.display());
     };
-    for (dir, info) in &profiles {
+    if profiles.from_snapshot {
+        eprintln!("(saved copy, from {})", snapshot_path().display());
+    }
+    for (dir, info) in &profiles.by_dir {
         let who = if info.user_name.is_empty() {
             format!("{} (not signed in)", info.name)
         } else {
@@ -122,10 +177,20 @@ fn run(args: Args) -> Result<ExitCode> {
     let profile_dir = match &args.account {
         None => None,
         Some(account) => {
-            let dir = read_profiles()?.and_then(|profiles| find_profile_dir(&profiles, account));
+            let profiles = read_profiles()?;
+            let dir = profiles
+                .as_ref()
+                .and_then(|profiles| find_profile_dir(&profiles.by_dir, account));
             let Some(dir) = dir else {
                 eprintln!("No Chrome profile signed in as {account}.");
-                eprintln!("Add it in Chrome (profile menu → Add), then re-run.");
+                if profiles.is_some_and(|profiles| profiles.from_snapshot) {
+                    eprintln!(
+                        "This is from the saved copy; after adding it in Chrome, run \
+                         `chrome --list` from a terminal with Full Disk Access."
+                    );
+                } else {
+                    eprintln!("Add it in Chrome (profile menu → Add), then re-run.");
+                }
                 return Ok(ExitCode::from(NOT_SIGNED_IN));
             };
             Some(dir)
