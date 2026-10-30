@@ -18,6 +18,13 @@ the profiles were created, so the same account lives in a different directory
 on each machine. `chrome` looks the directory up in Chrome's `Local State` by
 the address signed into it, so nothing has to hardcode them.
 
+macOS can close Chrome's data directory to everything but Chrome itself and
+apps with Full Disk Access, and then reading `Local State` fails with
+"Operation not permitted". So every successful read saves the profiles to
+`~/.local/share/skagedal-tools/chrome/profiles.json`, and lookups that cannot
+read `Local State` use that instead. Running `chrome --list` once from a
+terminal with Full Disk Access fills it, and again after adding a profile.
+
 It exits with status 3 when no profile is signed in as the account, which
 setup scripts can check for.
 
