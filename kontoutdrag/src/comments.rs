@@ -36,6 +36,9 @@ pub struct Comment {
     #[serde(flatten)]
     pub subject: Subject,
     pub comment: String,
+    /// The category it should have, when answered in `kontoutdrag ask`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
     /// When the comment was last changed, RFC 3339.
     pub updated: String,
 }
@@ -70,14 +73,39 @@ pub fn load(path: &Path) -> Result<Vec<Comment>> {
     Ok(file.comments)
 }
 
-/// Set the comment on one transaction, or remove it when `text` is blank.
+/// Set the comment on one transaction, or remove it when `text` is blank
+/// and no category was given in `kontoutdrag ask`. A category given there
+/// is kept.
 pub fn upsert(path: &Path, subject: Subject, text: &str, now: &str) -> Result<()> {
-    let mut comments = load(path)?;
+    let comments = load(path)?;
+    let category = comments
+        .iter()
+        .find(|c| c.subject.key == subject.key)
+        .and_then(|c| c.category.clone());
+    write(path, comments, subject, text, category, now)
+}
+
+/// Set both the comment and the category, as answered in `kontoutdrag
+/// ask`; remove the comment when both are blank.
+pub fn answer(path: &Path, subject: Subject, text: &str, category: &str, now: &str) -> Result<()> {
+    let category = Some(category.trim().to_string()).filter(|c| !c.is_empty());
+    write(path, load(path)?, subject, text, category, now)
+}
+
+fn write(
+    path: &Path,
+    mut comments: Vec<Comment>,
+    subject: Subject,
+    text: &str,
+    category: Option<String>,
+    now: &str,
+) -> Result<()> {
     comments.retain(|c| c.subject.key != subject.key);
-    if !text.trim().is_empty() {
+    if !text.trim().is_empty() || category.is_some() {
         comments.push(Comment {
             subject,
             comment: text.to_string(),
+            category,
             updated: now.to_string(),
         });
     }
@@ -217,5 +245,36 @@ mod tests {
         assert_eq!(first["descriptor"], "46700000001");
         assert_eq!(first["comment"], "a jacket");
         assert!(first.get("reference").is_none());
+        assert!(first.get("category").is_none());
+    }
+
+    #[test]
+    fn an_answer_with_only_a_category_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("comments.json");
+        answer(&path, subject("a", "2026-01-01"), "", "food/groceries", "t").unwrap();
+        let all = load(&path).unwrap();
+        assert_eq!(all[0].category.as_deref(), Some("food/groceries"));
+        answer(&path, subject("a", "2026-01-01"), " ", " ", "t").unwrap();
+        assert!(load(&path).unwrap().is_empty());
+    }
+
+    /// Editing the comment in the view leaves the category from `ask` alone.
+    #[test]
+    fn a_comment_written_later_keeps_the_category() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("comments.json");
+        answer(
+            &path,
+            subject("a", "2026-01-01"),
+            "lunch",
+            "eating-out",
+            "t1",
+        )
+        .unwrap();
+        upsert(&path, subject("a", "2026-01-01"), "lunch with Folke", "t2").unwrap();
+        let all = load(&path).unwrap();
+        assert_eq!(all[0].comment, "lunch with Folke");
+        assert_eq!(all[0].category.as_deref(), Some("eating-out"));
     }
 }

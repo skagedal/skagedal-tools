@@ -263,7 +263,7 @@ function shift(date: string, days: number): Date {
 }
 
 /** Google Calendar's day view on the booking date. */
-function calendarUrl(date: string): string {
+export function calendarUrl(date: string): string {
   const d = shift(date, 0);
   return `https://calendar.google.com/calendar/r/day/${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
@@ -272,7 +272,7 @@ function calendarUrl(date: string): string {
  * Gmail searching the week around the booking date. A card purchase books
  * a day or two after it is made, so the window leans earlier.
  */
-function gmailUrl(date: string): string {
+export function gmailUrl(date: string): string {
   const fmt = (d: Date) =>
     `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
   const query = `after:${fmt(shift(date, -4))} before:${fmt(shift(date, 3))}`;

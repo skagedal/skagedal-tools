@@ -320,6 +320,7 @@ path.
 | `explain <descriptor>` | Look one descriptor up and see which rule decided it, and what else would have matched |
 | `budget <statement>...` | A month against its budget file; see [Budgets](#budgets) |
 | `view <statement>...` | A window with charts to click through; see [The view](#the-view). `--json` prints the data behind it |
+| `ask <statement>... --since <date>` | Ask what the unexplained transactions were, and print the answers; see [Asking](#asking) |
 | `edit-config` | Open `settings.toml`, creating it from the template |
 
 All of them take `--from` / `--to` to narrow the window, `--spending` or
@@ -405,6 +406,23 @@ build without the tool has no icon. `view --serve` prints a URL for an ordinary
 browser instead of opening a window, and `?category=…`, `?merchant=…` and
 `?tag=…` on that URL open on a selection. For work on the app itself,
 `KONTOUTDRAG_URL=<that URL> pnpm dev` in `browser/` proxies the data.
+
+### Asking
+
+`kontoutdrag ask --since 2026-11-01 <statements>...` opens the same window
+with only the questions in it: every transaction booked since that day that
+no rule categorises, and every Swish to or from a person — an eleven-digit
+number beginning 467 — that no mark explains. A table can say whose number
+it is, but only a mark can say what one payment was for.
+
+Each question takes a category, offered from those already in use, and a
+note. **Send** saves every answered row as a comment, with its category, to
+the comments file, prints the answers as JSON on stdout, and ends the
+command. It is meant for an agent that runs it, waits for it to exit, and
+turns the answers into rules: the output is the answers, and the comments
+file keeps them if nobody was waiting. `--serve` prints a URL for a browser
+instead of opening a window, and `--json` prints the document with the
+question keys under `ask`.
 
 ## Limits
 

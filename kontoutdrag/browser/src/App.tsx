@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Version, fetchComments, fetchData, fetchVersion, saveComment } from "./api";
+import { Ask } from "./Ask";
 import { BarList } from "./BarList";
 import { BudgetView } from "./BudgetView";
 import { MonthColumns } from "./MonthColumns";
@@ -101,6 +102,7 @@ export function App() {
   if (!data) {
     return <p className={`page ${problem ? "error" : "muted"}`}>{problem ?? "Loading…"}</p>;
   }
+  if (data.ask) return <Ask data={data} ask={data.ask} comments={comments} />;
   return (
     <>
       {problem && <p className="banner">{problem}</p>}

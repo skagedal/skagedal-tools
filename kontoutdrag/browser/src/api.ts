@@ -34,3 +34,22 @@ export async function saveComment(key: string, comment: string): Promise<void> {
     throw new Error(body.error ?? `HTTP ${r.status}`);
   }
 }
+
+export interface AnswerToSend {
+  key: string;
+  comment: string;
+  category: string;
+}
+
+/** Ends `kontoutdrag ask`: the server prints the answers and exits. */
+export async function sendAnswers(answers: AnswerToSend[]): Promise<void> {
+  const r = await fetch("/api/answers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.error ?? `HTTP ${r.status}`);
+  }
+}

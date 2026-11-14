@@ -39,6 +39,7 @@ fn run() -> Result<()> {
         Subcommand::Marks(args) => commands::marks::run(&args),
         Subcommand::Explain(args) => commands::explain::run(&args),
         Subcommand::View(args) => commands::view::run(&args),
+        Subcommand::Ask(args) => commands::view::ask(&args),
         Subcommand::Budget(args) => commands::budget::run(&args),
         Subcommand::EditConfig => commands::edit_config::run(),
     }
