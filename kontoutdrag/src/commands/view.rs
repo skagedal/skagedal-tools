@@ -10,20 +10,26 @@
 //!
 //! Each transaction gets a key, which is what a comment written in the view
 //! is filed under; see [`crate::comments`].
+//!
+//! `kontoutdrag ask` is the same window showing only the questions: the
+//! transactions since a day that no rule categorises, and the Swishes to a
+//! person that no mark explains. Sending the answers saves them as comments,
+//! prints them, and ends the command.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use chrono::NaiveDate;
 use serde_json::{Value, json};
 
 use crate::budget::{self, Budgets, Item};
-use crate::cli::ViewArgs;
+use crate::cli::{AskArgs, ViewArgs};
 use crate::commands::{self, Resolved};
 use crate::comments::Subject;
 use crate::config;
 use crate::mapping;
-use crate::statement::Transaction;
+use crate::statement::{Descriptor, Transaction};
 
 /// The document the view is drawn from, and what each key refers to.
 #[cfg_attr(not(feature = "web"), allow(dead_code))]
@@ -34,15 +40,23 @@ pub struct Built {
 
 pub fn run(args: &ViewArgs) -> Result<()> {
     if args.json {
-        println!("{}", build(args)?.json);
+        println!("{}", build(args, None)?.json);
         return Ok(());
     }
-    open(args)
+    open(args, None)
+}
+
+pub fn ask(args: &AskArgs) -> Result<()> {
+    if args.view.json {
+        println!("{}", build(&args.view, Some(args.since))?.json);
+        return Ok(());
+    }
+    open(&args.view, Some(args.since))
 }
 
 #[cfg(feature = "web")]
-fn open(args: &ViewArgs) -> Result<()> {
-    let first = build(args)?;
+fn open(args: &ViewArgs, since: Option<NaiveDate>) -> Result<()> {
+    let first = build(args, since)?;
     let owned = ViewArgs {
         statements: args.statements.clone(),
         format: args.format.clone(),
@@ -53,9 +67,10 @@ fn open(args: &ViewArgs) -> Result<()> {
     };
     crate::web::run(
         crate::web::Source {
-            build: Box::new(move || build(&owned)),
+            build: Box::new(move || build(&owned, since)),
             watched: watched_files(args)?,
             comments: crate::paths::comments_path(),
+            asking: since.is_some(),
         },
         first,
         args.serve,
@@ -63,14 +78,15 @@ fn open(args: &ViewArgs) -> Result<()> {
 }
 
 #[cfg(not(feature = "web"))]
-fn open(_args: &ViewArgs) -> Result<()> {
+fn open(_args: &ViewArgs, _since: Option<NaiveDate>) -> Result<()> {
     anyhow::bail!(
         "this build was compiled without the `web` feature, so it cannot open a window; \
          rebuild with --features web, or use --json"
     )
 }
 
-pub fn build(args: &ViewArgs) -> Result<Built> {
+/// The document, with the keys of the questions to ask when `since` is given.
+pub fn build(args: &ViewArgs, since: Option<NaiveDate>) -> Result<Built> {
     let settings = config::load(&crate::paths::config_path())?;
     let loaded = commands::load_statements(
         &args.statements,
@@ -82,6 +98,7 @@ pub fn build(args: &ViewArgs) -> Result<Built> {
     let mut transactions = Vec::new();
     let mut subjects = HashMap::new();
     let mut keyed = Vec::new();
+    let mut questions = Vec::new();
     for (index, (path, loaded)) in loaded.iter().enumerate() {
         let account = account_name(path);
         let mut seen = HashMap::new();
@@ -89,6 +106,11 @@ pub fn build(args: &ViewArgs) -> Result<Built> {
             let key = key(&account, &resolved.transaction, &mut seen);
             subjects.insert(key.clone(), subject(&key, &account, &resolved.transaction));
             transactions.push(transaction(index, &key, resolved));
+            if since.is_some_and(|since| resolved.transaction.booked >= since)
+                && is_question(resolved)
+            {
+                questions.push(key.clone());
+            }
             keyed.push((key, resolved));
         }
         accounts.push(account);
@@ -102,6 +124,10 @@ pub fn build(args: &ViewArgs) -> Result<Built> {
         "transactions": transactions,
         "commentsFile": crate::paths::comments_path().display().to_string(),
         "budgets": budgets,
+        "ask": since.map(|since| json!({
+            "since": since.format("%Y-%m-%d").to_string(),
+            "keys": questions,
+        })),
     })
     .to_string();
     Ok(Built { json, subjects })
@@ -157,6 +183,19 @@ fn budgets_json(dir: &Path, budgets: &Budgets, keyed: &[(String, &Resolved)]) ->
         "warnings": budgets.warnings,
         "months": months,
     })
+}
+
+/// Whether `ask` should ask about it: nothing categorises it, or it is a
+/// Swish to or from a person, which a table can name but only a mark can
+/// say what it was for.
+fn is_question(resolved: &Resolved) -> bool {
+    resolved.category().is_empty()
+        || (is_person(&resolved.transaction.descriptor) && resolved.marked.applied.is_empty())
+}
+
+/// A Swish number that is a Swedish mobile phone, not a Swish-företag.
+fn is_person(descriptor: &Descriptor) -> bool {
+    matches!(descriptor, Descriptor::Swish { number } if number.len() == 11 && number.starts_with("467"))
 }
 
 pub fn item(resolved: &Resolved) -> Item<'_> {
@@ -264,6 +303,38 @@ mod tests {
             reference: reference.map(str::to_string),
             method: None,
         }
+    }
+
+    fn resolved(text: &str, category: Option<&str>, marked: bool) -> Resolved {
+        Resolved {
+            transaction: t("2026-01-01", "-100", text, None),
+            hit: None,
+            marked: crate::marks::Marked {
+                category: category.map(str::to_string),
+                merchant: None,
+                tags: Vec::new(),
+                applied: if marked { vec![0] } else { Vec::new() },
+            },
+        }
+    }
+
+    #[test]
+    fn asks_about_the_uncategorised_and_unexplained_swishes_to_people() {
+        assert!(is_question(&resolved("SHOP", None, false)));
+        assert!(!is_question(&resolved("SHOP", Some("things"), false)));
+        // A person: categorised by a table, but only a mark says what for.
+        assert!(is_question(&resolved(
+            "46700000001",
+            Some("children"),
+            false
+        )));
+        assert!(!is_question(&resolved(
+            "46700000001",
+            Some("children"),
+            true
+        )));
+        // A Swish-företag number is a business, and a table is enough.
+        assert!(!is_question(&resolved("1234567890", Some("giving"), false)));
     }
 
     #[test]

@@ -28,6 +28,8 @@ export interface Data {
   commentsFile: string;
   /** Null when no budget directory is configured. */
   budgets: Budgets | null;
+  /** Set by `kontoutdrag ask`: the transactions to ask about. */
+  ask: { since: string; keys: string[] } | null;
 }
 
 export const UNCATEGORISED = "(uncategorised)";

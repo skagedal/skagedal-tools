@@ -8,6 +8,9 @@
 //!                       file, so the page can poll and reload what changed
 //!   GET  /api/comments  the comments file
 //!   POST /api/comment   `{key, comment}`: set, or clear when blank
+//!   POST /api/answers   `{answers: [{key, comment, category}]}`, only for
+//!                       `kontoutdrag ask`: saved as comments, printed to
+//!                       stdout as JSON, and then the command exits
 //!
 //! The document is rebuilt when a statement, table, marks file, budget file
 //! or the settings change on disk. A rebuild that fails — a marks file saved
@@ -43,6 +46,8 @@ pub struct Source {
     pub build: Box<dyn Fn() -> Result<Built> + Send + Sync>,
     pub watched: Vec<PathBuf>,
     pub comments: PathBuf,
+    /// Whether this is `kontoutdrag ask`, which ends when the answers come.
+    pub asking: bool,
 }
 
 struct State {
@@ -63,6 +68,20 @@ struct Current {
 struct CommentRequest {
     key: String,
     comment: String,
+}
+
+#[derive(Deserialize)]
+struct AnswersRequest {
+    answers: Vec<Answer>,
+}
+
+#[derive(Deserialize)]
+struct Answer {
+    key: String,
+    #[serde(default)]
+    comment: String,
+    #[serde(default)]
+    category: String,
 }
 
 pub fn run(source: Source, first: Built, serve_only: bool) -> Result<()> {
@@ -114,6 +133,9 @@ fn handle(state: &State, request: &Request, stream: &mut TcpStream) -> io::Resul
             Err(e) => send_error(stream, 500, &format!("{e:#}"))?,
         },
         ("POST", "/api/comment") => save_comment(state, &request.body, stream)?,
+        ("POST", "/api/answers") if state.source.asking => {
+            save_answers(state, &request.body, stream)?
+        }
         ("GET", "/icon.png") => match ICON {
             Some(png) => server::send_png(stream, png)?,
             None => server::send_status(stream, 404, "Not Found")?,
@@ -144,6 +166,57 @@ fn save_comment(state: &State, body: &[u8], stream: &mut TcpStream) -> io::Resul
         Ok(()) => server::send_json(stream, r#"{"ok":true}"#),
         Err(e) => send_error(stream, 500, &format!("{e:#}")),
     }
+}
+
+/// Save every answer as a comment, print them all, and end the command, so
+/// whoever ran `kontoutdrag ask` gets them as its output.
+fn save_answers(state: &State, body: &[u8], stream: &mut TcpStream) -> io::Result<()> {
+    let request: AnswersRequest = match serde_json::from_slice(body) {
+        Ok(r) => r,
+        Err(e) => return send_error(stream, 400, &format!("bad request: {e}")),
+    };
+    let subjects = state.current.lock().unwrap().subjects.clone();
+    let _writing = state.writing.lock().unwrap();
+    let now = chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false);
+    let mut printed = Vec::new();
+    for answer in &request.answers {
+        if answer.comment.trim().is_empty() && answer.category.trim().is_empty() {
+            continue;
+        }
+        let Some(subject) = subjects.get(&answer.key).cloned() else {
+            return send_error(
+                stream,
+                404,
+                &format!("no transaction has the key {}", answer.key),
+            );
+        };
+        let path = &state.source.comments;
+        if let Err(e) = comments::answer(
+            path,
+            subject.clone(),
+            &answer.comment,
+            &answer.category,
+            &now,
+        ) {
+            return send_error(stream, 500, &format!("{e:#}"));
+        }
+        printed.push(comments::Comment {
+            subject,
+            comment: answer.comment.clone(),
+            category: Some(answer.category.trim().to_string()).filter(|c| !c.is_empty()),
+            updated: now.clone(),
+        });
+    }
+    let out = json!({ "answers": printed });
+    println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+    io::stdout().flush()?;
+    server::send_json(stream, r#"{"ok":true}"#)?;
+    // Give the page a moment to read the reply before the server goes.
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::process::exit(0);
+    });
+    Ok(())
 }
 
 /// Rebuild the document if anything it is built from has changed.

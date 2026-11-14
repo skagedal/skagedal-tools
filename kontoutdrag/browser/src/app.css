@@ -187,3 +187,26 @@ table.budget tr.total td { font-weight: 600; border-top: 1px solid var(--axis); 
 .progress-over { position: absolute; top: 0; bottom: 0; background: var(--bad); border-radius: 0 3px 3px 0; }
 .progress-pace { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink-2); }
 .tile .progress { margin: 4px 0; }
+
+.ask header h1 { margin: 0 0 4px; font-size: 20px; }
+.ask header p { margin: 0; }
+.question { display: flex; flex-direction: column; gap: 8px; }
+.question-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.question-head .amount { font-variant-numeric: tabular-nums; font-weight: 600; }
+.question-head .amount.in { color: var(--good-text); }
+.question-body { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.question-body input, .question-body textarea {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+}
+.question-body input { width: 200px; }
+.question-body textarea { flex: 1; min-width: 200px; resize: vertical; }
+.ask-footer {
+  position: sticky; bottom: 0; padding: 12px 0; background: var(--page);
+  display: flex; gap: 12px; align-items: center;
+}
+.ask-footer .send {
+  font: inherit; font-weight: 600; padding: 8px 18px; border-radius: 6px; border: none;
+  background: var(--accent); color: #fff; cursor: pointer;
+}
+.ask-footer .send:disabled { opacity: 0.6; cursor: default; }

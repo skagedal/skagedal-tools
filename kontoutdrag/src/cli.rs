@@ -29,6 +29,9 @@ pub enum Subcommand {
     Explain(ExplainArgs),
     /// Open the statements in a window with charts to click through
     View(ViewArgs),
+    /// Ask what the transactions no rule explains were, in a window, and
+    /// print the answers when they are sent
+    Ask(AskArgs),
     /// Compare a month's spending with its budget file
     Budget(BudgetArgs),
     /// Open settings.toml in $EDITOR, creating it from the template if needed
@@ -207,6 +210,16 @@ pub struct ExplainArgs {
     /// Ignore the configured tables and use only those given with --table
     #[arg(long)]
     pub only_tables: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct AskArgs {
+    #[command(flatten)]
+    pub view: ViewArgs,
+
+    /// Ask only about transactions booked on or after this day, YYYY-MM-DD
+    #[arg(long)]
+    pub since: chrono::NaiveDate,
 }
 
 #[derive(Debug, Args)]
