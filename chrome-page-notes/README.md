@@ -88,7 +88,7 @@ The host reads `~/.config/skagedal-tools/chrome-page-notes/config.toml`
 [convention](../AGENTS.md#per-tool-config-and-state-directories):
 
 ```toml
-vault_path = "/Users/you/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian-notes"  # required — absolute path to the vault folder
+vault_path = "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/obsidian-notes"  # required — absolute, or starting with ~/
 folder = "webnotes"                             # optional, defaults to "webnotes"
 debug = false                                   # optional, defaults to false
 ```
