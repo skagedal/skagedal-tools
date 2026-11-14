@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "appletv-vlc",
     "assistant",
+    "calendar-view",
     "chrome",
     "chrome-page-notes",
     "cloudwatch-insights",

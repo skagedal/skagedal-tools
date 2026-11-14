@@ -1,0 +1,25 @@
+# ~/.config/skagedal-tools/calendar-view/settings.toml
+
+# The calendula binary, and configs to pass it with -c, in order.
+#calendula = "calendula"
+#config = ["~/.config/calendula/config.toml"]
+
+# Events read are kept until one of these changes: the store neverest fills.
+watch = ["~/.local/state/neverest/pimdir.db", "~/.local/state/neverest/pimdir.db-wal"]
+
+# Run while the window is open: at start, every sync-minutes, and on Sync.
+sync = ["neverest", "sync"]
+sync-minutes = 15
+
+# The calendula accounts to read. Without any, every account calendula has.
+[accounts.google-cached]
+# An event where one of these declined is left out.
+me = ["me@example.com"]
+# Shown at start; the others are listed, unticked. Without it, all are shown.
+shown = ["Me", "Family"]
+calendars.Me = { label = "Personal", color = "#2a78d6" }
+calendars.Family = { color = "#0c9c6b" }
+
+[accounts.work-cached]
+me = ["me@example.org"]
+calendars.Calendar = { label = "Work", color = "#d0663b" }
