@@ -11,6 +11,12 @@ main() {
     for tool in "${NODE_TOOLS[@]}"; do
         update-node "$tool"
     done
+    # Crates that embed a web app keep its pnpm package in browser/.
+    for tool in "${RUST_TOOLS[@]}"; do
+        if [[ -f "$SCRIPT_DIR/$tool/browser/package.json" ]]; then
+            update-node "$tool/browser"
+        fi
+    done
     for tool in "${SWIFT_TOOLS[@]}"; do
         update-swift "$tool"
     done
