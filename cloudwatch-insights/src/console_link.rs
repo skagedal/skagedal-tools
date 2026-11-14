@@ -866,7 +866,7 @@ mod tests {
         assert_eq!(tab.kind.as_deref(), Some("query"));
         assert_eq!(
             tab.query,
-            format!("SOURCE \"/a\", \"/b with space\" START=-1w END=0s |\n{query}")
+            format!("SOURCE \"/a\" START=-1w END=0s |\nSOURCE \"/b with space\" |\n{query}")
         );
     }
 
