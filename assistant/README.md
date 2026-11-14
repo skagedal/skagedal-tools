@@ -31,4 +31,3 @@ The `when` field can be one of the following:
 ## Useful tools to handle subtasks
 
 * [simons-assistant](https://github.com/skagedal/simons-assistant) for git
-* [gmail-inbox-status](https://github.com/skagedal/gmail-inbox-status) for gmail
