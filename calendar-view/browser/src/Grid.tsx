@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { CalEvent, Calendar } from "./api";
-import { sameDay, time, weekday } from "./dates";
-import { Timed, allDayOn, timedOn } from "./layout";
+import { useNow } from "./hooks";
+import { Timed, allDayOn, minutesInto, timedOn } from "./layout";
+import { time, weekday } from "./time";
 
 const HOUR_PX = 48;
 const FIRST_HOUR_IN_VIEW = 7;
 
 interface Props {
-  days: Date[];
+  days: Temporal.PlainDate[];
   events: CalEvent[];
   calendars: Map<string, Calendar>;
   selected: CalEvent | null;
   onSelect: (e: CalEvent) => void;
-  onDay: (d: Date) => void;
+  onDay: (d: Temporal.PlainDate) => void;
 }
 
 const same = (a: CalEvent | null, b: CalEvent) =>
@@ -27,21 +28,12 @@ function tone(e: CalEvent): string {
   return "";
 }
 
-function useNow(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 60_000);
-    return () => window.clearInterval(id);
-  }, []);
-  return now;
-}
-
 export function Grid({ days, events, calendars, selected, onSelect, onDay }: Props) {
-  const scroller = useRef<HTMLDivElement>(null);
   const now = useNow();
-
-  useEffect(() => {
-    if (scroller.current) scroller.current.scrollTop = FIRST_HOUR_IN_VIEW * HOUR_PX;
+  const today = now.toPlainDate();
+  // Scrolled to the morning once, when the grid first appears.
+  const scroller = useCallback((el: HTMLDivElement | null) => {
+    if (el) el.scrollTop = FIRST_HOUR_IN_VIEW * HOUR_PX;
   }, []);
 
   const columns = { gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` };
@@ -53,9 +45,9 @@ export function Grid({ days, events, calendars, selected, onSelect, onDay }: Pro
       <div className="grid-head" style={columns}>
         <div />
         {days.map((d) => (
-          <button key={d.getTime()} className={`day-head ${sameDay(d, now) ? "today" : ""}`} onClick={() => onDay(d)}>
+          <button key={d.toString()} className={`day-head ${d.equals(today) ? "today" : ""}`} onClick={() => onDay(d)}>
             <span className="dow">{weekday(d)}</span>
-            <span className="dom">{d.getDate()}</span>
+            <span className="dom">{d.day}</span>
           </button>
         ))}
       </div>
@@ -89,7 +81,7 @@ export function Grid({ days, events, calendars, selected, onSelect, onDay }: Pro
             ))}
           </div>
           {days.map((d, i) => (
-            <div key={d.getTime()} className={`day-col ${sameDay(d, now) ? "today" : ""}`}>
+            <div key={d.toString()} className={`day-col ${d.equals(today) ? "today" : ""}`}>
               {[...Array(24)].map((_, h) => (
                 <div key={h} className="hour-line" style={{ top: h * HOUR_PX }} />
               ))}
@@ -102,9 +94,7 @@ export function Grid({ days, events, calendars, selected, onSelect, onDay }: Pro
                   onSelect={onSelect}
                 />
               ))}
-              {sameDay(d, now) && (
-                <div className="now" style={{ top: ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_PX }} />
-              )}
+              {d.equals(today) && <div className="now" style={{ top: (minutesInto(d, now) / 60) * HOUR_PX }} />}
             </div>
           ))}
         </div>
