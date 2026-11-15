@@ -827,6 +827,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar-view"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "include_dir",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "skagedal-dirs",
+ "tempfile",
+ "toml 0.8.2",
+ "webview-shell",
+]
+
+[[package]]
 name = "castaway"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
