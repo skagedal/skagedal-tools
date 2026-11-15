@@ -1,6 +1,6 @@
 import { CalEvent, Calendar, Person } from "./api";
-import { addDays, longDay, sameDay, time } from "./dates";
-import { allDaySpan, bounds } from "./layout";
+import { allDaySpan, timedBounds } from "./layout";
+import { longDay, time } from "./time";
 
 interface Props {
   event: CalEvent;
@@ -12,14 +12,16 @@ function when(e: CalEvent): string {
   if (e.allDay) {
     const span = allDaySpan(e);
     if (!span) return e.start;
-    return sameDay(span[0], span[1]) ? `${longDay(span[0])}, all day` : `${longDay(span[0])} – ${longDay(span[1])}`;
+    const [first, last] = span;
+    return first.equals(last) ? `${longDay(first)}, all day` : `${longDay(first)} – ${longDay(last)}`;
   }
-  const b = bounds(e);
+  const b = timedBounds(e);
   if (!b) return "";
   const [s, end] = b;
-  if (sameDay(s, end) || sameDay(addDays(s, 1), end) && end.getHours() === 0 && end.getMinutes() === 0)
-    return `${longDay(s)}, ${time(s)}–${time(end)}`;
-  return `${longDay(s)} ${time(s)} – ${longDay(end)} ${time(end)}`;
+  const day = s.toPlainDate();
+  const endsByMidnight = end.toPlainDate().equals(day) || end.equals(s.add({ days: 1 }).startOfDay());
+  if (endsByMidnight) return `${longDay(day)}, ${time(s)}–${time(end)}`;
+  return `${longDay(day)} ${time(s)} – ${longDay(end.toPlainDate())} ${time(end)}`;
 }
 
 const PARTSTAT: Record<string, string> = {

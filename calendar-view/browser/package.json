@@ -10,8 +10,12 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.107.1",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-hotkeys-hook": "^5.3.3",
+    "temporal-polyfill": "^1.0.8",
+    "usehooks-ts": "^3.1.1"
   },
   "devDependencies": {
     "@types/react": "latest",
