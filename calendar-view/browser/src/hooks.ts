@@ -75,9 +75,9 @@ const eventsQuery = (first: Temporal.PlainDate, which: number[], version: string
  * store's version changes. The weeks either side are read too, so the server
  * has them ready.
  */
-export function useWeek(first: Temporal.PlainDate, which: number[], enabled: boolean) {
+export function useWeek(first: Temporal.PlainDate, which: number[], ready: boolean) {
   const version = useVersion().data?.version;
-  enabled = enabled && version !== undefined;
+  const enabled = ready && version !== undefined;
   useQueries({
     queries: [-7, 7].map((days) => ({ ...eventsQuery(first.add({ days }), which, version), enabled })),
   });

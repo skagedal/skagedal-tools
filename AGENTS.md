@@ -80,6 +80,9 @@ All Node.js/TypeScript projects in this repository must follow these guidelines:
   setup, including `@eslint/js`, `typescript-eslint`, `eslint-plugin-react`,
   and `eslint-plugin-react-hooks`. See `log-viewer/eslint.config.js` for a
   reference. Pin `eslint` to `^9.x` until `eslint-plugin-react` supports v10.
+- React code follows [codestyle/react.md](codestyle/react.md): no `useEffect`
+  in components (react-query for the server, hook libraries or named hooks in
+  `hooks.ts` for the rest), and Temporal rather than `Date`.
 - Set `minimumReleaseAge: 10080` in `pnpm-workspace.yaml`, with the unit in a comment beside it,
   since pnpm counts in minutes (10080 minutes = one week):
   ```yaml

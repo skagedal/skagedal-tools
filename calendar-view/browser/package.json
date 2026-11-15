@@ -6,22 +6,29 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
-    "check": "tsc --noEmit",
-    "dev": "vite"
+    "check": "tsc --noEmit && pnpm lint",
+    "dev": "vite",
+    "lint": "eslint ."
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.107.1",
+    "@tanstack/react-query": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "react-hotkeys-hook": "^5.3.3",
-    "temporal-polyfill": "^1.0.8",
-    "usehooks-ts": "^3.1.1"
+    "react-hotkeys-hook": "latest",
+    "temporal-polyfill": "latest",
+    "usehooks-ts": "latest"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
-    "typescript": "latest",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
     "vite": "latest"
   },
   "packageManager": "pnpm@10.33.0"
