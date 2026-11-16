@@ -10,13 +10,13 @@ importers:
     dependencies:
       '@gunshi/plugin-completion':
         specifier: latest
-        version: 0.37.3(@gunshi/plugin-i18n@0.37.3)(citty@0.2.2)(commander@15.0.0)
+        version: 0.37.3(@gunshi/plugin-i18n@0.37.3)(citty@0.2.2)(commander@15.1.0)
       citty:
         specifier: latest
         version: 0.2.2
       commander:
         specifier: latest
-        version: 15.0.0
+        version: 15.1.0
       gunshi:
         specifier: latest
         version: 0.37.3
@@ -361,8 +361,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  ansi-regex@6.5.0:
-    resolution: {integrity: sha512-zhvbbbdt1kbw7EJ9OQoxmQcuaNR9P5kTj7e/YdmOSU10aHWbycofJxA6jKfoEy3vlLdctOF9ZHaxLtmSm998wQ==}
+  ansi-regex@6.6.0:
+    resolution: {integrity: sha512-XZ5apbzreCbXSKwPjJstu8R0zOi247w3XYwWxtwBXgpZrCyc1Ka7p9/xY0A9/diMewmHbEKz+FIraWaEWjlN5g==}
     engines: {node: '>=12'}
 
   ansi-styles@6.2.3:
@@ -376,8 +376,8 @@ packages:
     resolution: {integrity: sha512-k7ndgKhwoQveBL+/1tqGJYNz097I7WOvwbmmU2AR5+magtbjPWQTS1C5vzGkBC8Ym8UWRzfKUzUUqFLypY4Q+w==}
     engines: {node: '>=20'}
 
-  commander@15.0.0:
-    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
+  commander@15.1.0:
+    resolution: {integrity: sha512-cgnQ88TRrWcC7pVq46RzJVRMktu3W2RcbnoidnfBsl1bmDCBwJS/udcIZpKoCrbAYYaCqsz1yZCVIgbIaU3ddQ==}
     engines: {node: '>=22.12.0'}
 
   emoji-regex@10.6.0:
@@ -456,10 +456,10 @@ packages:
 
 snapshots:
 
-  '@bomb.sh/tab@0.0.22(citty@0.2.2)(commander@15.0.0)':
+  '@bomb.sh/tab@0.0.22(citty@0.2.2)(commander@15.1.0)':
     optionalDependencies:
       citty: 0.2.2
-      commander: 15.0.0
+      commander: 15.1.0
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
@@ -539,9 +539,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@gunshi/plugin-completion@0.37.3(@gunshi/plugin-i18n@0.37.3)(citty@0.2.2)(commander@15.0.0)':
+  '@gunshi/plugin-completion@0.37.3(@gunshi/plugin-i18n@0.37.3)(citty@0.2.2)(commander@15.1.0)':
     dependencies:
-      '@bomb.sh/tab': 0.0.22(citty@0.2.2)(commander@15.0.0)
+      '@bomb.sh/tab': 0.0.22(citty@0.2.2)(commander@15.1.0)
       '@gunshi/plugin': 0.37.3
       '@gunshi/plugin-i18n': 0.37.3
     transitivePeerDependencies:
@@ -625,7 +625,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  ansi-regex@6.5.0: {}
+  ansi-regex@6.6.0: {}
 
   ansi-styles@6.2.3: {}
 
@@ -637,7 +637,7 @@ snapshots:
       strip-ansi: 7.2.0
       wrap-ansi: 9.0.2
 
-  commander@15.0.0: {}
+  commander@15.1.0: {}
 
   emoji-regex@10.6.0: {}
 
@@ -696,7 +696,7 @@ snapshots:
 
   strip-ansi@7.2.0:
     dependencies:
-      ansi-regex: 6.5.0
+      ansi-regex: 6.6.0
 
   tsx@4.23.15:
     dependencies:
