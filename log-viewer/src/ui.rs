@@ -15,7 +15,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{
-    Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState,
+    Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, TableState, Wrap,
 };
 
 use crate::app::{App, View};
@@ -356,14 +356,29 @@ fn draw_detail(f: &mut ratatui::Frame, app: &App, area: Rect) {
         format!("entry {} of {}", app.selected + 1, app.entries.len()),
         header_style,
     ));
+    let inner_width = area.width.saturating_sub(2) as usize;
+    let mut selected_line = 0;
     for (i, key) in entry.keys().iter().enumerate() {
-        let value = entry.get_str(key).unwrap_or_default();
-        let style = if app.detail.row == i + 1 {
-            Style::default().add_modifier(Modifier::REVERSED)
+        if app.detail.row == i + 1 {
+            // The selected field shows its full value, wrapped and pretty-printed.
+            selected_line = lines.len();
+            let selected = Style::default().add_modifier(Modifier::REVERSED);
+            let value = entry.get_full_str(key).unwrap_or_default();
+            let mut value_lines = value.lines();
+            let first = value_lines.next().unwrap_or_default();
+            lines.push(Line::styled(format!("  {key}: {first}"), selected));
+            for line in value_lines {
+                lines.push(Line::styled(format!("    {line}"), selected));
+            }
         } else {
-            Style::default()
-        };
-        lines.push(Line::styled(format!("  {key}: {value}"), style));
+            // Other fields stay on one line so the scroll offset counts rows.
+            let value = entry.get_str(key).unwrap_or_default();
+            let line: String = format!("  {key}: {value}")
+                .chars()
+                .take(inner_width)
+                .collect();
+            lines.push(Line::raw(line));
+        }
     }
     lines.push(Line::raw(""));
     lines.push(Line::raw("--- raw ---"));
@@ -372,11 +387,17 @@ fn draw_detail(f: &mut ratatui::Frame, app: &App, area: Rect) {
             lines.push(Line::raw(line.to_string()));
         }
     }
-    let para = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" entry detail "),
-    );
+    // Keep the selected field in view.
+    let inner_height = area.height.saturating_sub(2) as usize;
+    let scroll = selected_line.saturating_sub(inner_height / 2);
+    let para = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((u16::try_from(scroll).unwrap_or(u16::MAX), 0))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" entry detail "),
+        );
     f.render_widget(para, area);
 }
 

@@ -18,7 +18,7 @@
     "check": "tsc --noEmit && pnpm test && pnpm lint"
   },
   "dependencies": {
-    "@tanstack/react-table": "latest",
+    "@tanstack/react-table": "^8",
     "@tanstack/react-virtual": "latest",
     "@vitejs/plugin-react": "latest",
     "gunshi": "latest",
