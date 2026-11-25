@@ -96,6 +96,12 @@ impl Entry {
         self.object().and_then(|m| m.get(key)).map(stringify)
     }
 
+    /// The field's full value for the detail view: JSON objects and arrays,
+    /// including ones stored as strings, are pretty-printed.
+    pub fn get_full_str(&self, key: &str) -> Option<String> {
+        self.object().and_then(|m| m.get(key)).map(pretty)
+    }
+
     pub fn keys(&self) -> Vec<String> {
         self.object()
             .map(|m| m.keys().cloned().collect())
@@ -111,6 +117,20 @@ pub fn stringify(v: &Value) -> String {
         Value::Number(n) => n.to_string(),
         other => other.to_string(),
     }
+}
+
+fn pretty(v: &Value) -> String {
+    let structured = match v {
+        Value::String(s) => match serde_json::from_str::<Value>(s) {
+            Ok(inner @ (Value::Object(_) | Value::Array(_))) => Some(inner),
+            _ => None,
+        },
+        Value::Object(_) | Value::Array(_) => Some(v.clone()),
+        _ => None,
+    };
+    structured
+        .and_then(|inner| serde_json::to_string_pretty(&inner).ok())
+        .unwrap_or_else(|| stringify(v))
 }
 
 /// Subsequence (fuzzy) match: every char of `needle` must appear in
@@ -161,6 +181,31 @@ mod tests {
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| (*x).to_string()).collect()
+    }
+
+    #[test]
+    fn full_str_pretty_prints_json_in_strings() {
+        let e = Entry::parse(
+            r#"{"request":"{\"ticket_id\":{\"value\":\"x\"}}"}"#,
+            "message",
+        );
+        assert_eq!(
+            e.get_full_str("request").unwrap(),
+            "{\n  \"ticket_id\": {\n    \"value\": \"x\"\n  }\n}"
+        );
+    }
+
+    #[test]
+    fn full_str_pretty_prints_objects() {
+        let e = Entry::parse(r#"{"k":{"a":1}}"#, "message");
+        assert_eq!(e.get_full_str("k").unwrap(), "{\n  \"a\": 1\n}");
+    }
+
+    #[test]
+    fn full_str_keeps_plain_strings() {
+        let e = Entry::parse(r#"{"msg":"hello","n":"42"}"#, "message");
+        assert_eq!(e.get_full_str("msg").unwrap(), "hello");
+        assert_eq!(e.get_full_str("n").unwrap(), "42");
     }
 
     #[test]
