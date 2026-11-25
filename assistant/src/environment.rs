@@ -1,4 +1,3 @@
-use filetime::FileTime;
 use std::fs;
 use std::fs::File;
 use std::io::{ErrorKind, Read, Write};
@@ -40,22 +39,19 @@ impl Environment {
     pub fn mark_as_done(&self, task_id: &str) {
         let path_buf = self.path_for_task(task_id);
         let _ = File::create(path_buf);
-        // filetime::set_file_mtime(path_buf, FileTime::now())
-        //     .expect("Could not set file time");
     }
 
     pub fn mark_as_done_in_an_hour(&self, task_id: &str) {
         let path_buf = self.path_for_task(task_id);
-        let _ = File::create(&path_buf);
-        filetime::set_file_mtime(path_buf, Self::in_an_hour()).expect("Could not set file time");
+        File::create(path_buf)
+            .and_then(|file| file.set_modified(Self::in_an_hour()))
+            .expect("Could not set file time");
     }
 
-    fn in_an_hour() -> FileTime {
-        FileTime::from_system_time(
-            SystemTime::now()
-                .checked_add(Duration::from_secs(3600))
-                .unwrap(),
-        )
+    fn in_an_hour() -> SystemTime {
+        SystemTime::now()
+            .checked_add(Duration::from_secs(3600))
+            .unwrap()
     }
 
     pub fn logs_dir(&self) -> PathBuf {
