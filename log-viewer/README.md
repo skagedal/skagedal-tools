@@ -134,7 +134,7 @@ List view:
 | `Esc` (when filter is set) | Clear the filter |
 | `q` / Ctrl-C | Quit |
 
-Detail view:
+Detail view (the selected field shows its full value, wrapped, with JSON pretty-printed, including JSON stored in a string):
 
 | Key | Action |
 |-----|--------|

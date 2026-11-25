@@ -1,6 +1,6 @@
 # MIT License
 
-Copyright (c) 2026 Simon Kågedal Reimer
+Copyright (c) 2026 Simon Kågedal
 
 Copyright (c) 2020 Pierre Ståhl
 

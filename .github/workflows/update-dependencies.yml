@@ -19,6 +19,7 @@ jobs:
     # appicon-generator, and Swift is only set up on the macOS runners. The
     # Rust and Node parts run there just as well.
     runs-on: macos-latest
+    environment: updates
     steps:
       # The pull request comes from a GitHub App rather than from me, for two
       # reasons. GitHub does not notify me of anything I did myself, so a pull
@@ -28,7 +29,7 @@ jobs:
       # CI runs on the pull request — which is what checks that the update
       # builds. The token covers this repository only, carries only what the
       # steps below need, and is revoked when the job ends.
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: app-token
         with:
           client-id: ${{ vars.UPDATES_APP_CLIENT_ID }}
