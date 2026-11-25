@@ -74,7 +74,6 @@ INSTALLED_RUST_TOOLS=(
     git-dirty-checker
     imessage-log
     intellij-patch
-    kontoutdrag
     log-jsonify
     log-viewer
     package-json-merge
@@ -276,7 +275,7 @@ install-rust() {
     # `./install <single-tool>` — subsequent single installs are also
     # faster because dep artifacts persist in target/release/.
     export CARGO_TARGET_DIR="$SCRIPT_DIR/target"
-    if [[ "$dir" == "log-viewer" || "$dir" == "kontoutdrag" || "$dir" == "calendar-view" ]]; then
+    if [[ "$dir" == "log-viewer" || "$dir" == "calendar-view" ]]; then
         # Their webviews embed a React app from browser/ into the binary via
         # include_dir!. Each crate's build.rs runs pnpm and Vite in browser/
         # automatically when the `web` feature is on, so all this special

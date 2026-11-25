@@ -14,7 +14,6 @@ members = [
     "git-dirty-checker",
     "imessage-log",
     "intellij-patch",
-    "kontoutdrag",
     "log-jsonify",
     "log-viewer",
     "package-json-merge",

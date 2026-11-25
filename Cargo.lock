@@ -3087,26 +3087,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kontoutdrag"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "include_dir",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "shellexpand",
- "skagedal-dirs",
- "tempfile",
- "thiserror 2.0.21",
- "toml 1.2.2+spec-1.1.0",
- "webview-shell",
-]
-
-[[package]]
 name = "lab"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
