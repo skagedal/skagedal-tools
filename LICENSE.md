@@ -1,6 +1,6 @@
 # MIT License
 
-Copyright (c) 2021 Simon Kågedal Reimer
+Copyright (c) 2021 Simon Kågedal
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
