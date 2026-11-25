@@ -3,7 +3,6 @@ use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use filetime::FileTime;
 use ratatui::{
     Frame, Terminal, TerminalOptions, Viewport,
     backend::CrosstermBackend,
@@ -150,11 +149,10 @@ fn snooze_repo(path: &Path) {
     let dir = snooze_dir();
     let _ = fs::create_dir_all(&dir);
     let snooze_file = dir.join(repo_snooze_key(path));
-    let _ = fs::File::create(&snooze_file);
     // Extend from current expiry if already snoozed, otherwise from now
     let base_time = get_snooze_expiry(path).unwrap_or_else(SystemTime::now);
     let future_time = base_time.checked_add(Duration::from_secs(3600)).unwrap();
-    let _ = filetime::set_file_mtime(&snooze_file, FileTime::from_system_time(future_time));
+    let _ = fs::File::create(&snooze_file).and_then(|file| file.set_modified(future_time));
 }
 
 fn unsnooze_repo(path: &Path) {
