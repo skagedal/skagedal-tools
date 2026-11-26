@@ -1,9 +1,12 @@
 # React apps
 
 How a React app is written: the page of a tool that serves one, like
-`calendar-view` or `kontoutdrag`, or an app of its own. The setup that
+`calendar-view` or `log-viewer`, or an app of its own. The setup that
 is specific to `skagedal-tools` (where the app lives, how it is built
 into a binary) is in its `AGENTS.md`.
+
+This guide is read outside this repository too: `kontoutdrag`, which has
+moved out of it, still follows it.
 
 ## Effects live in hooks, not components
 
@@ -76,6 +79,6 @@ light or dark appearance. Times are shown in 24-hour form.
 
 ## Older apps
 
-`kontoutdrag` predates this guide, and `log-viewer` predates the parts
-about effects and Temporal. Bring them in line when you are working in
-them anyway.
+`log-viewer` predates the parts about effects and Temporal. Bring it in
+line when you are working in it anyway. `kontoutdrag` predates the whole
+guide and is no longer here; the same applies to it where it now lives.
